@@ -3,6 +3,7 @@ import * as Atom from "effect/unstable/reactivity/Atom"
 import { config } from "../config.js"
 import { detectCurrentGitHubRepository } from "../gitRemotes.js"
 import { Observability } from "../observability.js"
+import { AgentRunner } from "./AgentRunner.js"
 import { BrowserOpener } from "./BrowserOpener.js"
 import { CacheService } from "./CacheService.js"
 import { Clipboard } from "./Clipboard.js"
@@ -57,8 +58,10 @@ const cacheServiceLayer = mockPrCount !== null ? CacheService.disabledLayer : Ca
 
 const editorOpenerLayer = mockPrCount !== null ? EditorOpener.mockLayer : EditorOpener.layerNoDeps
 
+const agentRunnerLayer = AgentRunner.layer.pipe(Layer.provide(cacheServiceLayer))
+
 export const githubRuntime = Atom.runtime(
-	Layer.mergeAll(githubServiceLayer, cacheServiceLayer, Clipboard.layerNoDeps, BrowserOpener.layerNoDeps, editorOpenerLayer).pipe(
+	Layer.mergeAll(githubServiceLayer, cacheServiceLayer, Clipboard.layerNoDeps, BrowserOpener.layerNoDeps, editorOpenerLayer, agentRunnerLayer).pipe(
 		Layer.provide(CommandRunner.layer),
 		Layer.provideMerge(Observability.layer),
 	),

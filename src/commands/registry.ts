@@ -4,6 +4,7 @@ import type * as Atom from "effect/unstable/reactivity/Atom"
 import type { AtomRegistry } from "effect/unstable/reactivity/AtomRegistry"
 import type { Reactivity } from "effect/unstable/reactivity/Reactivity"
 import type { CommandScope } from "../commands.js"
+import type { AgentRunner } from "../services/AgentRunner.js"
 import type { BrowserOpener } from "../services/BrowserOpener.js"
 import type { CacheService } from "../services/CacheService.js"
 import type { Clipboard } from "../services/Clipboard.js"
@@ -41,7 +42,7 @@ export interface CommandDefinition {
 // The services a command body may yield. Mirrors the layer set provided by
 // `githubRuntime` so commands can require GitHub, cache, clipboard, browser,
 // the atom registry, or none of the above.
-export type CommandRequirements = AtomRegistry | Reactivity | Scope | BrowserOpener | CacheService | Clipboard | EditorOpener | GitHubService
+export type CommandRequirements = AtomRegistry | Reactivity | Scope | AgentRunner | BrowserOpener | CacheService | Clipboard | EditorOpener | GitHubService
 
 export type CommandEffect = Effect.Effect<void, unknown, CommandRequirements>
 
