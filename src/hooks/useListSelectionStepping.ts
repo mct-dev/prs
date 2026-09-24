@@ -1,6 +1,7 @@
 import type { IssueItem, PullRequestItem } from "../domain.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import type { RepositoryListItem } from "../ui/RepoList.js"
+import { stepWithinGroup } from "../workspace/headerDerivations.js"
 
 export interface UseListSelectionSteppingInput {
 	readonly activeWorkspaceSurface: WorkspaceSurface
@@ -10,6 +11,8 @@ export interface UseListSelectionSteppingInput {
 	readonly loadMoreSlotAvailable: boolean
 	readonly issueLoadMoreSlotAvailable: boolean
 	readonly groupStarts: readonly number[]
+	/** Sections view: PR steps stay inside the current group (no crossing, no wrap). */
+	readonly clampToGroup?: boolean
 	readonly getCurrentGroupIndex: (current: number) => number
 	readonly setSelectedIndex: (next: number | ((current: number) => number)) => void
 	readonly setSelectedIssueIndex: (next: number | ((current: number) => number)) => void
@@ -34,7 +37,9 @@ export interface ListSelectionStepping {
  * is `[0, visiblePullRequests.length]` — one past the last PR represents the
  * load-more pseudo-row. Stepping down past the tail lands on it; pressing
  * Enter there triggers `loadMorePullRequests` via the keymap layer (not from
- * here). j-wrap behaviour at the very bottom wraps to 0 like before.
+ * here). j-wrap behaviour at the very bottom wraps to 0 like before, except
+ * with `clampToGroup` (sections view), where every PR step stays inside the
+ * current section.
  *
  * Up-stepping never wraps — PR/Issue lists are long and load lazily, so wrap-
  * to-bottom would jump past unloaded rows.
@@ -47,6 +52,7 @@ export const useListSelectionStepping = ({
 	loadMoreSlotAvailable,
 	issueLoadMoreSlotAvailable,
 	groupStarts,
+	clampToGroup = false,
 	getCurrentGroupIndex,
 	setSelectedIndex,
 	setSelectedIssueIndex,
@@ -70,21 +76,24 @@ export const useListSelectionStepping = ({
 			if (currentGroup >= groupStarts.length - 1) return groupStarts[0]!
 			return groupStarts[currentGroup + 1]!
 		})
+	const stepPullRequestWithinGroup = (delta: number) => setSelectedIndex((current) => stepWithinGroup(groupStarts, visiblePullRequests.length, current, delta))
 	const stepSelected = (delta: number) =>
-		activeWorkspaceSurface === "repos"
-			? setSelectedRepositoryIndex((current) => {
-					if (repositoryItems.length === 0) return 0
-					return Math.max(0, Math.min(repositoryItems.length - 1, current + delta))
-				})
-			: activeWorkspaceSurface === "issues"
-				? setSelectedIssueIndex((current) => {
-						if (issues.length === 0) return 0
-						return Math.max(0, Math.min(issueMaxIndex(), current + delta))
+		activeWorkspaceSurface === "pullRequests" && clampToGroup
+			? stepPullRequestWithinGroup(delta)
+			: activeWorkspaceSurface === "repos"
+				? setSelectedRepositoryIndex((current) => {
+						if (repositoryItems.length === 0) return 0
+						return Math.max(0, Math.min(repositoryItems.length - 1, current + delta))
 					})
-				: setSelectedIndex((current) => {
-						if (visiblePullRequests.length === 0) return 0
-						return Math.max(0, Math.min(prMaxIndex(), current + delta))
-					})
+				: activeWorkspaceSurface === "issues"
+					? setSelectedIssueIndex((current) => {
+							if (issues.length === 0) return 0
+							return Math.max(0, Math.min(issueMaxIndex(), current + delta))
+						})
+					: setSelectedIndex((current) => {
+							if (visiblePullRequests.length === 0) return 0
+							return Math.max(0, Math.min(prMaxIndex(), current + delta))
+						})
 	const stepSelectedDown = (count = 1) => stepSelected(count)
 	const stepSelectedUp = (count = 1) => stepSelected(-count)
 	const stepSelectedDownWithLoadMore = () => {
@@ -103,6 +112,10 @@ export const useListSelectionStepping = ({
 			})
 			return
 		}
+		if (clampToGroup) {
+			stepPullRequestWithinGroup(1)
+			return
+		}
 		setSelectedIndex((current) => {
 			if (visiblePullRequests.length === 0) return 0
 			const max = prMaxIndex()
@@ -114,7 +127,9 @@ export const useListSelectionStepping = ({
 			? setSelectedRepositoryIndex((current) => Math.max(0, current - 1))
 			: activeWorkspaceSurface === "issues"
 				? setSelectedIssueIndex((current) => Math.max(0, current - 1))
-				: setSelectedIndex((current) => Math.max(0, current - 1))
+				: clampToGroup
+					? stepPullRequestWithinGroup(-1)
+					: setSelectedIndex((current) => Math.max(0, current - 1))
 
 	return { stepSelected, stepSelectedDown, stepSelectedUp, stepSelectedDownWithLoadMore, stepSelectedUpWrap, moveSelectedToPreviousGroup, moveSelectedToNextGroup }
 }

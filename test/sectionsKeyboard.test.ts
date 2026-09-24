@@ -43,6 +43,11 @@ const probe = `
 	frames.next = await press("]")
 	frames.previous = await press("[")
 	frames.expandFromCursor = await press("z")
+	frames.bottom = await press("G", { shift: true })
+	await press("j")
+	await press("j")
+	frames.bottomAfterJ = await press("j")
+	frames.bottomAfterK = await press("k")
 	console.log(JSON.stringify(frames))
 	act(() => root.unmount())
 	setup.renderer.destroy()
@@ -83,5 +88,11 @@ describe("sections keyboard", () => {
 		expect(frames.previous.headers[0]).toBe(`-${needs}`)
 		expect(frames.expandFromCursor.headers[0]).toBe(`+${needs}`)
 		expect(frames.expandFromCursor.selected).toBe(firstSelected)
+
+		// j at the bottom of the last section stays put (no wrap to the first section); k still moves up.
+		expect(frames.bottom.selected).not.toBeNull()
+		expect(frames.bottom.selected).not.toBe(firstSelected)
+		expect(frames.bottomAfterJ.selected).toBe(frames.bottom.selected)
+		expect(frames.bottomAfterK.selected).not.toBe(frames.bottom.selected)
 	}, 30_000)
 })

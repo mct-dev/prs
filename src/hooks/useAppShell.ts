@@ -957,6 +957,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 	const runCommandPaletteCommand = (command: AppCommand) => {
 		runCommand(command, { notifyDisabled: true, closePalette: true })
 	}
+	// In the sections view j/k (and counted / half-page steps) stay inside the current section.
+	const sectionsNavActive = activeView._tag === "Sections" && activeWorkspaceSurface === "pullRequests"
 	const {
 		stepSelected,
 		stepSelectedDown,
@@ -966,6 +968,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		moveSelectedToPreviousGroup: moveSelectedToPreviousRepositoryGroup,
 		moveSelectedToNextGroup: moveSelectedToNextRepositoryGroup,
 	} = useListSelectionStepping({
+		clampToGroup: sectionsNavActive,
 		activeWorkspaceSurface,
 		visiblePullRequests,
 		issues,
@@ -979,7 +982,6 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		setSelectedRepositoryIndex,
 	})
 	// In the sections view `[` / `]` move the section cursor, which can rest on collapsed or empty sections.
-	const sectionsNavActive = activeView._tag === "Sections" && activeWorkspaceSurface === "pullRequests"
 	const moveSelectedToPreviousGroup = sectionsNavActive ? () => stepSectionBy(-1) : moveSelectedToPreviousRepositoryGroup
 	const moveSelectedToNextGroup = sectionsNavActive ? () => stepSectionBy(1) : moveSelectedToNextRepositoryGroup
 	const handleQuitOrClose = () => {
