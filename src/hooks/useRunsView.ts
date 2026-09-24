@@ -15,6 +15,9 @@ import {
 	workflowRunDetailsFor,
 } from "../ui/runs/atoms.js"
 import { failureRowIndices, flattenRunRows, type RunDetailRow } from "../ui/runs/runsRows.js"
+import { detailFullViewAtom } from "../ui/detail/atoms.js"
+import { briefFullViewAtom } from "../ui/review/briefViewAtoms.js"
+import { runsReturnViewAtom } from "../ui/viewReturn.js"
 
 const clamp = (value: number, max: number) => Math.max(0, Math.min(value, Math.max(0, max)))
 
@@ -52,6 +55,9 @@ export const useRunsView = (selectedPullRequest: PullRequestItem | null, halfPag
 	const [runsSelection, setRunsSelection] = useAtom(runsListSelectionAtom)
 	const [detailSelection, setDetailSelection] = useAtom(runDetailSelectionAtom)
 	const openUrl = useAtomSet(openUrlAtom, { mode: "promise" })
+	const [runsReturnView, setRunsReturnView] = useAtom(runsReturnViewAtom)
+	const setBriefFullView = useAtomSet(briefFullViewAtom)
+	const setDetailFullView = useAtomSet(detailFullViewAtom)
 
 	const runsListKey = selectedPullRequest ? runsKey(selectedPullRequest) : null
 	const runsResult = useAtomValue(pullRequestRunsFor(runsListKey ?? "\u0000\u0000"))
@@ -65,10 +71,14 @@ export const useRunsView = (selectedPullRequest: PullRequestItem | null, halfPag
 	const detailRun = detailState?.status === "ready" ? detailState.value : null
 	const detailRows = useMemo(() => (detailRun ? flattenRunRows(detailRun) : []), [detailRun])
 
+	// Mirrors the `runs.close` command: esc lands back on the view runs was opened from.
 	const closeRunsView = useCallback(() => {
 		setRunsFullView(false)
 		setSelectedRunId(null)
-	}, [setRunsFullView, setSelectedRunId])
+		setRunsReturnView(null)
+		if (runsReturnView === "brief") setBriefFullView(true)
+		else if (runsReturnView === "detail") setDetailFullView(true)
+	}, [setRunsFullView, setSelectedRunId, runsReturnView, setRunsReturnView, setBriefFullView, setDetailFullView])
 
 	const backToList = useCallback(() => {
 		setSelectedRunId(null)

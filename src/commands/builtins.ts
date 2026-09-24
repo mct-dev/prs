@@ -18,6 +18,7 @@ import { submitReviewOptions } from "../ui/modals/shared.js"
 import { reviewPresetOptions } from "../ui/modals/ReviewPresetModal.js"
 import { initialCommandPaletteState, initialCommentModalState, initialOpenRepositoryModalState, Modal } from "../ui/modals/types.js"
 import { noticeAtom } from "../ui/notice/atoms.js"
+import { currentReturnView, diffReturnViewAtom, restoreReturnView, runsReturnViewAtom } from "../ui/viewReturn.js"
 import { briefStatusFor } from "../ui/review/atoms.js"
 import {
 	briefFocusIndexAtom,
@@ -135,6 +136,8 @@ function switchWorkspaceSurfaceEffect(surface: WorkspaceSurface) {
 		yield* Atom.set(diffFullViewAtom, false)
 		yield* Atom.set(commentsViewActiveAtom, false)
 		yield* Atom.set(briefFullViewAtom, false)
+		yield* Atom.set(diffReturnViewAtom, null)
+		yield* Atom.set(runsReturnViewAtom, null)
 		yield* Atom.set(diffCommentRangeStartIndexAtom, null)
 		yield* Atom.set(filterModeAtom, false)
 		const query = yield* Atom.get(filterQueryAtom)
@@ -297,6 +300,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 		run: Effect.gen(function* () {
 			yield* Atom.set(diffFullViewAtom, false)
 			yield* Atom.set(diffCommentRangeStartIndexAtom, null)
+			yield* restoreReturnView(diffReturnViewAtom)
 			// A brief target still waiting on the diff must not land on a later open.
 			yield* Atom.set(pendingBriefDiffTargetAtom, null)
 		}),
@@ -317,6 +321,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 			yield* Atom.set(selectedRunIdAtom, null)
 			yield* Atom.set(runsListSelectionAtom, 0)
 			yield* Atom.set(runDetailSelectionAtom, 0)
+			yield* Atom.set(runsReturnViewAtom, yield* currentReturnView)
 			yield* Atom.set(diffFullViewAtom, false)
 			yield* Atom.set(detailFullViewAtom, false)
 			yield* Atom.set(commentsViewActiveAtom, false)
@@ -334,6 +339,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 		run: Effect.gen(function* () {
 			yield* Atom.set(runsFullViewAtom, false)
 			yield* Atom.set(selectedRunIdAtom, null)
+			yield* restoreReturnView(runsReturnViewAtom)
 		}),
 	}),
 	defineCommand({
@@ -403,8 +409,9 @@ export const globalCommands: readonly CommandDefinition[] = [
 			const area = entry?.brief?.focus_areas[yield* Atom.get(briefFocusIndexAtom)]
 			if (!pullRequest || !area) return
 			yield* Atom.set(pendingBriefDiffTargetAtom, { url: pullRequest.url, headSha: entry.record.headSha, file: area.file, lines: area.lines ?? null })
+			// esc from the diff comes back here; the brief's own return-to-detail flag stays set.
+			yield* Atom.set(diffReturnViewAtom, "brief")
 			yield* Atom.set(briefFullViewAtom, false)
-			yield* Atom.set(briefReturnToDetailAtom, false)
 			yield* Effect.sync(() => invokeHandoff("openDiffView"))
 		}),
 	}),
@@ -836,6 +843,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 		disabledReason: noPullRequestReasonAtom,
 		keywords: ["files", "patch"],
 		run: Effect.gen(function* () {
+			yield* Atom.set(diffReturnViewAtom, yield* currentReturnView)
 			yield* Atom.set(briefFullViewAtom, false)
 			// A plain open starts at the top; only `brief.open-focus` parks a target.
 			yield* Atom.set(pendingBriefDiffTargetAtom, null)
