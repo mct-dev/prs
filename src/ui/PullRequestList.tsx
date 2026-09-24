@@ -16,6 +16,8 @@ export interface PullRequestSectionHeader {
 	readonly error: string | null
 	readonly collapsed: boolean
 	readonly count: number
+	/** Keyboard cursor rests on this header (collapsed or empty section). */
+	readonly focused?: boolean
 }
 
 export interface PullRequestSections {
@@ -85,7 +87,7 @@ const SectionHeaderLine = ({
 	contentWidth: number
 	onToggle: () => void
 }) => (
-	<TextLine width={contentWidth} onMouseDown={onToggle}>
+	<TextLine width={contentWidth} onMouseDown={onToggle} {...(section.focused ? { bg: colors.selectedBg } : {})}>
 		<span fg={colors.accent}>{section.collapsed ? SECTION_COLLAPSED_ICON : SECTION_OPEN_ICON} </span>
 		<span fg={colors.accent} attributes={TextAttributes.BOLD}>
 			{section.title}

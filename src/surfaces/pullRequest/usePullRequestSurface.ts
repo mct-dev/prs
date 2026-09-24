@@ -20,6 +20,7 @@ import {
 	activeViewAtom,
 	activeViewsAtom,
 	collapsedSectionsAtom,
+	sectionCursorAtom,
 	displayedPullRequestsAtom,
 	groupStartsAtom,
 	hasMorePullRequestsAtom,
@@ -39,6 +40,7 @@ import {
 	visiblePullRequestsAtom,
 } from "../../ui/pullRequests/atoms.js"
 import { describeFilterQuery } from "../../filter/parse.js"
+import { focusedSectionHeaderId, type SectionNavGroup, type SectionNavResult, stepSection, toggleAllSectionsAt, toggleSectionAt } from "../../sections/cursor.js"
 import { buildPullRequestListRows, pullRequestListRowIndex, type PullRequestGroups, type PullRequestListRow, type PullRequestSections } from "../../ui/PullRequestList.js"
 import { useScrollFollowSelected } from "../../ui/useScrollFollowSelected.js"
 import { useScrollPersistence } from "../../ui/useScrollPersistence.js"
@@ -109,6 +111,8 @@ export interface PullRequestSurfaceShell {
 	readonly toggleAllSections: () => void
 	/** Collapse or expand the section containing the selected PR. */
 	readonly toggleSelectedSection: () => void
+	/** `[` / `]` in the sections view. */
+	readonly stepSectionBy: (delta: 1 | -1) => void
 	readonly pullRequestListRows: readonly PullRequestListRow[]
 	readonly selectedPullRequestRowIndex: number | null
 	// Atom setters re-exposed for App-shell-level consumers (modals, mutations,
@@ -212,6 +216,12 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 	const sectionGroups = useAtomValue(sectionGroupsAtom)
 	const sectionsConfigError = useAtomValue(sectionsConfigErrorAtom)
 	const setCollapsedSections = useAtomSet(collapsedSectionsAtom)
+	const [sectionCursor, setSectionCursor] = useAtom(sectionCursorAtom)
+	const sectionNavGroups = useMemo<readonly SectionNavGroup[]>(
+		() => sectionGroups.map((group) => ({ id: group.id, collapsed: group.collapsed, urls: group.pullRequests.map((pullRequest) => pullRequest.url) })),
+		[sectionGroups],
+	)
+	const focusedSectionId = focusedSectionHeaderId(sectionNavGroups, sectionCursor, selectedPullRequest?.url ?? null)
 	const pullRequestSections = useMemo<PullRequestSections | null>(
 		() =>
 			activeView._tag === "Sections"
@@ -223,25 +233,13 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 							error: group.error,
 							collapsed: group.collapsed,
 							count: group.pullRequests.length,
+							focused: group.id === focusedSectionId,
 						})),
 						configError: sectionsConfigError,
 					}
 				: null,
-		[activeView._tag, sectionGroups, sectionsConfigError],
+		[activeView._tag, sectionGroups, sectionsConfigError, focusedSectionId],
 	)
-	const toggleSection = useCallback(
-		(id: string) => {
-			const group = sectionGroups.find((candidate) => candidate.id === id)
-			if (!group) return
-			setCollapsedSections((current) => ({ ...current, [id]: !group.collapsed }))
-		},
-		[sectionGroups, setCollapsedSections],
-	)
-	const toggleAllSections = useCallback(() => {
-		if (sectionGroups.length === 0) return
-		const collapse = sectionGroups.some((group) => !group.collapsed)
-		setCollapsedSections(Object.fromEntries(sectionGroups.map((group) => [group.id, collapse])))
-	}, [sectionGroups, setCollapsedSections])
 	const activeViews = useAtomValue(activeViewsAtom)
 	const currentQueueCacheKey = viewCacheKey(activeView)
 	const loadedPullRequestCount = useAtomValue(loadedPullRequestCountAtom)
@@ -380,11 +378,39 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		}
 	}
 
-	const toggleSelectedSection = useCallback(() => {
-		const url = selectedPullRequest?.url
-		const section = url ? visibleGroups.find(([, pullRequests]) => pullRequests.some((pullRequest) => pullRequest.url === url)) : undefined
-		if (section) toggleSection(section[0])
-	}, [selectedPullRequest, visibleGroups, toggleSection])
+	const applySectionNav = useCallback(
+		(result: SectionNavResult | null) => {
+			if (!result) return
+			const { collapsed } = result
+			if (collapsed) setCollapsedSections((current) => ({ ...current, ...collapsed }))
+			setSectionCursor(result.cursor)
+			if (result.selectIndex !== null && result.selectUrl !== null) {
+				const index = result.selectIndex
+				// Remember the new url first so the selection-recovery effect doesn't pull the old PR back.
+				selectedUrlRef.current = { cacheKey: currentQueueCacheKey, url: result.selectUrl }
+				setSelectedIndex(index)
+				setQueueSelection((current) => ({ ...current, [currentQueueCacheKey]: index }))
+			}
+		},
+		[currentQueueCacheKey, setCollapsedSections, setQueueSelection, setSectionCursor, setSelectedIndex],
+	)
+	const selectedUrl = selectedPullRequest?.url ?? null
+	const toggleSection = useCallback(
+		(id: string) => applySectionNav(toggleSectionAt(sectionNavGroups, sectionCursor, selectedUrl, id)),
+		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+	)
+	const toggleSelectedSection = useCallback(
+		() => applySectionNav(toggleSectionAt(sectionNavGroups, sectionCursor, selectedUrl)),
+		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+	)
+	const toggleAllSections = useCallback(
+		() => applySectionNav(toggleAllSectionsAt(sectionNavGroups, sectionCursor, selectedUrl)),
+		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+	)
+	const stepSectionBy = useCallback(
+		(delta: 1 | -1) => applySectionNav(stepSection(sectionNavGroups, sectionCursor, selectedUrl, delta)),
+		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+	)
 
 	// `isFullscreen` is provisionally `false` for the PR Surface here — the
 	// detail/diff/comments full-view booleans still live in App-shell during
@@ -422,6 +448,7 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		toggleSection,
 		toggleAllSections,
 		toggleSelectedSection,
+		stepSectionBy,
 		pullRequestListRows,
 		selectedPullRequestRowIndex,
 		setPullRequestOverrides,

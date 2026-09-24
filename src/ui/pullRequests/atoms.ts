@@ -15,6 +15,7 @@ import { activePullRequestViews, type PullRequestView, SECTIONS_VIEW_CACHE_KEY, 
 import { filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
 import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
+import type { SectionCursor } from "../../sections/cursor.js"
 import { assignSections } from "../../sections/merge.js"
 import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
@@ -66,6 +67,8 @@ export const sectionStatesAtom = Atom.make<readonly SectionState[]>([]).pipe(Ato
 export const sectionsConfigErrorAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive)
 /** Collapse toggles by section id, overriding `collapsed:` from config. */
 export const collapsedSectionsAtom = Atom.make<Partial<Record<string, boolean>>>({}).pipe(Atom.keepAlive)
+/** Section `[` / `]` / `z` act on; see `sections/cursor.ts`. */
+export const sectionCursorAtom = Atom.make<SectionCursor | null>(null).pipe(Atom.keepAlive)
 
 // Keep hydrated details when a fresh search summary for the same head arrives.
 const keepHydratedDetail = (existing: readonly PullRequestItem[], fresh: readonly PullRequestItem[]) => {

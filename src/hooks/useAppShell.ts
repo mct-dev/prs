@@ -293,6 +293,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		toggleSection,
 		toggleAllSections,
 		toggleSelectedSection,
+		stepSectionBy,
 		pullRequestListRows,
 		setPullRequestOverrides,
 		setRecentlyCompletedPullRequests,
@@ -930,20 +931,31 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 	const runCommandPaletteCommand = (command: AppCommand) => {
 		runCommand(command, { notifyDisabled: true, closePalette: true })
 	}
-	const { stepSelected, stepSelectedDown, stepSelectedUp, stepSelectedDownWithLoadMore, stepSelectedUpWrap, moveSelectedToPreviousGroup, moveSelectedToNextGroup } =
-		useListSelectionStepping({
-			activeWorkspaceSurface,
-			visiblePullRequests,
-			issues,
-			repositoryItems,
-			loadMoreSlotAvailable,
-			issueLoadMoreSlotAvailable,
-			groupStarts,
-			getCurrentGroupIndex,
-			setSelectedIndex,
-			setSelectedIssueIndex,
-			setSelectedRepositoryIndex,
-		})
+	const {
+		stepSelected,
+		stepSelectedDown,
+		stepSelectedUp,
+		stepSelectedDownWithLoadMore,
+		stepSelectedUpWrap,
+		moveSelectedToPreviousGroup: moveSelectedToPreviousRepositoryGroup,
+		moveSelectedToNextGroup: moveSelectedToNextRepositoryGroup,
+	} = useListSelectionStepping({
+		activeWorkspaceSurface,
+		visiblePullRequests,
+		issues,
+		repositoryItems,
+		loadMoreSlotAvailable,
+		issueLoadMoreSlotAvailable,
+		groupStarts,
+		getCurrentGroupIndex,
+		setSelectedIndex,
+		setSelectedIssueIndex,
+		setSelectedRepositoryIndex,
+	})
+	// In the sections view `[` / `]` move the section cursor, which can rest on collapsed or empty sections.
+	const sectionsNavActive = activeView._tag === "Sections" && activeWorkspaceSurface === "pullRequests"
+	const moveSelectedToPreviousGroup = sectionsNavActive ? () => stepSectionBy(-1) : moveSelectedToPreviousRepositoryGroup
+	const moveSelectedToNextGroup = sectionsNavActive ? () => stepSectionBy(1) : moveSelectedToNextRepositoryGroup
 	const handleQuitOrClose = () => {
 		if (themeModalActive) {
 			closeThemeModal(false)
