@@ -2,8 +2,12 @@
 # Fake `claude` / `codex` binary for review runner tests.
 # FAKE_AGENT_MODE: ok (default) | bad | error | sleep
 # FAKE_AGENT_RECORD: file that receives cwd then argv, NUL-separated.
+# FAKE_AGENT_COPY_CONTEXT: directory prefix; the cwd's .prs-context is copied to "<prefix>-<pid>".
 if [ -n "$FAKE_AGENT_RECORD" ]; then
 	printf '%s\0' "$(pwd -P)" "$@" > "$FAKE_AGENT_RECORD"
+fi
+if [ -n "$FAKE_AGENT_COPY_CONTEXT" ] && [ -d .prs-context ]; then
+	cp -R .prs-context "$FAKE_AGENT_COPY_CONTEXT-$$"
 fi
 
 brief='{"risk":"medium","summary":"Adds a greeting.","before_after":null,"focus_areas":[{"file":"hello.txt","lines":"1","why":"New text.","severity":"low"}],"safe_to_skip":[],"questions":[],"tests":null,"confidence":"high"}'

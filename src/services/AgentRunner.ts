@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { Context, Effect, FiberMap, Layer, Schema, Semaphore, Stream, SubscriptionRef } from "effect"
+import { Context, Effect, Exit, FiberMap, Layer, Schema, Semaphore, Stream, SubscriptionRef } from "effect"
 import { config } from "../config.js"
 import type { RiskBrief } from "../review/briefSchema.js"
 import { type BriefStatus, briefStatusFor, reviewEntryFromRecord, type ReviewIndex, reviewKey } from "../review/briefStatus.js"
@@ -91,6 +91,14 @@ export class AgentRunner extends Context.Service<
 					}
 
 					const id = randomUUID()
+					// Last record written for this run, so the exit handler can tell
+					// whether `runReview` already reached a terminal state.
+					let latest: AgentReviewRecord | null = null
+					const track = (record: AgentReviewRecord, brief: RiskBrief | null) =>
+						Effect.suspend(() => {
+							latest = record
+							return persist(record, brief)
+						})
 					const input = {
 						id,
 						pullRequest,
@@ -99,18 +107,27 @@ export class AgentRunner extends Context.Service<
 						paths: options.paths,
 						timeoutMs: review.timeoutMs,
 						startedAt: new Date(),
-						persist,
+						persist: track,
 						...(options.ghCommand ? { ghCommand: options.ghCommand } : {}),
 					}
 					active.set(id, { key, headSha: pullRequest.headRefOid, preset: preset.id })
-					yield* persist(initialReviewRecord(input), null)
+					yield* track(initialReviewRecord(input), null)
+					// A run cancelled (or failing) while still queued on the semaphore never
+					// enters `runReview`, so finalize its record here.
+					const finalize = (exit: Exit.Exit<AgentReviewRecord>) =>
+						Effect.suspend(() => {
+							const record = latest
+							if (!record || record.status !== "running") return Effect.void
+							const cancelled = Exit.hasInterrupts(exit)
+							return track({ ...record, status: cancelled ? "cancelled" : "error", error: cancelled ? null : "Review ended unexpectedly", finishedAt: new Date() }, null)
+						})
 					yield* FiberMap.run(
 						fibers,
 						id,
 					)(
 						semaphore
 							.withPermits(1)(runReview(input))
-							.pipe(Effect.ensuring(Effect.sync(() => active.delete(id)))),
+							.pipe(Effect.onExit(finalize), Effect.ensuring(Effect.sync(() => active.delete(id)))),
 					)
 					return id
 				})

@@ -1,5 +1,8 @@
 import type { ReviewPreset } from "./config.js"
 
+/** Folder, inside a worktree, holding the pre-generated diff, log and file list. */
+export const CONTEXT_DIR = ".prs-context"
+
 export type ReviewMode = "worktree" | "diff-only"
 
 export interface ReviewPromptInput {
@@ -24,7 +27,7 @@ export const READ_ONLY_RULES = [
 	"This is a strictly read-only review.",
 	"Never post comments, reviews, or approvals. Never push, commit, merge, or create branches.",
 	"Never create, modify, or delete files. Do not run commands that change the repository or anything on GitHub.",
-	"Use only read-only inspection (reading files, searching, git diff/log/show/blame).",
+	"You have no shell. Use only the Read, Grep and Glob tools.",
 ] as const
 
 const truncate = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}\n…(truncated)` : text)
@@ -37,10 +40,15 @@ const fileList = (files: readonly string[]) => {
 
 const locationSection = (input: ReviewPromptInput) => {
 	if (input.mode === "worktree") {
-		const range = input.mergeBase ? `${input.mergeBase}..HEAD` : `origin/${input.baseRefName}...HEAD`
-		return ["The PR head is checked out (detached) in the current directory.", `See the full change with \`git diff ${range}\`; inspect history with git log/show/blame.`].join(
-			"\n",
-		)
+		const range = input.mergeBase ? ` (${input.mergeBase.slice(0, 12)}..${input.headSha.slice(0, 12)})` : ""
+		return [
+			"The PR head is checked out (detached) in the current directory; read any file there for context.",
+			`Pre-generated context is in \`${CONTEXT_DIR}/\`, which is not part of the PR:`,
+			`- \`${CONTEXT_DIR}/diff.patch\`: the full change${range}`,
+			`- \`${CONTEXT_DIR}/log.txt\`: the PR's commits with file stats`,
+			`- \`${CONTEXT_DIR}/files.txt\`: the changed files, one per line`,
+			"Read and Grep those files instead of running git.",
+		].join("\n")
 	}
 	return [
 		"You are in diff-only mode: there is no checkout of the repository.",

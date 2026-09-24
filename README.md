@@ -162,11 +162,15 @@ directory in `runs/`.
 Agent reviews are **read-only**. The agent never posts comments, approves
 or pushes:
 
-- Claude runs non-interactively. It has an allowlist of read and search
-  tools. Edit and write tools, `git commit`, `git push`, all `gh` commands and network
-  tools are denied, and it runs with no project settings or MCP servers.
+- Claude runs non-interactively with only Read, Grep and Glob. Bash, edit and
+  write tools, web tools and subagents are denied outright. Deny rules win
+  over any allow rules in your user settings. It loads your user skills but
+  no project settings or MCP servers.
+- The agent has no shell. prs pre-generates the diff, the commit log and
+  the file list into `.prs-context/` inside the worktree.
 - Codex runs in its `read-only` sandbox.
-- Worktrees are created with git hooks disabled.
+- Worktrees are created with git hooks disabled. PR refs are fetched into
+  private `refs/prs/...` refs, which are deleted afterwards.
 - prs only reads the agent's JSON output. Nothing is sent to GitHub.
 
 ## Keybindings

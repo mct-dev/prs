@@ -1,10 +1,11 @@
+import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { Effect } from "effect"
 import type { PullRequestItem } from "../domain.js"
 import { type RepoPaths, resolveRepoPath } from "../editorCommand.js"
-import type { ReviewMode } from "./prompt.js"
+import { CONTEXT_DIR, type ReviewMode } from "./prompt.js"
 import { type RunLog, runChecked, runLogged } from "./process.js"
 
 export type WorkspacePullRequest = Pick<
@@ -77,6 +78,22 @@ const isGitRepo = (path: string, options: { timeoutMs: number; log: RunLog | nul
 		Effect.orElseSucceed(() => false),
 	)
 
+/**
+ * Private refs for one run. Fetching into explicit refs (instead of
+ * FETCH_HEAD) keeps concurrent reviews against the same clone from racing;
+ * the random segment keeps two runs of the same PR apart too.
+ */
+export const reviewRefs = (number: number, token: string = randomUUID().slice(0, 8)) => {
+	const prefix = `refs/prs/pull/${number}/${token}`
+	return { head: `${prefix}/head`, base: `${prefix}/base` }
+}
+
+const fetchDiff = (pr: WorkspacePullRequest, cwd: string, options: PrepareWorkspaceOptions) =>
+	runChecked(
+		{ command: options.ghCommand ?? "gh", args: ["pr", "diff", String(pr.number), "-R", pr.repository], cwd },
+		{ timeoutMs: options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS, log: options.log },
+	).pipe(Effect.map((result) => result.stdout))
+
 const prepareWorktree = Effect.fn("review.prepareWorktree")(function* (clone: string, options: PrepareWorkspaceOptions) {
 	const { pullRequest: pr, log } = options
 	const run = { timeoutMs: options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS, log }
@@ -86,51 +103,79 @@ const prepareWorktree = Effect.fn("review.prepareWorktree")(function* (clone: st
 			Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
 			Effect.orElseSucceed(() => null),
 		)
+	const gitText = (...args: string[]) =>
+		runLogged({ command: "git", args: ["-C", clone, ...args], cwd: clone }, run).pipe(
+			Effect.map((result) => (result.exitCode === 0 ? result.stdout : null)),
+			Effect.orElseSucceed(() => null),
+		)
 
-	const remote = pickRemote((yield* gitOk("remote", "-v")) ?? "", pr.repository)
-	yield* git("fetch", "--no-tags", remote, `pull/${pr.number}/head`)
-	const hasHead = (yield* gitOk("cat-file", "-e", `${pr.headRefOid}^{commit}`)) !== null
-	const headSha = hasHead ? pr.headRefOid : (yield* git("rev-parse", "FETCH_HEAD")).stdout.trim()
+	const refs = reviewRefs(pr.number)
+	const deleteRefs = Effect.all([gitOk("update-ref", "-d", refs.head), gitOk("update-ref", "-d", refs.base)]).pipe(Effect.asVoid)
 
-	let mergeBase: string | null = null
-	if ((yield* gitOk("fetch", "--no-tags", remote, pr.baseRefName)) !== null) {
-		mergeBase = yield* gitOk("merge-base", headSha, "FETCH_HEAD")
-	}
+	const prepared = Effect.gen(function* () {
+		const remote = pickRemote((yield* gitOk("remote", "-v")) ?? "", pr.repository)
+		yield* git("fetch", "--no-tags", remote, `+pull/${pr.number}/head:${refs.head}`)
+		const hasHead = (yield* gitOk("cat-file", "-e", `${pr.headRefOid}^{commit}`)) !== null
+		const headSha = hasHead ? pr.headRefOid : (yield* git("rev-parse", refs.head)).stdout.trim()
 
-	yield* Effect.promise(() => mkdir(options.worktreesDir, { recursive: true }))
-	const path = join(options.worktreesDir, worktreeDirName(pr.repository, pr.number, headSha, options.presetId))
-	const cleanup = git("worktree", "remove", "--force", path).pipe(
-		Effect.catch(() => Effect.promise(() => rm(path, { recursive: true, force: true })).pipe(Effect.andThen(gitOk("worktree", "prune")))),
-		Effect.asVoid,
-	)
+		let mergeBase: string | null = null
+		if ((yield* gitOk("fetch", "--no-tags", remote, `+refs/heads/${pr.baseRefName}:${refs.base}`)) !== null) {
+			mergeBase = yield* gitOk("merge-base", headSha, refs.base)
+		}
 
-	const existingHead = existsSync(path)
-		? yield* runLogged({ command: "git", args: ["-C", path, "rev-parse", "HEAD"], cwd: path }, run).pipe(
-				Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
-				Effect.orElseSucceed(() => null),
-			)
-		: null
-	if (existingHead !== headSha) {
-		if (existsSync(path)) yield* cleanup
-		// Disable hooks: the checkout is untrusted PR code.
-		yield* git("-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", path, headSha)
-	} else {
-		log?.write(`reusing worktree ${path}\n`)
-	}
+		yield* Effect.promise(() => mkdir(options.worktreesDir, { recursive: true }))
+		const path = join(options.worktreesDir, worktreeDirName(pr.repository, pr.number, headSha, options.presetId))
+		const removeWorktree = git("worktree", "remove", "--force", path).pipe(
+			Effect.catch(() => Effect.promise(() => rm(path, { recursive: true, force: true })).pipe(Effect.andThen(gitOk("worktree", "prune")))),
+			Effect.asVoid,
+		)
 
-	const files = mergeBase ? nonEmptyLines((yield* gitOk("diff", "--name-only", `${mergeBase}..${headSha}`)) ?? "") : []
-	return { mode: "worktree", cwd: path, headSha, mergeBase, files, cleanup } satisfies PreparedWorkspace
+		const existingHead = existsSync(path)
+			? yield* runLogged({ command: "git", args: ["-C", path, "rev-parse", "HEAD"], cwd: path }, run).pipe(
+					Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
+					Effect.orElseSucceed(() => null),
+				)
+			: null
+		if (existingHead !== headSha) {
+			if (existsSync(path)) yield* removeWorktree
+			// Disable hooks: the checkout is untrusted PR code.
+			yield* git("-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", path, headSha)
+		} else {
+			log?.write(`reusing worktree ${path}\n`)
+		}
+
+		// The agent has no shell, so hand it the diff and history as plain files.
+		const range = mergeBase ? `${mergeBase}..${headSha}` : null
+		const diff = range ? yield* gitText("diff", "--no-color", "--no-ext-diff", "--no-textconv", range) : null
+		const patch = diff ?? (yield* fetchDiff(pr, path, options).pipe(Effect.tapError(() => removeWorktree)))
+		const files = range ? nonEmptyLines((yield* gitOk("diff", "--name-only", range)) ?? "") : filesFromDiff(patch)
+		const history = (yield* gitText("log", "--no-color", "--stat", ...(range ? [range] : ["-n", "20", headSha]))) ?? "(log unavailable)\n"
+		const contextDir = join(path, CONTEXT_DIR)
+		yield* Effect.promise(async () => {
+			await rm(contextDir, { recursive: true, force: true })
+			await mkdir(contextDir, { recursive: true })
+			await Promise.all([
+				writeFile(join(contextDir, "diff.patch"), patch),
+				writeFile(join(contextDir, "log.txt"), history),
+				writeFile(join(contextDir, "files.txt"), files.length > 0 ? `${files.join("\n")}\n` : ""),
+			])
+		})
+
+		const cleanup = removeWorktree.pipe(Effect.andThen(deleteRefs))
+		return { mode: "worktree", cwd: path, headSha, mergeBase, files, cleanup } satisfies PreparedWorkspace
+	})
+
+	// The refs are only needed while preparing (the worktree pins the commit), so
+	// drop them as soon as preparation ends, successfully or not.
+	return yield* prepared.pipe(Effect.ensuring(deleteRefs))
 })
 
 const prepareDiffOnly = Effect.fn("review.prepareDiffOnly")(function* (options: PrepareWorkspaceOptions) {
-	const { pullRequest: pr, log } = options
+	const { pullRequest: pr } = options
 	yield* Effect.promise(() => mkdir(options.tempDir, { recursive: true }))
 	const dir = yield* Effect.promise(() => mkdtemp(join(options.tempDir, `${worktreeDirName(pr.repository, pr.number, pr.headRefOid, options.presetId)}-`)))
 	const cleanup = Effect.promise(() => rm(dir, { recursive: true, force: true }))
-	const diff = yield* runChecked(
-		{ command: options.ghCommand ?? "gh", args: ["pr", "diff", String(pr.number), "-R", pr.repository], cwd: dir },
-		{ timeoutMs: options.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS, log },
-	).pipe(Effect.tapError(() => cleanup))
+	const diff = yield* fetchDiff(pr, dir, options).pipe(Effect.tapError(() => cleanup))
 	const metadata = {
 		repository: pr.repository,
 		number: pr.number,
@@ -145,14 +190,15 @@ const prepareDiffOnly = Effect.fn("review.prepareDiffOnly")(function* (options: 
 		deletions: pr.deletions,
 		changedFiles: pr.changedFiles,
 	}
-	yield* Effect.promise(() => Promise.all([writeFile(join(dir, "pr.diff"), diff.stdout), writeFile(join(dir, "pr.json"), `${JSON.stringify(metadata, null, 2)}\n`)]))
-	return { mode: "diff-only", cwd: dir, headSha: pr.headRefOid, mergeBase: null, files: filesFromDiff(diff.stdout), cleanup } satisfies PreparedWorkspace
+	yield* Effect.promise(() => Promise.all([writeFile(join(dir, "pr.diff"), diff), writeFile(join(dir, "pr.json"), `${JSON.stringify(metadata, null, 2)}\n`)]))
+	return { mode: "diff-only", cwd: dir, headSha: pr.headRefOid, mergeBase: null, files: filesFromDiff(diff), cleanup } satisfies PreparedWorkspace
 })
 
 /**
  * Prepare an isolated, read-only place for the agent to look at the PR: a
  * detached git worktree of the local clone when one is configured in
- * `repoPaths`, otherwise a temp dir with `pr.diff` and `pr.json`.
+ * `repoPaths` (with the diff, log and file list pre-generated under
+ * `CONTEXT_DIR`), otherwise a temp dir with `pr.diff` and `pr.json`.
  */
 export const prepareWorkspace = Effect.fn("review.prepareWorkspace")(function* (options: PrepareWorkspaceOptions) {
 	const clone = resolveRepoPath(options.repoPaths, options.pullRequest.repository)

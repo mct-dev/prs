@@ -16,7 +16,7 @@ const fakeGh = join(import.meta.dir, "fixtures", "fake-gh.sh")
 
 let root = ""
 let paths: ReviewPaths
-const envKeys = ["FAKE_AGENT_MODE", "FAKE_AGENT_RECORD", "FAKE_AGENT_CHILD_PID"] as const
+const envKeys = ["FAKE_AGENT_MODE", "FAKE_AGENT_RECORD", "FAKE_AGENT_CHILD_PID", "FAKE_AGENT_COPY_CONTEXT"] as const
 
 beforeEach(async () => {
 	root = realpathSync(await mkdtemp(join(tmpdir(), "prs-run-review-")))
@@ -94,8 +94,20 @@ const makeRepos = async () => {
 	git(work, "commit", "-q", "-m", "greet")
 	const sha = git(work, "rev-parse", "HEAD")
 	git(work, "push", "-q", origin, "HEAD:refs/pull/1/head")
-	return { clone, sha }
+	git(work, "checkout", "-q", "main")
+	git(work, "checkout", "-q", "-b", "other")
+	await writeFile(join(work, "other.txt"), "other\n")
+	git(work, "add", ".")
+	git(work, "commit", "-q", "-m", "other change")
+	const otherSha = git(work, "rev-parse", "HEAD")
+	git(work, "push", "-q", origin, "HEAD:refs/pull/2/head")
+	return { clone, sha, otherSha }
 }
+
+const contextCopies = () =>
+	readdirSync(root)
+		.filter((name) => name.startsWith("context-"))
+		.map((name) => join(root, name))
 
 describe("runReview", () => {
 	test("diff-only mode: claude brief is validated, logged, and the temp dir removed", async () => {
@@ -132,8 +144,53 @@ describe("runReview", () => {
 		const { cwd, args } = recordedArgs(process.env.FAKE_AGENT_RECORD)
 		expect(cwd).toBe(join(paths.worktreesDir, `owner-repo-1-${sha.slice(0, 7)}-claude`))
 		expect(args[1]).toContain("- hello.txt")
-		expect(args[1]).toMatch(/git diff [0-9a-f]{40}\.\.HEAD/)
+		expect(args[1]).toContain(".prs-context/diff.patch")
 		expect(existsSync(cwd)).toBe(false)
+		expect(git(clone, "worktree", "list").split("\n")).toHaveLength(1)
+		// Private fetch refs are gone and FETCH_HEAD was never relied on.
+		expect(git(clone, "for-each-ref", "refs/prs")).toBe("")
+	})
+
+	test("worktree mode: pre-generates diff, log and file list for a shell-less agent", async () => {
+		const { clone, sha } = await makeRepos()
+		process.env.FAKE_AGENT_COPY_CONTEXT = join(root, "context")
+		const { record } = await run({ pr: pullRequest({ headRefOid: sha }), repoPaths: { "owner/repo": clone } })
+		expect(record.status).toBe("done")
+		const [context] = contextCopies()
+		expect(context).toBeDefined()
+		const patch = readFileSync(join(context!, "diff.patch"), "utf8")
+		expect(patch).toContain("diff --git a/hello.txt b/hello.txt")
+		expect(patch).toContain("+hello")
+		expect(patch).not.toContain("README.md")
+		expect(readFileSync(join(context!, "log.txt"), "utf8")).toContain("greet")
+		expect(readFileSync(join(context!, "files.txt"), "utf8")).toBe("hello.txt\n")
+	})
+
+	test("worktree mode: concurrent reviews of different PRs on one clone use separate refs", async () => {
+		const { clone, sha, otherSha } = await makeRepos()
+		process.env.FAKE_AGENT_COPY_CONTEXT = join(root, "context")
+		const review = (id: string, pr: WorkspacePullRequest) =>
+			runReview({
+				id,
+				pullRequest: pr,
+				preset: presets.claude!,
+				repoPaths: { "owner/repo": clone },
+				paths,
+				timeoutMs: 30_000,
+				startedAt: new Date(),
+				persist: () => Effect.void,
+				ghCommand: fakeGh,
+			})
+		const [first, second] = await Effect.runPromise(
+			Effect.all([review("run-a", pullRequest({ headRefOid: sha })), review("run-b", pullRequest({ number: 2, headRefOid: otherSha }))], { concurrency: "unbounded" }),
+		)
+		expect([first.status, first.headSha]).toEqual(["done", sha])
+		expect([second.status, second.headSha]).toEqual(["done", otherSha])
+		const fileLists = contextCopies()
+			.map((dir) => readFileSync(join(dir, "files.txt"), "utf8"))
+			.sort()
+		expect(fileLists).toEqual(["hello.txt\n", "other.txt\n"])
+		expect(git(clone, "for-each-ref", "refs/prs")).toBe("")
 		expect(git(clone, "worktree", "list").split("\n")).toHaveLength(1)
 	})
 
@@ -250,6 +307,37 @@ describe("AgentRunner", () => {
 		const childPid = Number(readFileSync(process.env.FAKE_AGENT_CHILD_PID, "utf8"))
 		await waitFor(() => !isAlive(childPid))
 		expect(readdirSafe(paths.tempDir)).toEqual([])
+	})
+
+	test("cancelling a run still queued behind the concurrency limit records cancellation", async () => {
+		process.env.FAKE_AGENT_MODE = "sleep"
+		process.env.FAKE_AGENT_CHILD_PID = join(root, "child.pid")
+		const cachePath = join(root, "cache.sqlite")
+		const first = pullRequest()
+		const second = pullRequest({ number: 2, url: "https://github.com/owner/repo/pull/2" })
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const runner = yield* AgentRunner
+				const firstId = yield* runner.startReview(first)
+				yield* Effect.promise(() => waitFor(() => existsSync(process.env.FAKE_AGENT_CHILD_PID!)))
+				const secondId = yield* runner.startReview(second)
+				const queued = yield* runner.briefStatus(second)
+				expect(yield* runner.cancelReview(secondId)).toBe(true)
+				const cancelled = yield* runner.latestBrief(second.repository, second.number, second.headRefOid)
+				const stillRunning = yield* runner.briefStatus(first)
+				yield* runner.cancelReview(firstId)
+				return { queued, cancelled, stillRunning }
+			}).pipe(Effect.provide(runnerLayer(cachePath)), Effect.scoped),
+		)
+		expect(result.queued._tag).toBe("running")
+		expect(result.cancelled?.record.status).toBe("cancelled")
+		expect(result.cancelled?.record.finishedAt).not.toBeNull()
+		expect(result.stillRunning._tag).toBe("running")
+
+		const persisted = await Effect.runPromise(
+			CacheService.use((cache) => cache.readLatestAgentReview({ repository: "owner/repo", number: 2 })).pipe(Effect.provide(CacheService.layerSqliteFile(cachePath))),
+		)
+		expect(persisted?.status).toBe("cancelled")
 	})
 })
 

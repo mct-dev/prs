@@ -6,11 +6,19 @@ export interface AgentInvocation {
 	readonly cwd: string
 }
 
-/** Tools the Claude reviewer may use. Everything else is denied in `dontAsk` mode. */
-export const CLAUDE_ALLOWED_TOOLS = ["Read", "Grep", "Glob", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git blame:*)"] as const
+/**
+ * Tools the Claude reviewer may use. No Bash at all: even "read-only" git
+ * commands accept flags like `--output=<file>`. The diff and log are
+ * pre-generated into the workspace instead (see `CONTEXT_DIR`).
+ */
+export const CLAUDE_ALLOWED_TOOLS = ["Read", "Grep", "Glob"] as const
 
-/** Belt and braces: explicitly deny tools that could write, post, or reach the network. */
-export const CLAUDE_DISALLOWED_TOOLS = ["Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Bash(gh:*)", "Bash(git push:*)", "Bash(git commit:*)", "Bash(curl:*)"] as const
+/**
+ * Denied outright. User-level settings still load (for skills), and deny rules
+ * beat any allow rule the user has, so this is what actually keeps the run
+ * read-only. `Task`/`Agent` are denied so no subagent can escape the list.
+ */
+export const CLAUDE_DISALLOWED_TOOLS = ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Agent"] as const
 
 export interface ClaudeArgsInput {
 	readonly preset: ReviewPreset

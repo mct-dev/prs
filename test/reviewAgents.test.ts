@@ -33,8 +33,10 @@ describe("buildClaudeInvocation", () => {
 		expect(args.slice(deniedStart, deniedStart + CLAUDE_DISALLOWED_TOOLS.length)).toEqual([...CLAUDE_DISALLOWED_TOOLS])
 		// Variadic lists must be terminated by a flag, never by a positional.
 		expect(args[deniedStart + CLAUDE_DISALLOWED_TOOLS.length]?.startsWith("--")).toBe(true)
-		for (const tool of ["Edit", "Write", "Bash(gh:*)", "Bash(git push:*)"]) expect(CLAUDE_DISALLOWED_TOOLS).toContain(tool as never)
-		expect(CLAUDE_ALLOWED_TOOLS.some((tool) => tool === "Bash" || tool.startsWith("Edit") || tool.startsWith("Write"))).toBe(false)
+		for (const tool of ["Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Agent"]) expect(CLAUDE_DISALLOWED_TOOLS).toContain(tool as never)
+		// Only pure read tools: no Bash of any shape (git flags like --output can write files).
+		expect([...CLAUDE_ALLOWED_TOOLS]).toEqual(["Read", "Grep", "Glob"])
+		expect(args.some((arg) => arg.startsWith("Bash("))).toBe(false)
 	})
 
 	test("passes model and binary override", () => {

@@ -21,7 +21,18 @@ const input: ReviewPromptInput = {
 describe("buildReviewPrompt", () => {
 	test("includes PR context and file list", () => {
 		const prompt = buildReviewPrompt(input, presets.claude!)
-		for (const text of ["owner/repo#7", "Add retry", "Retries the fetch loop.", input.url, "Base branch: main", "abcdef1234567890", "- src/fetch.ts", "git diff 1234567..HEAD"]) {
+		for (const text of [
+			"owner/repo#7",
+			"Add retry",
+			"Retries the fetch loop.",
+			input.url,
+			"Base branch: main",
+			"abcdef1234567890",
+			"- src/fetch.ts",
+			".prs-context/diff.patch",
+			".prs-context/log.txt",
+			"(1234567..abcdef123456)",
+		]) {
 			expect(prompt).toContain(text)
 		}
 	})
@@ -45,13 +56,15 @@ describe("buildReviewPrompt", () => {
 		expect(prompt).toMatch(/approv/i)
 		expect(prompt).toMatch(/never push/i)
 		expect(prompt).toMatch(/must be a single JSON object that matches the provided JSON schema/)
+		expect(prompt).toContain("You have no shell")
+		expect(prompt).not.toMatch(/git (diff|log|show|blame)/)
 	})
 
 	test("diff-only mode points at pr.diff", () => {
 		const prompt = buildReviewPrompt({ ...input, mode: "diff-only", mergeBase: null }, presets.claude!)
 		expect(prompt).toContain("diff-only mode")
 		expect(prompt).toContain("pr.diff")
-		expect(prompt).not.toContain("git diff 1234567")
+		expect(prompt).not.toContain(".prs-context")
 	})
 
 	test("appends extraPrompt", () => {
