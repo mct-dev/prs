@@ -104,7 +104,7 @@ export const LoadingArt = memo(function LoadingArt({
 })
 
 const hintLine = (content: LoadingLogoContent, width: number, frame: number) => {
-	const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length]!
+	const spinner = SPINNER_FRAMES[loadingArtAnimated() ? frame % SPINNER_FRAMES.length : 0]!
 	return <PlainLine text={centerCell(`${spinner} ${content.hint}`, width)} fg={colors.muted} />
 }
 

@@ -36,6 +36,7 @@ Forked from [kitlangton/ghui](https://github.com/kitlangton/ghui) at `76c91b8` (
 - `PRS_PR_FETCH_LIMIT`: max PRs fetched, defaults to `500`
 - `PRS_RUN_FETCH_LIMIT`: max workflow runs fetched per PR, defaults to `20`
 - `PRS_NO_ANIMATION=1`: show a still loading picture instead of the animated one
+- `PRS_LOADING_ART=contours|plasma|torus`: pick the loading art (default `contours`)
 
 Example:
 

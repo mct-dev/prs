@@ -32,4 +32,9 @@ describe("envConfig", () => {
 	test("uses the default when neither is set", () => {
 		expect(readConfig(limit, {})).toBe(500)
 	})
+
+	test("an invalid PRS_ value fails instead of falling back", () => {
+		expect(() => readConfig(limit, { PRS_PR_FETCH_LIMIT: "abc", GHUI_PR_FETCH_LIMIT: "7" })).toThrow()
+		expect(() => readConfig(limit, { PRS_PR_FETCH_LIMIT: "abc" })).toThrow()
+	})
 })
