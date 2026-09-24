@@ -191,6 +191,12 @@ export const setDiffThreadsExpanded = (threads: readonly DiffThread[], expanded:
 	return next
 }
 
+// Threads on files this diff shows. Comments can point at paths that are
+// not in the patch (e.g. a file later reverted); they have no rows, so they
+// must not count as "open" for shift+c.
+export const diffThreadsInFiles = (threads: ReadonlyMap<string, readonly DiffThread[]>, stackedFiles: readonly StackedDiffFilePatch[]): readonly DiffThread[] =>
+	stackedFiles.flatMap((file) => threads.get(file.file.name) ?? [])
+
 // shift+c: collapse everything if anything is open, else expand everything.
 export const toggleAllDiffThreads = (threads: readonly DiffThread[], toggled: ReadonlySet<string>): ReadonlySet<string> =>
 	setDiffThreadsExpanded(threads, !threads.some((thread) => diffThreadExpanded(thread, toggled)), toggled)

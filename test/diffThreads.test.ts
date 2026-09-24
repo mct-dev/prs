@@ -6,6 +6,7 @@ import {
 	diffThreadKeysAtCursor,
 	diffThreadLines,
 	diffThreadPlacements,
+	diffThreadsInFiles,
 	diffThreadsByPath,
 	toggleAllDiffThreads,
 	toggleDiffThreads,
@@ -144,5 +145,14 @@ describe("diff threads", () => {
 		expect(fileThreads.every((thread) => !diffThreadExpanded(thread, collapsed))).toBe(true)
 		const expanded = toggleAllDiffThreads(fileThreads, collapsed)
 		expect(fileThreads.every((thread) => diffThreadExpanded(thread, expanded))).toBe(true)
+	})
+
+	test("shift+c ignores threads on files the diff does not show", () => {
+		const stray = diffThreadsByPath(diffKey, { ...threads, [`${diffKey}:src/gone.ts:RIGHT:3`]: [comment("g", { path: "src/gone.ts", line: 3 })] })
+		const stacked = buildStackedDiffFiles(splitPatchFiles(patch), "unified", "none", 80)
+		const visible = diffThreadsInFiles(stray, stacked)
+		expect(visible.map((thread) => thread.comments[0]!.id)).toEqual(["e", "c", "a", "d"])
+		const collapsed = toggleAllDiffThreads(visible, new Set([find("a").key]))
+		expect(visible.every((thread) => diffThreadExpanded(thread, collapsed))).toBe(true)
 	})
 })

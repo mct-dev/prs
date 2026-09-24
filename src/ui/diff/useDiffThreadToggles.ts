@@ -3,7 +3,7 @@ import { useEffect } from "react"
 import { registerHandoff } from "../../commands/handoffs.js"
 import type { StackedDiffCommentAnchor, StackedDiffFilePatch } from "../diff.js"
 import { diffThreadToggledAtom } from "./threadAtoms.js"
-import { diffThreadKeysAtCursor, toggleAllDiffThreads, toggleDiffThreads, type DiffThread } from "./threads.js"
+import { diffThreadKeysAtCursor, diffThreadsInFiles, toggleAllDiffThreads, toggleDiffThreads, type DiffThread } from "./threads.js"
 
 export interface UseDiffThreadTogglesInput {
 	readonly stackedDiffFiles: readonly StackedDiffFilePatch[]
@@ -18,7 +18,7 @@ export interface UseDiffThreadTogglesInput {
 // or shrink.
 export const useDiffThreadToggles = ({ stackedDiffFiles, selectedDiffCommentAnchor, selectedDiffKey, diffThreads, flashNotice }: UseDiffThreadTogglesInput) => {
 	const [toggled, setToggled] = useAtom(diffThreadToggledAtom)
-	const allThreads = [...diffThreads.values()].flat()
+	const allThreads = diffThreadsInFiles(diffThreads, stackedDiffFiles)
 
 	const toggleThreadAtCursor = () => {
 		const keys = diffThreadKeysAtCursor(stackedDiffFiles, selectedDiffCommentAnchor, selectedDiffKey)
