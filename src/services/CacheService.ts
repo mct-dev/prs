@@ -20,9 +20,13 @@ import type { IssueLoad } from "../issueLoad.js"
 import { type IssueView, issueViewCacheKey } from "../issueViews.js"
 import { mergeCachedDetails } from "../pullRequestCache.js"
 import type { PullRequestLoad } from "../pullRequestLoad.js"
-import { type PullRequestView, viewCacheKey } from "../pullRequestViews.js"
+import { type PullRequestView, sectionsView, viewCacheKey } from "../pullRequestViews.js"
 import type { AgentReviewRecord, AgentReviewStatus } from "../review/types.js"
 import { makeWorkspacePreferences, WorkspacePreferences, type ViewerId, type WorkspacePreferencesInput } from "../workspacePreferences.js"
+
+// Section snapshots share `queue_snapshots`; the `pullRequest:` prefix keeps
+// their PRs safe from pruning.
+const sectionSnapshotViewKey = (sectionKey: string) => `pullRequest:section:${sectionKey}`
 
 export interface PullRequestCacheKey {
 	readonly repository: string
@@ -88,11 +92,13 @@ const CachedPullRequestItemSchema = Schema.Struct({
 	updatedAt: Schema.optional(Schema.String),
 	closedAt: Schema.NullOr(Schema.String),
 	url: Schema.String,
+	viewerLatestReviewOid: Schema.optionalKey(Schema.NullOr(Schema.String)),
 })
 
 const CachedPullRequestViewSchema = Schema.Union([
 	Schema.Struct({ _tag: Schema.tag("Queue"), mode: Schema.Literals(pullRequestQueueModes), repository: Schema.NullOr(Schema.String) }),
 	Schema.Struct({ _tag: Schema.tag("Repository"), repository: Schema.String }),
+	Schema.Struct({ _tag: Schema.tag("Sections"), repository: Schema.Null }),
 ])
 
 // IssueView's Queue mode excludes "all" — that mode is reserved for the
@@ -227,6 +233,7 @@ const cachedPullRequestToDomain = (cached: CachedPullRequestItem): PullRequestIt
 		updatedAt,
 		closedAt,
 		url: cached.url,
+		...(cached.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: cached.viewerLatestReviewOid } : {}),
 	}
 }
 
@@ -289,6 +296,7 @@ const encodePullRequest = (pullRequest: PullRequestItem): CachedPullRequestItem 
 	updatedAt: pullRequest.updatedAt.toISOString(),
 	closedAt: pullRequest.closedAt?.toISOString() ?? null,
 	url: pullRequest.url,
+	...(pullRequest.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: pullRequest.viewerLatestReviewOid } : {}),
 })
 
 const repositoryDetailsToDomain = (cached: CachedRepositoryDetails): RepositoryDetails | null => {
@@ -629,10 +637,10 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 				updated_at = excluded.updated_at`.pipe(Effect.mapError((cause) => toCacheError("writeWorkspacePreferences", cause)))
 	})
 
-	const readQueue = (viewer: string, view: PullRequestView): Effect.Effect<PullRequestLoad | null, CacheError> =>
+	const readQueueSnapshot = (viewer: string, viewKey: string, view: PullRequestView): Effect.Effect<PullRequestLoad | null, CacheError> =>
 		Effect.gen(function* () {
 			const rows =
-				yield* sql<QueueSnapshotRow>`SELECT view_json, pr_keys_json, fetched_at, end_cursor, has_next_page FROM queue_snapshots WHERE viewer = ${viewer} AND view_key = ${viewCacheKey(view)} LIMIT 1`
+				yield* sql<QueueSnapshotRow>`SELECT view_json, pr_keys_json, fetched_at, end_cursor, has_next_page FROM queue_snapshots WHERE viewer = ${viewer} AND view_key = ${viewKey} LIMIT 1`
 			const snapshot = rows[0]
 			if (!snapshot) return null
 
@@ -672,7 +680,10 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 			} satisfies PullRequestLoad
 		}).pipe(Effect.mapError((cause) => toCacheError("readQueue", cause)))
 
-	const writeQueue = Effect.fn("CacheService.writeQueue")(function* (viewer: string, load: PullRequestLoad) {
+	const readQueue = (viewer: string, view: PullRequestView) => readQueueSnapshot(viewer, viewCacheKey(view), view)
+	const readSectionSnapshot = (viewer: string, sectionKey: string) => readQueueSnapshot(viewer, sectionSnapshotViewKey(sectionKey), sectionsView)
+
+	const writeQueueSnapshot = Effect.fn("CacheService.writeQueue")(function* (viewer: string, viewKey: string, load: PullRequestLoad) {
 		const fetchedAt = load.fetchedAt ?? new Date()
 		const write = Effect.gen(function* () {
 			if (load.data.length > 0) {
@@ -687,7 +698,7 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 			}
 			const snapshot = {
 				viewer,
-				view_key: viewCacheKey(load.view),
+				view_key: viewKey,
 				view_json: JSON.stringify(load.view),
 				pr_keys_json: JSON.stringify(load.data.map(pullRequestCacheKey)),
 				fetched_at: fetchedAt.toISOString(),
@@ -708,6 +719,9 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 		)
 		if (wrote) yield* pruneSql(sql)
 	})
+	const writeQueue = (viewer: string, load: PullRequestLoad) => writeQueueSnapshot(viewer, viewCacheKey(load.view), load)
+	const writeSectionSnapshot = (viewer: string, sectionKey: string, pullRequests: readonly PullRequestItem[], fetchedAt: Date) =>
+		writeQueueSnapshot(viewer, sectionSnapshotViewKey(sectionKey), { view: sectionsView, data: pullRequests, fetchedAt, endCursor: null, hasNextPage: false })
 
 	const readPullRequest = (key: PullRequestCacheKey): Effect.Effect<PullRequestItem | null, CacheError> =>
 		readPullRequestSql(sql, key).pipe(Effect.mapError((cause) => toCacheError("readPullRequest", cause)))
@@ -937,6 +951,8 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 	return {
 		readQueue,
 		writeQueue,
+		readSectionSnapshot,
+		writeSectionSnapshot,
 		readPullRequest,
 		upsertPullRequest,
 		readIssueQueue,
@@ -962,6 +978,8 @@ export class CacheService extends Context.Service<
 	{
 		readonly readQueue: (viewer: string, view: PullRequestView) => Effect.Effect<PullRequestLoad | null, CacheError>
 		readonly writeQueue: (viewer: string, load: PullRequestLoad) => Effect.Effect<void>
+		readonly readSectionSnapshot: (viewer: string, sectionKey: string) => Effect.Effect<PullRequestLoad | null, CacheError>
+		readonly writeSectionSnapshot: (viewer: string, sectionKey: string, pullRequests: readonly PullRequestItem[], fetchedAt: Date) => Effect.Effect<void>
 		readonly readPullRequest: (key: PullRequestCacheKey) => Effect.Effect<PullRequestItem | null, CacheError>
 		readonly upsertPullRequest: (pullRequest: PullRequestItem) => Effect.Effect<void>
 		readonly readIssueQueue: (viewer: string, view: IssueView) => Effect.Effect<IssueLoad | null, CacheError>
@@ -986,6 +1004,8 @@ export class CacheService extends Context.Service<
 		CacheService.of({
 			readQueue: () => Effect.succeed(null),
 			writeQueue: () => Effect.void,
+			readSectionSnapshot: () => Effect.succeed(null),
+			writeSectionSnapshot: () => Effect.void,
 			readPullRequest: () => Effect.succeed(null),
 			upsertPullRequest: () => Effect.void,
 			readIssueQueue: () => Effect.succeed(null),

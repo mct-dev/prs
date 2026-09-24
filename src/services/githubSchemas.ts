@@ -73,6 +73,7 @@ const RawPullRequestSummaryFields = {
 	headRefOid: Schema.String,
 	headRefName: Schema.String,
 	baseRefName: Schema.String,
+	viewerLatestReview: Schema.optionalKey(Schema.NullOr(Schema.Struct({ state: Schema.String, commit: Schema.NullOr(Schema.Struct({ oid: Schema.String })) }))),
 } as const
 
 export const RawPullRequestSummaryNodeSchema = Schema.Struct({
@@ -133,6 +134,10 @@ export const RepositoryPullRequestsResponseSchema = Schema.Struct({
 })
 
 export const ViewerSchema = Schema.Struct({ login: Schema.String })
+
+// `gh api --paginate --slurp` wraps each REST page in an outer array.
+export const TeamMembersResponseSchema = Schema.Array(Schema.Array(Schema.Struct({ login: Schema.String })))
+export const ViewerTeamsResponseSchema = Schema.Array(Schema.Array(Schema.Struct({ slug: Schema.String, organization: Schema.Struct({ login: Schema.String }) })))
 
 export const RepositoryMergeMethodsResponseSchema = Schema.Struct({
 	squashMergeAllowed: Schema.Boolean,
@@ -337,6 +342,7 @@ const SUMMARY_FIELDS_FRAGMENT = `
         headRefOid
         headRefName
         baseRefName
+        viewerLatestReview { state commit { oid } }
 		repository { nameWithOwner defaultBranchRef { name } }`
 
 // Compose detail from summary — keeps the two in lock-step on field renames.

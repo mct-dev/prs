@@ -9,6 +9,9 @@ process.env.GHUI_MOCK_REPO_COUNT = "4"
 process.env.GHUI_MOCK_FIXTURE_PATH = "/var/folders/dd/5fz89drs5p9_r0fk7rwqqnbr0000gn/T/opencode/ghui-test-no-fixture.json"
 process.env.GHUI_MOCK_WORKSPACE_PREFERENCES_PATH = "off"
 process.env.GHUI_PR_PAGE_SIZE = "100"
+// These suites exercise the repository-grouped queue list; sections is the
+// default home view, so pin the queue.
+process.env.PRS_DEFAULT_VIEW = "queue"
 
 const loadApp = async () => {
 	const { createTestRenderer } = await import("@opentui/core/testing")
@@ -86,7 +89,7 @@ describe("small terminal fallback", () => {
 		act(() => setup.mockInput.pressKey("p", { ctrl: true }))
 		const modalOpen = await settle(setup.renderOnce, () => setup.captureCharFrame().includes("Commands"))
 		expect(modalOpen, setup.captureCharFrame()).toBe(true)
-		expect(setup.captureCharFrame()).toContain("25 commands")
+		expect(setup.captureCharFrame()).toContain("26 commands")
 
 		act(() => setup.resize(59, 15))
 		const fallbackVisible = await settle(setup.renderOnce, () => setup.captureCharFrame().includes("Terminal too small"))
@@ -101,7 +104,7 @@ describe("small terminal fallback", () => {
 		act(() => setup.resize(100, 20))
 		const modalRestored = await settle(setup.renderOnce, () => setup.captureCharFrame().includes("Commands"))
 		expect(modalRestored, setup.captureCharFrame()).toBe(true)
-		expect(setup.captureCharFrame()).toContain("25 commands")
+		expect(setup.captureCharFrame()).toContain("26 commands")
 		cleanup(setup)
 	})
 })

@@ -44,6 +44,9 @@ type Handoff =
 	| "viewReview"
 	| "viewAssigned"
 	| "viewMentioned"
+	| "viewSections"
+	| "toggleSelectedSection"
+	| "toggleAllSections"
 
 const slots: Partial<Record<Handoff, () => void>> = {}
 

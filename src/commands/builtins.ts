@@ -65,6 +65,9 @@ import {
 	repositoryViewSubtitleAtom,
 	repositoryViewTitleAtom,
 	runsCloseDisabledReasonAtom,
+	sectionsViewAlreadyActiveReasonAtom,
+	sectionsViewInactiveReasonAtom,
+	sectionsViewSubtitleAtom,
 	workspaceSurfaceAlreadyActiveReasonAtom,
 	workspaceSurfaceSubtitleAtom,
 } from "./derivations.js"
@@ -690,7 +693,36 @@ export const globalCommands: readonly CommandDefinition[] = [
 		disabledReason: repositoryViewAlreadyActiveReasonAtom,
 		run: Effect.sync(() => invokeHandoff("viewRepository")),
 	}),
+	defineCommand({
+		id: "view.sections",
+		title: "Show sections view",
+		scope: "View",
+		subtitle: sectionsViewSubtitleAtom,
+		keywords: ["sections", "inbox", "home", "view"],
+		disabledReason: sectionsViewAlreadyActiveReasonAtom,
+		run: Effect.sync(() => invokeHandoff("viewSections")),
+	}),
 	...queueViewCommands,
+	defineCommand({
+		id: "section.toggle",
+		title: "Collapse or expand section",
+		scope: "View",
+		subtitle: "Toggle the section of the selected pull request",
+		shortcut: "z",
+		keywords: ["fold", "collapse", "expand", "section"],
+		disabledReason: sectionsViewInactiveReasonAtom,
+		run: Effect.sync(() => invokeHandoff("toggleSelectedSection")),
+	}),
+	defineCommand({
+		id: "section.toggle-all",
+		title: "Collapse or expand all sections",
+		scope: "View",
+		subtitle: "Collapse every section, or expand all when all are collapsed",
+		shortcut: "Z",
+		keywords: ["fold", "collapse", "expand", "sections"],
+		disabledReason: sectionsViewInactiveReasonAtom,
+		run: Effect.sync(() => invokeHandoff("toggleAllSections")),
+	}),
 
 	// === Diff cluster ===
 	defineCommand({

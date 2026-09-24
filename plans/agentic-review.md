@@ -149,3 +149,12 @@ Read-only is a hard rule. The review must never post, approve, or push.
 ## Status
 
 In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, cache, commands, minimal brief block) → 4 brief UI.
+
+- **Phases 1 and 2 (sections and filters): implemented** on `feat/sections`.
+  - Code: `src/sections/` (config, compile, merge, load) and `src/filter/` (parse, evaluate).
+  - The sections view is always the home view, in a repo and in mock mode too (`PRS_DEFAULT_VIEW=queue` opts out). `risk:` and `brief:` go through an injectable lookup, backed by the live agent review index (`src/ui/review/indexAtom.ts`).
+  - Differences from the spec above:
+    - Section headers are not selectable rows. A section cursor driven by `[` / `]` can rest on a collapsed or empty section, and `z` (section under the cursor), `Z` (all sections) or a click on the header toggles them, instead of Enter.
+    - `me.reviewed` and `me.reviewed_since_push` also work in the `/` filter.
+    - A `sections.yaml` error shows as a persistent row above the default sections, not as a toast.
+    - Free-text limits (256 chars, at most 5 AND/OR/NOT) are checked when the config is compiled. Author lists larger than the limit are split into several searches.

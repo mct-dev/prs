@@ -92,6 +92,9 @@ export interface PullRequestSurfaceProps {
 	readonly diffFilePanel: DiffFilePanelBundle
 }
 
+// The active filter bar's divider sits on row 1 of the list pane.
+const FILTER_BAR_DIVIDER_ROW = 1
+
 export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 	const {
 		showScrollbars,
@@ -411,7 +414,8 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 				height={wideBodyHeight}
 				leftWidth={leftPaneWidth}
 				rightWidth={rightPaneWidth}
-				junctionRows={detailJunctions}
+				junctionRows={activeFilterLabel ? detailJunctions.filter((row) => row !== FILTER_BAR_DIVIDER_ROW) : detailJunctions}
+				junctions={activeFilterLabel ? [{ row: FILTER_BAR_DIVIDER_ROW, char: detailJunctions.includes(FILTER_BAR_DIVIDER_ROW) ? "┼" : "┤" }] : []}
 				left={
 					<box height={wideBodyHeight} flexDirection="column">
 						{widePullRequestFilterBar}

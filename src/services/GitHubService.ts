@@ -61,6 +61,8 @@ import {
 	SearchResponseSchema,
 	type SearchResponse,
 	ViewerSchema,
+	TeamMembersResponseSchema,
+	ViewerTeamsResponseSchema,
 	WorkflowRunDetailsSchema,
 	WorkflowRunListSchema,
 } from "./githubSchemas.js"
@@ -89,6 +91,12 @@ export class GitHubService extends Context.Service<
 		readonly getPullRequestDetails: (repository: string, number: number) => Effect.Effect<PullRequestItem, GitHubError>
 		readonly getRepositoryDetails: (repository: string) => Effect.Effect<RepositoryDetails, GitHubError>
 		readonly getAuthenticatedUser: () => Effect.Effect<string, GitHubError>
+		/** Drain a raw GitHub search string (qualifiers included) up to `limit` PRs. */
+		readonly searchPullRequests: (query: string, limit: number) => Effect.Effect<readonly PullRequestItem[], GitHubError>
+		/** Logins of `org/team` members. Cached in memory for a day. */
+		readonly listTeamMembers: (org: string, team: string) => Effect.Effect<readonly string[], GitHubError>
+		/** The viewer's teams as `org/slug`. */
+		readonly listViewerTeams: () => Effect.Effect<readonly string[], GitHubError>
 		readonly getPullRequestDiff: (repository: string, number: number) => Effect.Effect<string, GitHubError>
 		readonly listWorkflowRunsForCommit: (repository: string, headSha: string) => Effect.Effect<readonly WorkflowRun[], GitHubError>
 		readonly getWorkflowRunDetails: (repository: string, runId: number) => Effect.Effect<WorkflowRunDetails, GitHubError>
@@ -231,6 +239,54 @@ export class GitHubService extends Context.Service<
 				})
 				return Stream.runCollect(stream).pipe(Effect.map((chunk) => Array.from(chunk)))
 			}
+
+			const rawPullRequestSearchResponse = SearchResponseSchema(RawPullRequestSummaryNodeSchema)
+			const searchPullRequestPage = (query: string, cursor: string | null, pageSize: number) =>
+				ghJson("searchPullRequests", rawPullRequestSearchResponse, [
+					"api",
+					"graphql",
+					"-f",
+					`query=${pullRequestSummarySearchQuery}`,
+					"-F",
+					`searchQuery=${query}`,
+					"-F",
+					`first=${pageSize}`,
+					...(cursor ? ["-F", `after=${cursor}`] : []),
+				]).pipe(Effect.map((response) => itemPage(response.data.search, parsePullRequestSummary)))
+
+			const searchPullRequests = (query: string, limit: number) =>
+				drainItemPages<"pullRequest", PullRequestItem>(
+					{ kind: "pullRequest", mode: "all", repository: null },
+					(input) => searchPullRequestPage(query, input.cursor, input.pageSize),
+					Math.max(1, limit),
+				).pipe(Effect.withSpan("GitHubService.searchPullRequests"))
+
+			// Team membership changes rarely; keep successful lookups for a day.
+			// Failures are not cached so a transient error retries next load.
+			const TEAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+			const teamCache = new Map<string, { readonly value: readonly string[]; readonly at: number }>()
+			const cachedForADay = (key: string, effect: Effect.Effect<readonly string[], GitHubError>) =>
+				Effect.suspend(() => {
+					const hit = teamCache.get(key)
+					if (hit && Date.now() - hit.at < TEAM_CACHE_TTL_MS) return Effect.succeed(hit.value)
+					return effect.pipe(Effect.tap((value) => Effect.sync(() => teamCache.set(key, { value, at: Date.now() }))))
+				})
+
+			const listTeamMembers = (org: string, team: string) =>
+				cachedForADay(
+					`members:${org}/${team}`.toLowerCase(),
+					ghJson("listTeamMembers", TeamMembersResponseSchema, ["api", "--paginate", "--slurp", `orgs/${org}/teams/${team}/members`]).pipe(
+						Effect.map((pages) => pages.flat().map((member) => member.login)),
+					),
+				)
+
+			const listViewerTeams = () =>
+				cachedForADay(
+					"viewer-teams",
+					ghJson("listViewerTeams", ViewerTeamsResponseSchema, ["api", "--paginate", "--slurp", "user/teams"]).pipe(
+						Effect.map((pages) => pages.flat().map((team) => `${team.organization.login}/${team.slug}`)),
+					),
+				)
 
 			const listAllPullRequests = (input: Omit<ItemListInput<"pullRequest">, "cursor" | "pageSize">) =>
 				drainItemPages<"pullRequest", PullRequestItem>(input, listPullRequestPage, config.prFetchLimit)
@@ -499,6 +555,9 @@ export class GitHubService extends Context.Service<
 				getPullRequestDetails,
 				getRepositoryDetails,
 				getAuthenticatedUser,
+				searchPullRequests,
+				listTeamMembers,
+				listViewerTeams,
 				getPullRequestDiff,
 				listWorkflowRunsForCommit,
 				getWorkflowRunDetails,

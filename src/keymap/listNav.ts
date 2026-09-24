@@ -61,6 +61,8 @@ export const listNavKeymap = List(
 	{ id: "list.favorite-repo", title: "Favorite repository", keys: ["f"], when: reposActive, run: (s) => s.toggleFavoriteRepository() },
 	{ id: "list.scope-filter", title: "Filter items", keys: ["f"], when: filterableSurfaceActive, run: (s) => s.openFilterModal() },
 	{ id: "list.remove-repo", title: "Remove repository", keys: ["x"], when: reposActive, run: (s) => s.removeSelectedRepository() },
+	{ id: "list.toggle-section", title: "Toggle section", keys: ["z"], when: pullRequestsActive, run: (s) => s.runCommandById("section.toggle") },
+	{ id: "list.toggle-all-sections", title: "Toggle all sections", keys: ["shift+z"], when: pullRequestsActive, run: (s) => s.runCommandById("section.toggle-all") },
 	{ id: "list.refresh", title: "Refresh", keys: ["r"], when: pullRequestsActive, run: (s) => s.runCommandById("pull.refresh") },
 	{ id: "list.refresh-issues", title: "Refresh issues", keys: ["r"], when: (s) => s.activeSurface === "issues", run: (s) => s.runCommandById("issue.refresh") },
 	{ id: "list.theme", title: "Theme", keys: ["t"], run: (s) => s.runCommandById("theme.open") },

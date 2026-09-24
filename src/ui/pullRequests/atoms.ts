@@ -11,12 +11,19 @@ import { retryItemQueueFirstPage } from "../../item/retry.js"
 import { freshPullRequestLoad, mergePullRequestDetail } from "../../pullRequestCache.js"
 export { nextLoadAfterPage } from "../../pullRequestCache.js"
 import type { PullRequestLoad } from "../../pullRequestLoad.js"
-import { activePullRequestViews, initialPullRequestView, type PullRequestView, viewCacheKey, viewRepository, viewToListInput } from "../../pullRequestViews.js"
+import { activePullRequestViews, type PullRequestView, SECTIONS_VIEW_CACHE_KEY, sectionsView, viewCacheKey, viewRepository, viewToListInput } from "../../pullRequestViews.js"
+import { type FilterLookups, filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
+import { parseFilterQuery } from "../../filter/parse.js"
+import { briefFilterValue, briefRisk, briefStatusFor } from "../../review/briefStatus.js"
+import { loadSectionsConfig } from "../../sections/config.js"
+import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
+import type { SectionCursor } from "../../sections/cursor.js"
+import { assignSections } from "../../sections/merge.js"
 import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
-import { githubRuntime, pullRequestPageSize } from "../../services/runtime.js"
+import { githubRuntime, homePullRequestView, pullRequestPageSize } from "../../services/runtime.js"
 import { effectiveFilterQueryAtom } from "../filter/atoms.js"
-import { filterByScore, pullRequestFilterScore } from "../filter/scoring.js"
+import { agentReviewIndexAtom } from "../review/indexAtom.js"
 import { initialRetryProgress, RetryProgress } from "../FooterHints.js"
 import { selectedIndexAtom } from "../listSelection/atoms.js"
 import { groupBy } from "../pullRequests.js"
@@ -50,9 +57,65 @@ const trimQueueLoadCache = (cache: Partial<Record<string, PullRequestLoad>>) => 
 
 // === View / queue state atoms ===
 export const retryProgressAtom = Atom.make<RetryProgress>(initialRetryProgress).pipe(Atom.keepAlive)
-export const activeViewAtom = Atom.make<PullRequestView>(initialPullRequestView(null)).pipe(Atom.keepAlive)
+export const activeViewAtom = Atom.make<PullRequestView>(homePullRequestView).pipe(Atom.keepAlive)
 export const queueLoadCacheAtom = Atom.make<Partial<Record<string, PullRequestLoad>>>({}).pipe(Atom.keepAlive)
 export const queueSelectionAtom = Atom.make<Partial<Record<string, number>>>({}).pipe(Atom.keepAlive)
+
+// === Sections view state ===
+// Per-section status and membership, published by the sections loader as each
+// section resolves. The PRs themselves live in `queueLoadCacheAtom` under the
+// sections view key, so detail hydration updates them like any other queue.
+export const sectionStatesAtom = Atom.make<readonly SectionState[]>([]).pipe(Atom.keepAlive)
+/** Set when `sections.yaml` could not be used; the defaults render with this message. */
+export const sectionsConfigErrorAtom = Atom.make<string | null>(null).pipe(Atom.keepAlive)
+/** Collapse toggles by section id, overriding `collapsed:` from config. */
+export const collapsedSectionsAtom = Atom.make<Partial<Record<string, boolean>>>({}).pipe(Atom.keepAlive)
+/** Section `[` / `]` / `z` act on; see `sections/cursor.ts`. */
+export const sectionCursorAtom = Atom.make<SectionCursor | null>(null).pipe(Atom.keepAlive)
+
+// Keep hydrated details when a fresh search summary for the same head arrives.
+const keepHydratedDetail = (existing: readonly PullRequestItem[], fresh: readonly PullRequestItem[]) => {
+	const detailed = new Map(existing.filter((pullRequest) => pullRequest.detailLoaded).map((pullRequest) => [pullRequest.url, pullRequest]))
+	if (detailed.size === 0) return fresh
+	return fresh.map((pullRequest) => {
+		const detail = detailed.get(pullRequest.url)
+		return detail && detail.headRefOid === pullRequest.headRefOid ? mergePullRequestDetail(pullRequest, detail) : pullRequest
+	})
+}
+
+const publishSections = (snapshot: SectionsSnapshot) =>
+	Effect.gen(function* () {
+		yield* Atom.set(sectionStatesAtom, snapshot.sections)
+		yield* Atom.update(queueLoadCacheAtom, (cache) => ({
+			...cache,
+			[SECTIONS_VIEW_CACHE_KEY]: {
+				view: sectionsView,
+				data: keepHydratedDetail(cache[SECTIONS_VIEW_CACHE_KEY]?.data ?? [], snapshot.pullRequests),
+				fetchedAt: new Date(),
+				endCursor: null,
+				hasNextPage: false,
+			},
+		}))
+	})
+
+const loadSectionsView = Effect.gen(function* () {
+	const github = yield* GitHubService
+	const cacheService = yield* CacheService
+	const loaded = yield* Effect.promise(() => loadSectionsConfig())
+	yield* Atom.set(sectionsConfigErrorAtom, loaded.error)
+	const snapshot = yield* loadSections(loaded.config, {
+		viewer: github.getAuthenticatedUser(),
+		viewerTeams: github.listViewerTeams(),
+		teamMembers: (org, team) => github.listTeamMembers(org, team),
+		search: (query, limit) => github.searchPullRequests(query, limit),
+		readCached: (viewer, key) => cacheService.readSectionSnapshot(viewer, key).pipe(Effect.map((load) => load?.data ?? null)),
+		writeCached: (viewer, key, pullRequests) => cacheService.writeSectionSnapshot(viewer, key, pullRequests, new Date()),
+		publish: publishSections,
+	})
+	devLog("pullRequestsAtom:sections", { sections: snapshot.sections.map((section) => [section.id, section.status, section.urls.length]) })
+	const cached = (yield* Atom.get(queueLoadCacheAtom))[SECTIONS_VIEW_CACHE_KEY]
+	return cached ?? { view: sectionsView, data: snapshot.pullRequests, fetchedAt: new Date(), endCursor: null, hasNextPage: false }
+})
 
 // === Data-fetching atoms ===
 //
@@ -60,6 +123,7 @@ export const queueSelectionAtom = Atom.make<Partial<Record<string, number>>>({})
 export const pullRequestsAtom = githubRuntime.atom(
 	Effect.fnUntraced(function* (get) {
 		const view = get(activeViewAtom)
+		if (view._tag === "Sections") return yield* loadSectionsView
 		const github = yield* GitHubService
 		const cacheService = yield* CacheService
 		const cacheKey = viewCacheKey(view)
@@ -315,7 +379,52 @@ export const filteredPullRequestsAtom = Atom.make((get) => {
 	// search qualifier; no client-side author filter is needed here.
 	const pullRequests = get(displayedPullRequestsAtom)
 	const query = get(effectiveFilterQueryAtom)
-	return filterByScore(pullRequests, query, pullRequestFilterScore, (pullRequest) => pullRequest.updatedAt.getTime())
+	return filterPullRequests(pullRequests, query, filterContext(get))
+})
+
+const filterContext = (get: Atom.AtomContext) => {
+	const username = get(usernameAtom)
+	const reviews = get(agentReviewIndexAtom)
+	const lookups: FilterLookups = {
+		risk: (pullRequest) => briefRisk(briefStatusFor(reviews, pullRequest)) ?? "unknown",
+		brief: (pullRequest) => briefFilterValue(briefStatusFor(reviews, pullRequest)),
+	}
+	return makeFilterContext({ now: new Date(), lookups, ...(AsyncResult.isSuccess(username) ? { viewer: username.value } : {}) })
+}
+
+export interface SectionGroupView {
+	readonly id: string
+	readonly title: string
+	readonly status: SectionStatus
+	readonly error: string | null
+	readonly note: string | null
+	readonly collapsed: boolean
+	readonly pullRequests: readonly PullRequestItem[]
+}
+
+/** Every configured section with its assigned PRs, including collapsed and empty ones. Empty outside the sections view. */
+export const sectionGroupsAtom = Atom.make((get): readonly SectionGroupView[] => {
+	if (get(activeViewAtom)._tag !== "Sections") return []
+	const states = get(sectionStatesAtom)
+	const collapsed = get(collapsedSectionsAtom)
+	const pullRequests = get(filteredPullRequestsAtom)
+	const byUrl = new Map(pullRequests.map((pullRequest) => [pullRequest.url, pullRequest]))
+	const membership = new Map(states.map((state) => [state.id, state.urls]))
+	const groups = assignSections(states, membership, byUrl, filterContext(get))
+	// With `/` free text, rank PRs inside each section by match score (the
+	// order of filteredPullRequestsAtom) instead of the section's sort.
+	const ranked = parseFilterQuery(get(effectiveFilterQueryAtom)).text.trim().length > 0
+	const rank = ranked ? new Map(pullRequests.map((pullRequest, index) => [pullRequest.url, index])) : null
+	const byRank = (items: readonly PullRequestItem[]) => (rank ? [...items].sort((left, right) => rank.get(left.url)! - rank.get(right.url)!) : items)
+	return states.map((state, index) => ({
+		id: state.id,
+		title: state.title,
+		status: state.status,
+		error: state.error,
+		note: state.note,
+		collapsed: collapsed[state.id] ?? state.collapsed,
+		pullRequests: byRank(groups[index]!.pullRequests),
+	}))
 })
 
 export const visibleRepoOrderAtom = Atom.make((get) => {
@@ -336,7 +445,14 @@ export const visibleRepoOrderAtom = Atom.make((get) => {
 		.map(([repo]) => repo)
 })
 
-export const visibleGroupsAtom = Atom.make((get) => groupBy(get(filteredPullRequestsAtom), (pullRequest) => pullRequest.repository, get(visibleRepoOrderAtom)))
+export const visibleGroupsAtom = Atom.make((get): Array<[string, PullRequestItem[]]> => {
+	if (get(activeViewAtom)._tag === "Sections") {
+		return get(sectionGroupsAtom)
+			.filter((group) => !group.collapsed && group.pullRequests.length > 0)
+			.map((group) => [group.id, [...group.pullRequests]])
+	}
+	return groupBy(get(filteredPullRequestsAtom), (pullRequest) => pullRequest.repository, get(visibleRepoOrderAtom))
+})
 
 export const visiblePullRequestsAtom = Atom.make((get) => get(visibleGroupsAtom).flatMap(([, pullRequests]) => pullRequests))
 

@@ -231,4 +231,192 @@ describe("item view atoms", () => {
 		const stdout = await runIsolatedProbe(probe)
 		expect(stdout).toBe("closed|0")
 	})
+	test("sections view loads every section, groups first-match, and hides collapsed sections", async () => {
+		const probe = `
+			import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"
+			import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"
+			import { activeViewAtom, collapsedSectionsAtom, pullRequestsAtom, sectionGroupsAtom, sectionStatesAtom, sectionsConfigErrorAtom, visibleGroupsAtom } from "./src/ui/pullRequests/atoms.ts"
+			import { filterQueryAtom } from "./src/ui/filter/atoms.ts"
+			const registry = AtomRegistry.make()
+			const unmount = registry.mount(visibleGroupsAtom)
+			const waitFor = (atom) => new Promise((resolve, reject) => {
+				const settle = (result) => {
+					if (result.waiting) return false
+					if (AsyncResult.isFailure(result)) reject(result.cause)
+					else if (AsyncResult.isSuccess(result)) resolve(result.value)
+					else return false
+					return true
+				}
+				if (settle(registry.get(atom))) return
+				let unsubscribe = () => {}
+				unsubscribe = registry.subscribe(atom, (result) => {
+					if (settle(result)) unsubscribe()
+				})
+			})
+			await waitFor(pullRequestsAtom)
+			const states = registry.get(sectionStatesAtom)
+			const groups = registry.get(sectionGroupsAtom)
+			const visible = registry.get(visibleGroupsAtom)
+			const urls = visible.flatMap(([id, prs]) => prs.map((pr) => pr.url))
+			registry.set(collapsedSectionsAtom, { [visible[0][0]]: true })
+			const afterCollapse = registry.get(visibleGroupsAtom).map(([id]) => id)
+			registry.set(filterQueryAtom, "-author:nobody-matches-this zzzz-no-title")
+			const filtered = registry.get(visibleGroupsAtom).length
+			console.log(JSON.stringify({
+				view: registry.get(activeViewAtom)._tag,
+				error: registry.get(sectionsConfigErrorAtom),
+				ids: groups.map((group) => group.id),
+				settled: states.every((state) => state.status !== "loading"),
+				someRows: urls.length > 0,
+				unique: new Set(urls).size === urls.length,
+				botsHidden: !visible.some(([id]) => id === "bots"),
+				collapsedHidden: !afterCollapse.includes(visible[0][0]),
+				filtered,
+			}))
+			unmount()
+		`
+		const stdout = await runIsolatedProbe(probe, {
+			GHUI_MOCK_PR_COUNT: "40",
+			GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off",
+			PRS_DEFAULT_VIEW: "sections",
+			PRS_SECTIONS_PATH: "/nonexistent/prs-test/sections.yaml",
+		})
+		expect(JSON.parse(stdout)).toEqual({
+			view: "Sections",
+			error: null,
+			ids: ["needs-me", "rereview", "team", "mine", "bots"],
+			settled: true,
+			someRows: true,
+			unique: true,
+			botsHidden: true,
+			collapsedHidden: true,
+			filtered: 0,
+		})
+	})
+
+	test("sections is the home view, even inside a repository; PRS_DEFAULT_VIEW=queue opts out", async () => {
+		const probe = `
+			import { homePullRequestView } from "./src/services/runtime.ts"
+			console.log(homePullRequestView._tag)
+		`
+		const env = { GHUI_MOCK_PR_COUNT: "4", GHUI_MOCK_REPOSITORY: "owner/repo", GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off" }
+		expect(await runIsolatedProbe(probe, { ...env, PRS_DEFAULT_VIEW: undefined })).toBe("Sections")
+		expect(await runIsolatedProbe(probe, { ...env, PRS_DEFAULT_VIEW: "queue" })).toBe("Queue")
+	})
+
+	test("sections rank PRs by free-text score inside each section", async () => {
+		const probe = `
+			import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"
+			import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"
+			import { filteredPullRequestsAtom, pullRequestsAtom, sectionGroupsAtom } from "./src/ui/pullRequests/atoms.ts"
+			import { filterQueryAtom } from "./src/ui/filter/atoms.ts"
+			const registry = AtomRegistry.make()
+			const unmount = registry.mount(sectionGroupsAtom)
+			await new Promise((resolve, reject) => {
+				const settle = (result) => {
+					if (result.waiting) return false
+					if (AsyncResult.isFailure(result)) reject(result.cause)
+					else if (AsyncResult.isSuccess(result)) resolve(result.value)
+					else return false
+					return true
+				}
+				if (settle(registry.get(pullRequestsAtom))) return
+				let unsubscribe = () => {}
+				unsubscribe = registry.subscribe(pullRequestsAtom, (result) => {
+					if (settle(result)) unsubscribe()
+				})
+			})
+			registry.set(filterQueryAtom, "fix")
+			const ranked = registry.get(filteredPullRequestsAtom).map((pr) => pr.url)
+			const groups = registry.get(sectionGroupsAtom).map((group) => group.pullRequests.map((pr) => pr.url))
+			const inScoreOrder = groups.every((urls) => urls.every((url, index) => index === 0 || ranked.indexOf(urls[index - 1]) < ranked.indexOf(url)))
+			console.log(JSON.stringify({ inScoreOrder, grouped: groups.flat().length > 1 }))
+			unmount()
+		`
+		const stdout = await runIsolatedProbe(probe, {
+			GHUI_MOCK_PR_COUNT: "40",
+			GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off",
+			PRS_DEFAULT_VIEW: "sections",
+			PRS_SECTIONS_PATH: "/nonexistent/prs-test/sections.yaml",
+		})
+		expect(JSON.parse(stdout)).toEqual({ inScoreOrder: true, grouped: true })
+	})
+
+	test("the / filter reads risk: and brief: from the agent review index", async () => {
+		const probe = `
+			import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"
+			import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"
+			import { filteredPullRequestsAtom, pullRequestsAtom } from "./src/ui/pullRequests/atoms.ts"
+			import { filterQueryAtom } from "./src/ui/filter/atoms.ts"
+			import { agentReviewIndexAtom } from "./src/ui/review/atoms.ts"
+			import { reviewEntryFromRecord, reviewKey } from "./src/review/briefStatus.ts"
+			const load = async (registry) => {
+				const unmount = registry.mount(filteredPullRequestsAtom)
+				await new Promise((resolve, reject) => {
+					const settle = (result) => {
+						if (result.waiting) return false
+						if (AsyncResult.isFailure(result)) reject(result.cause)
+						else if (AsyncResult.isSuccess(result)) resolve(result.value)
+						else return false
+						return true
+					}
+					if (settle(registry.get(pullRequestsAtom))) return
+					let unsubscribe = () => {}
+					unsubscribe = registry.subscribe(pullRequestsAtom, (result) => {
+						if (settle(result)) unsubscribe()
+					})
+				})
+				return { prs: registry.get(filteredPullRequestsAtom), unmount }
+			}
+			const first = await load(AtomRegistry.make())
+			first.unmount()
+			const [high, low, moved, running] = first.prs
+			const brief = (risk) => JSON.stringify({ risk, summary: "s", focus_areas: [], safe_to_skip: [], questions: [], confidence: "low" })
+			const record = (pr, overrides) => ({
+				id: "run-" + pr.number, repository: pr.repository, number: pr.number, headSha: pr.headRefOid, preset: "claude", agent: "claude",
+				status: "done", mode: "worktree", briefJson: null, error: null, logPath: null, costUsd: null,
+				startedAt: new Date(0), finishedAt: new Date(0), ...overrides,
+			})
+			const records = [
+				record(high, { briefJson: brief("high") }),
+				record(low, { briefJson: brief("low") }),
+				record(moved, { briefJson: brief("medium"), headSha: "old-head" }),
+				record(running, { status: "running" }),
+			]
+			const index = Object.fromEntries(records.map((value) => [reviewKey(value.repository, value.number), reviewEntryFromRecord(value)]))
+			const registry = AtomRegistry.make({ initialValues: [[agentReviewIndexAtom, index]] })
+			const second = await load(registry)
+			const numbers = (query) => {
+				registry.set(filterQueryAtom, query)
+				return registry.get(filteredPullRequestsAtom).map((pr) => pr.number).sort((a, b) => a - b)
+			}
+			const sorted = (list) => list.map((pr) => pr.number).sort((a, b) => a - b)
+			console.log(JSON.stringify({
+				riskHigh: numbers("risk:high"),
+				riskAtLeastMedium: numbers("risk>=medium"),
+				done: numbers("brief:done"),
+				stale: numbers("brief:stale"),
+				running: numbers("brief:running"),
+				noneCount: numbers("brief:none").length,
+				total: second.prs.length,
+				expected: { high: sorted(second.prs.filter((pr) => pr.number !== low.number && pr.number !== moved.number)), atLeastMedium: sorted(second.prs.filter((pr) => pr.number !== low.number)), done: sorted([high, low]), stale: sorted([moved]), running: sorted([running]) },
+			}))
+			second.unmount()
+		`
+		const out = JSON.parse(
+			await runIsolatedProbe(probe, {
+				GHUI_MOCK_PR_COUNT: "20",
+				GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off",
+				PRS_DEFAULT_VIEW: "queue",
+				PRS_SECTIONS_PATH: "/nonexistent/prs-test/sections.yaml",
+			}),
+		)
+		// Unreviewed (and running) PRs have unknown risk, and unknown never hides a PR.
+		expect(out.riskHigh).toEqual(out.expected.high)
+		expect(out.riskAtLeastMedium).toEqual(out.expected.atLeastMedium)
+		expect(out.done).toEqual(out.expected.done)
+		expect(out.stale).toEqual(out.expected.stale)
+		expect(out.running).toEqual(out.expected.running)
+		expect(out.noneCount).toBe(out.total - 4)
+	})
 })

@@ -3,6 +3,7 @@ import * as Atom from "effect/unstable/reactivity/Atom"
 import { config } from "../config.js"
 import { detectCurrentGitHubRepository } from "../gitRemotes.js"
 import { Observability } from "../observability.js"
+import { initialPullRequestView, type PullRequestView, sectionsView } from "../pullRequestViews.js"
 import { AgentRunner } from "./AgentRunner.js"
 import { BrowserOpener } from "./BrowserOpener.js"
 import { CacheService } from "./CacheService.js"
@@ -20,6 +21,10 @@ const parseOptionalPositiveInt = (value: string | undefined, fallback: number | 
 export const mockPrCount = parseOptionalPositiveInt(process.env.GHUI_MOCK_PR_COUNT, null)
 export const mockRepository = process.env.GHUI_MOCK_REPOSITORY?.trim() || null
 export const detectedRepository = mockPrCount === null ? detectCurrentGitHubRepository() : mockRepository
+// Home view: sections, everywhere (in a repo and in mock mode too). The
+// repository and queue views stay reachable from the tab cycle, repository
+// picker and palette. `PRS_DEFAULT_VIEW=queue` starts in the authored queue.
+export const homePullRequestView: PullRequestView = process.env.PRS_DEFAULT_VIEW?.trim().toLowerCase() === "queue" ? initialPullRequestView(null) : sectionsView
 export const mockUsername = process.env.GHUI_MOCK_USERNAME?.trim() || (mockPrCount !== null ? "kitlangton" : undefined)
 
 export const mockWorkspacePreferencesPath = (() => {

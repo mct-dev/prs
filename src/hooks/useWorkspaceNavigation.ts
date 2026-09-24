@@ -1,4 +1,5 @@
 import type { MutableRefObject } from "react"
+import { homePullRequestView } from "../services/runtime.js"
 import type * as Atom from "effect/unstable/reactivity/Atom"
 import { useAtomSet } from "@effect/atom-react"
 import { devLog } from "../devLog.js"
@@ -168,7 +169,7 @@ export const useWorkspaceNavigation = (input: UseWorkspaceNavigationInput): Work
 		// a complete freeze. See the audit note in
 		// `plans/app-shell-deepening.md` for the underlying effect-atom
 		// dep-tracking quirk this is dodging.
-		switchViewTo({ _tag: "Queue", mode: "authored", repository: null })
+		switchViewTo(homePullRequestView)
 		return true
 	}
 

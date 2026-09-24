@@ -224,6 +224,11 @@ export const queueViewTitleFor = (mode: PullRequestUserQueueMode): string => `Sh
 export const repositoryViewAvailableAtom = Atom.make((get) => get(selectedRepositoryAtom) !== null)
 export const repositoryViewAlreadyActiveReasonAtom = Atom.make((get) => (get(activeViewAtom)._tag === "Repository" ? "Already showing this view." : null))
 export const repositoryViewSubtitleAtom = Atom.make((get) => (get(activeViewAtom)._tag === "Repository" ? "Already showing this view" : "Switch pull request view"))
+// `view.sections` and the section collapse commands.
+export const sectionsViewAlreadyActiveReasonAtom = Atom.make((get) => (get(activeViewAtom)._tag === "Sections" ? "Already showing this view." : null))
+export const sectionsViewSubtitleAtom = Atom.make((get) => (get(activeViewAtom)._tag === "Sections" ? "Already showing this view" : "Grouped sections from sections.yaml"))
+export const sectionsViewInactiveReasonAtom = Atom.make((get) => (get(activeViewAtom)._tag === "Sections" ? null : "Only available in the sections view."))
+
 export const repositoryViewTitleAtom = Atom.make((get) => {
 	const repo = get(selectedRepositoryAtom)
 	return repo ? `Show ${repo} view` : "Show repository view"
