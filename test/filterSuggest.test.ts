@@ -127,3 +127,9 @@ describe("suggestFilter inside quotes", () => {
 		expect(suggest('title:"fix" au').items.length).toBeGreaterThan(0)
 	})
 })
+
+describe("org suggestions", () => {
+	test("suggests orgs from loaded PRs", () => {
+		expect(labels("org:my")).toEqual(["my-org"])
+	})
+})

@@ -253,7 +253,7 @@ The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `fi
 
 | Field | Meaning |
 |---|---|
-| `author`, `repo`, `draft`, `review:approved\|changes\|none` | PR metadata (`author:@me` works) |
+| `author`, `repo`, `org`, `draft`, `review:approved\|changes\|none` | PR metadata (`author:@me` works) |
 | `label`, `size`, `files`, `file:glob`, `ci:pass\|fail\|pending\|none` | Need PR details; unknown until loaded |
 | `age`, `idle` | Since created / updated, e.g. `idle>3d`, `age<2h`, `1w` |
 | `risk:low\|medium\|high` (also `risk>=medium`), `brief:none\|running\|done\|stale` | From the latest agent review; `risk` is unknown until a brief is done, and `stale` means the brief is for an older head |

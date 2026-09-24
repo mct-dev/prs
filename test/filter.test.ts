@@ -206,3 +206,13 @@ describe("helpers", () => {
 		expect(globToRegExp("*.md").test("src/app.ts")).toBe(false)
 	})
 })
+
+describe("org filter", () => {
+	test("matches the repository owner exactly, case-insensitively", () => {
+		expect(evaluate("org:my-org", { repository: "my-org/api" })).toBe(true)
+		expect(evaluate("org:My-Org", { repository: "my-org/api" })).toBe(true)
+		expect(evaluate("org:my", { repository: "my-org/api" })).toBe(false)
+		expect(evaluate("org:other", { repository: "my-org/api" })).toBe(false)
+		expect(parseFilterToken("-org:my-org")).toMatchObject({ field: "org", negated: true })
+	})
+})

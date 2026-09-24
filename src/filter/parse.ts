@@ -10,6 +10,7 @@
 export const filterFields = [
 	"author",
 	"repo",
+	"org",
 	"label",
 	"draft",
 	"size",

@@ -164,6 +164,8 @@ const evaluatePositive = (pullRequest: PullRequestItem, predicate: FilterPredica
 			const repository = pullRequest.repository.toLowerCase()
 			return value.includes("/") ? repository === value : repository.includes(value)
 		}
+		case "org":
+			return pullRequest.repository.toLowerCase().split("/")[0] === value.replace(/^@/, "")
 		case "label":
 			if (!pullRequest.detailLoaded) return "unknown"
 			return pullRequest.labels.some((label) => label.name.toLowerCase() === value)

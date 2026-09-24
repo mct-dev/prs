@@ -38,6 +38,7 @@ export interface FilterSuggestions {
 export const fieldDescriptions: Record<FilterField, string> = {
 	author: "PR author (@me for you)",
 	repo: "owner/name, or part of it",
+	org: "GitHub org or owner (org:my-org)",
 	label: "has this label",
 	draft: "draft or ready",
 	size: "lines changed (size>400)",
@@ -141,6 +142,8 @@ const valuesFromPullRequests = (field: FilterField, pullRequests: readonly PullR
 			return byFrequency(pullRequests.map((pullRequest) => pullRequest.author))
 		case "repo":
 			return byFrequency(pullRequests.map((pullRequest) => pullRequest.repository))
+		case "org":
+			return byFrequency(pullRequests.map((pullRequest) => pullRequest.repository.split("/")[0] ?? ""))
 		case "label":
 			return byFrequency(pullRequests.flatMap((pullRequest) => pullRequest.labels.map((label) => label.name)))
 		default:
