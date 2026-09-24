@@ -34,6 +34,7 @@ import {
 	resolveLoad,
 	retryProgressAtom,
 	sectionGroupsAtom,
+	sectionReasonForAtom,
 	sectionsConfigErrorAtom,
 	selectedPullRequestAtom,
 	visibleGroupsAtom,
@@ -41,6 +42,7 @@ import {
 } from "../../ui/pullRequests/atoms.js"
 import { describeFilterQuery } from "../../filter/parse.js"
 import {
+	activeSectionId,
 	focusedSectionHeaderId,
 	type SectionNavGroup,
 	type SectionNavResult,
@@ -234,6 +236,12 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		[selectedPullRequest, selectedIndex],
 	)
 	const focusedSectionId = focusedSectionHeaderId(sectionNavGroups, sectionCursor, sectionSelection)
+	const currentSectionId = activeSectionId(sectionNavGroups, sectionCursor, sectionSelection)
+	const sectionReasonFor = useAtomValue(sectionReasonForAtom)
+	const currentSectionSummary = sectionGroups.find((group) => group.id === currentSectionId)?.reason?.summary ?? null
+	const selectedReasonText = selectedPullRequest && currentSectionId ? sectionReasonFor(selectedPullRequest, currentSectionId) : null
+	// The row only repeats what the header says when it adds something (e.g. which team).
+	const selectedSectionReason = selectedReasonText === currentSectionSummary ? null : selectedReasonText
 	const pullRequestSections = useMemo<PullRequestSections | null>(
 		() =>
 			activeView._tag === "Sections"
@@ -247,11 +255,13 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 							collapsed: group.collapsed,
 							count: group.pullRequests.length,
 							focused: group.id === focusedSectionId,
+							reason: group.id === currentSectionId ? (group.reason?.summary ?? null) : null,
 						})),
 						configError: sectionsConfigError,
+						selectedReason: selectedSectionReason,
 					}
 				: null,
-		[activeView._tag, sectionGroups, sectionsConfigError, focusedSectionId],
+		[activeView._tag, sectionGroups, sectionsConfigError, focusedSectionId, currentSectionId, selectedSectionReason],
 	)
 	const activeViews = useAtomValue(activeViewsAtom)
 	const currentQueueCacheKey = viewCacheKey(activeView)

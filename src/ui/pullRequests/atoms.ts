@@ -19,6 +19,7 @@ import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
 import type { SectionCursor } from "../../sections/cursor.js"
 import { assignSections, sectionLookup, sectionMembershipByUrl } from "../../sections/merge.js"
+import { type SectionReason, sectionReasonFor } from "../../sections/reason.js"
 import { defaultMyTeams } from "../../sections/teams.js"
 import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
@@ -414,6 +415,22 @@ export const sectionMembershipAtom = Atom.make((get): ReadonlyMap<string, readon
 	return sectionMembershipByUrl(assignSections(states, membership, byUrl, baseFilterContext(get)))
 })
 
+/**
+ * `sectionReasonFor(pr)` bound to the loaded sections: why a PR is listed, in
+ * plain words. Pass `sectionId` when the PR shows in several sections
+ * (`exclusive: false`); otherwise its first assigned section is used. Null
+ * outside the sections view or before sections load.
+ */
+export const sectionReasonForAtom = Atom.make((get) => {
+	const reasons = new Map(get(sectionStatesAtom).map((state) => [state.id, state.reason ?? null]))
+	const membership = get(sectionMembershipAtom)
+	return (pullRequest: PullRequestItem, sectionId?: string | null): string | null => {
+		const id = sectionId ?? membership?.get(pullRequest.url)?.[0]
+		const reason = id ? reasons.get(id) : null
+		return reason ? sectionReasonFor(pullRequest, reason) || null : null
+	}
+})
+
 const filterContext = (get: Atom.AtomContext) => {
 	const base = baseFilterContext(get)
 	const section = sectionLookup(get(sectionStatesAtom), get(sectionMembershipAtom))
@@ -426,6 +443,7 @@ export interface SectionGroupView {
 	readonly status: SectionStatus
 	readonly error: string | null
 	readonly note: string | null
+	readonly reason: SectionReason | null
 	readonly collapsed: boolean
 	readonly pullRequests: readonly PullRequestItem[]
 }
@@ -450,6 +468,7 @@ export const sectionGroupsAtom = Atom.make((get): readonly SectionGroupView[] =>
 		status: state.status,
 		error: state.error,
 		note: state.note,
+		reason: state.reason ?? null,
 		collapsed: collapsed[state.id] ?? state.collapsed,
 		pullRequests: byRank(groups[index]!.pullRequests),
 	}))
