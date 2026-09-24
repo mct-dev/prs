@@ -138,3 +138,11 @@ describe("markdown renderer: whole-body inline budget", () => {
 		expect(render.lines.map(markdownPlainText).join("\n")).not.toContain(PLAIN_TEXT_NOTE)
 	})
 })
+
+describe("bodyPreview control scrub", () => {
+	test("strips terminal escapes from PR/issue body previews", async () => {
+		const { bodyPreview } = await import("../src/ui/DetailsPane.js")
+		const lines = bodyPreview("hello \x1b[2J world\x07", 80, 10)
+		expect(JSON.stringify(lines)).not.toMatch(/\\u001b|\\u0007/)
+	})
+})

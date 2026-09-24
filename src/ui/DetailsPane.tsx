@@ -14,6 +14,7 @@ import { LabelChips, labelChipRows } from "./LabelChips.js"
 import { centerCell, Divider, Filler, fitCell, PaddedRow, PlainLine, TextLine, trimCell } from "./primitives.js"
 import { type ReviewerRow, reviewerRows as computeReviewerRows } from "./reviewerRows.js"
 import { SubjectMetaLine } from "./SubjectMetaLine.js"
+import { stripControls } from "./markdown/html.js"
 
 const inlinePalette = (): InlinePalette => ({ text: colors.text, inlineCode: colors.inlineCode, link: colors.link, count: colors.count })
 
@@ -220,7 +221,7 @@ export const bodyPreview = (
 	limit = DETAIL_BODY_LINES,
 	options: { readonly tableMode?: TableRenderMode; readonly issueReferenceRepository?: string | null } = {},
 ): Array<PreviewLine> => {
-	const sourceLines = body.replace(/\r/g, "").split("\n")
+	const sourceLines = stripControls(body.replace(/\r/g, "")).split("\n")
 	const preview: Array<PreviewLine> = []
 	let inCodeBlock = false
 	const tableMode = options.tableMode ?? "wrap"
