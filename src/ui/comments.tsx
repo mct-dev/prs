@@ -9,6 +9,8 @@ export interface CommentSegment {
 	readonly fg: string
 	readonly bold?: boolean
 	readonly underline?: boolean
+	readonly italic?: boolean
+	readonly strike?: boolean
 	readonly url?: string
 }
 
@@ -181,7 +183,11 @@ export const CommentSegments = ({
 }) => (
 	<>
 		{segments.map((segment, index) => {
-			const attributes = (segment.bold || selected ? TextAttributes.BOLD : 0) | (segment.underline ? TextAttributes.UNDERLINE : 0)
+			const attributes =
+				(segment.bold || selected ? TextAttributes.BOLD : 0) |
+				(segment.underline ? TextAttributes.UNDERLINE : 0) |
+				(segment.italic ? TextAttributes.ITALIC : 0) |
+				(segment.strike ? TextAttributes.STRIKETHROUGH : 0)
 			const isHovered = segment.url !== undefined && segment.url === hoveredUrl
 			const fg = selected ? colors.accent : isHovered ? colors.accent : segment.fg
 			return (

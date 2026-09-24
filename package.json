@@ -61,6 +61,7 @@
 		"@opentui/core": "0.4.2",
 		"@opentui/react": "0.4.2",
 		"effect": "4.0.0-beta.90",
+		"marked": "17.0.1",
 		"react": "19.2.7",
 		"scheduler": "0.27.0"
 	},
