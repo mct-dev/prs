@@ -1,5 +1,5 @@
 {
-  description = "Development environment for ghui";
+  description = "Development environment for prs";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 

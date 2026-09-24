@@ -6,6 +6,7 @@ import { WorkspaceContent } from "./surfaces/WorkspaceContent.js"
 import { WorkspaceFooter } from "./surfaces/WorkspaceFooter.js"
 import { WorkspaceHeader } from "./surfaces/WorkspaceHeader.js"
 import { WorkspaceModals } from "./surfaces/WorkspaceModals.js"
+import { FilterPopover } from "./ui/FilterPopover.js"
 import { useAppShell } from "./hooks/useAppShell.js"
 
 interface AppProps {
@@ -72,6 +73,7 @@ export const App = ({ systemThemeGeneration = 0 }: AppProps) => {
 			<WorkspaceContent {...shell.contentProps} />
 			<Divider width={shell.contentWidth} junctions={shell.preFooterDividerJunctions} />
 			<WorkspaceFooter {...shell.footerProps} />
+			<FilterPopover terminalWidth={shell.terminalWidth} terminalHeight={shell.terminalHeight} />
 			<WorkspaceModals {...shell.modalsProps} />
 		</box>
 	)

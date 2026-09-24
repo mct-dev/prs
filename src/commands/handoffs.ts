@@ -50,6 +50,7 @@ type Handoff =
 	| "viewSections"
 	| "toggleSelectedSection"
 	| "toggleAllSections"
+	| "reloadSections"
 
 const slots: Partial<Record<Handoff, () => void>> = {}
 

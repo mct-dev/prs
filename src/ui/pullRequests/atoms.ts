@@ -12,13 +12,15 @@ import { freshPullRequestLoad, mergePullRequestDetail } from "../../pullRequestC
 export { nextLoadAfterPage } from "../../pullRequestCache.js"
 import type { PullRequestLoad } from "../../pullRequestLoad.js"
 import { activePullRequestViews, type PullRequestView, SECTIONS_VIEW_CACHE_KEY, sectionsView, viewCacheKey, viewRepository, viewToListInput } from "../../pullRequestViews.js"
-import { type FilterLookups, filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
+import { type FilterLookups, filterPullRequests, makeFilterContext, unknownFilterLookups } from "../../filter/evaluate.js"
 import { parseFilterQuery } from "../../filter/parse.js"
 import { briefFilterValue, briefRisk, briefStatusFor } from "../../review/briefStatus.js"
 import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
 import type { SectionCursor } from "../../sections/cursor.js"
-import { assignSections } from "../../sections/merge.js"
+import { assignSections, sectionLookup, sectionMembershipByUrl } from "../../sections/merge.js"
+import { type SectionReason, sectionReasonFor } from "../../sections/reason.js"
+import { defaultMyTeams } from "../../sections/teams.js"
 import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
 import { githubRuntime, homePullRequestView, pullRequestPageSize } from "../../services/runtime.js"
@@ -105,7 +107,7 @@ const loadSectionsView = Effect.gen(function* () {
 	yield* Atom.set(sectionsConfigErrorAtom, loaded.error)
 	const snapshot = yield* loadSections(loaded.config, {
 		viewer: github.getAuthenticatedUser(),
-		viewerTeams: github.listViewerTeams(),
+		viewerTeams: github.listViewerTeamsDetailed().pipe(Effect.map(defaultMyTeams)),
 		teamMembers: (org, team) => github.listTeamMembers(org, team),
 		search: (query, limit) => github.searchPullRequests(query, limit),
 		readCached: (viewer, key) => cacheService.readSectionSnapshot(viewer, key).pipe(Effect.map((load) => load?.data ?? null)),
@@ -382,14 +384,57 @@ export const filteredPullRequestsAtom = Atom.make((get) => {
 	return filterPullRequests(pullRequests, query, filterContext(get))
 })
 
-const filterContext = (get: Atom.AtomContext) => {
+// Context for section `where:` rules: no `section:` lookup (that would be circular).
+const baseFilterContext = (get: Atom.AtomContext) => {
 	const username = get(usernameAtom)
 	const reviews = get(agentReviewIndexAtom)
 	const lookups: FilterLookups = {
+		...unknownFilterLookups,
 		risk: (pullRequest) => briefRisk(briefStatusFor(reviews, pullRequest)) ?? "unknown",
 		brief: (pullRequest) => briefFilterValue(briefStatusFor(reviews, pullRequest)),
 	}
 	return makeFilterContext({ now: new Date(), lookups, ...(AsyncResult.isSuccess(username) ? { viewer: username.value } : {}) })
+}
+
+/** Displayed PRs with no brief risk yet. `risk:` never hides them (unknown passes). */
+export const unknownRiskCountAtom = Atom.make((get) => {
+	const { lookups } = baseFilterContext(get)
+	return get(displayedPullRequestsAtom).filter((pullRequest) => lookups.risk(pullRequest) === "unknown").length
+})
+
+/**
+ * url → section ids, assigned over the (unfiltered) sections load so
+ * `section:<id>` works from any view. Null until sections have loaded.
+ */
+export const sectionMembershipAtom = Atom.make((get): ReadonlyMap<string, readonly string[]> | null => {
+	const states = get(sectionStatesAtom)
+	const load = get(queueLoadCacheAtom)[SECTIONS_VIEW_CACHE_KEY]
+	if (states.length === 0 || !load) return null
+	const byUrl = new Map(load.data.map((pullRequest) => [pullRequest.url, pullRequest]))
+	const membership = new Map(states.map((state) => [state.id, state.urls]))
+	return sectionMembershipByUrl(assignSections(states, membership, byUrl, baseFilterContext(get)))
+})
+
+/**
+ * `sectionReasonFor(pr)` bound to the loaded sections: why a PR is listed, in
+ * plain words. Pass `sectionId` when the PR shows in several sections
+ * (`exclusive: false`); otherwise its first assigned section is used. Null
+ * outside the sections view or before sections load.
+ */
+export const sectionReasonForAtom = Atom.make((get) => {
+	const reasons = new Map(get(sectionStatesAtom).map((state) => [state.id, state.reason ?? null]))
+	const membership = get(sectionMembershipAtom)
+	return (pullRequest: PullRequestItem, sectionId?: string | null): string | null => {
+		const id = sectionId ?? membership?.get(pullRequest.url)?.[0]
+		const reason = id ? reasons.get(id) : null
+		return reason ? sectionReasonFor(pullRequest, reason) || null : null
+	}
+})
+
+const filterContext = (get: Atom.AtomContext) => {
+	const base = baseFilterContext(get)
+	const section = sectionLookup(get(sectionStatesAtom), get(sectionMembershipAtom))
+	return { ...base, lookups: { ...base.lookups, section } }
 }
 
 export interface SectionGroupView {
@@ -398,6 +443,7 @@ export interface SectionGroupView {
 	readonly status: SectionStatus
 	readonly error: string | null
 	readonly note: string | null
+	readonly reason: SectionReason | null
 	readonly collapsed: boolean
 	readonly pullRequests: readonly PullRequestItem[]
 }
@@ -410,7 +456,7 @@ export const sectionGroupsAtom = Atom.make((get): readonly SectionGroupView[] =>
 	const pullRequests = get(filteredPullRequestsAtom)
 	const byUrl = new Map(pullRequests.map((pullRequest) => [pullRequest.url, pullRequest]))
 	const membership = new Map(states.map((state) => [state.id, state.urls]))
-	const groups = assignSections(states, membership, byUrl, filterContext(get))
+	const groups = assignSections(states, membership, byUrl, baseFilterContext(get))
 	// With `/` free text, rank PRs inside each section by match score (the
 	// order of filteredPullRequestsAtom) instead of the section's sort.
 	const ranked = parseFilterQuery(get(effectiveFilterQueryAtom)).text.trim().length > 0
@@ -422,6 +468,7 @@ export const sectionGroupsAtom = Atom.make((get): readonly SectionGroupView[] =>
 		status: state.status,
 		error: state.error,
 		note: state.note,
+		reason: state.reason ?? null,
 		collapsed: collapsed[state.id] ?? state.collapsed,
 		pullRequests: byRank(groups[index]!.pullRequests),
 	}))

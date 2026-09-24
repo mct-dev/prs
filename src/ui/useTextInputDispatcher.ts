@@ -1,7 +1,15 @@
 import { useKeyboard } from "@opentui/react"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { type CommentEditorValue, insertText } from "./commentEditor.js"
-import type { ChangedFilesModalState, CommandPaletteState, LabelModalState, OpenRepositoryModalState, SubmitReviewModalState, ThemeModalState } from "./modals.js"
+import type {
+	ChangedFilesModalState,
+	CommandPaletteState,
+	LabelModalState,
+	OpenRepositoryModalState,
+	ReviewPresetModalState,
+	SubmitReviewModalState,
+	ThemeModalState,
+} from "./modals.js"
 import { editSingleLineInput, isSingleLineInputKey, printableKeyText } from "./singleLineInput.js"
 
 export interface UseTextInputDispatcherInput {
@@ -10,6 +18,7 @@ export interface UseTextInputDispatcherInput {
 	// Modal active flags
 	readonly commandPaletteActive: boolean
 	readonly openRepositoryModalActive: boolean
+	readonly reviewPresetModalActive: boolean
 	readonly themeModalActive: boolean
 	readonly commentModalActive: boolean
 	readonly submitReviewModalActive: boolean
@@ -23,6 +32,7 @@ export interface UseTextInputDispatcherInput {
 	// Modal sub-state needed for routing
 	readonly themeModal: ThemeModalState
 	readonly submitReviewModal: SubmitReviewModalState
+	readonly reviewPresetModal: ReviewPresetModalState
 
 	// Workspace surface tabs (for 1/2/3 numeric shortcuts)
 	readonly workspaceTabSurfaces: readonly WorkspaceSurface[]
@@ -37,6 +47,7 @@ export interface UseTextInputDispatcherInput {
 	readonly setFilterDraft: (next: string | ((prev: string) => string)) => void
 	readonly editThemeQuery: (transform: (query: string) => string) => void
 	readonly editSubmitReview: (transform: (state: CommentEditorValue) => CommentEditorValue) => void
+	readonly editReviewPresetText: (transform: (value: string) => string) => void
 }
 
 /**
@@ -75,6 +86,15 @@ export const useTextInputDispatcher = (input: UseTextInputDispatcherInput): void
 					query: editSingleLineInput(current.query, key) ?? current.query,
 					error: null,
 				}))
+			}
+			return
+		}
+
+		// Preset name / edit form; ahead of the numeric tabs so digits type.
+		if (input.reviewPresetModalActive) {
+			const mode = input.reviewPresetModal.mode
+			if ((mode === "name" || mode === "edit") && isSingleLineInputKey(key)) {
+				input.editReviewPresetText((value) => editSingleLineInput(value, key) ?? value)
 			}
 			return
 		}

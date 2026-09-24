@@ -25,7 +25,7 @@ bun link   # puts `prs` on your PATH
 prs
 ```
 
-Environment variables still use the `GHUI_` prefix inherited from upstream (for example `GHUI_PR_FETCH_LIMIT`). Config lives in `~/.config/prs/` and the cache in `~/.cache/prs/`, so `prs` and `ghui` can be installed side by side.
+Environment variables use the `PRS_` prefix (for example `PRS_PR_FETCH_LIMIT`). The `GHUI_` names inherited from upstream still work as a fallback. Config lives in `~/.config/prs/` and the cache in `~/.cache/prs/`, so `prs` and `ghui` can be installed side by side.
 
 ## Credits
 
@@ -33,20 +33,22 @@ Forked from [kitlangton/ghui](https://github.com/kitlangton/ghui) at `76c91b8` (
 
 ## Configuration
 
-- `GHUI_PR_FETCH_LIMIT`: max PRs fetched, defaults to `200`
-- `GHUI_RUN_FETCH_LIMIT`: max workflow runs fetched per PR, defaults to `20`
+- `PRS_PR_FETCH_LIMIT`: max PRs fetched, defaults to `500`
+- `PRS_RUN_FETCH_LIMIT`: max workflow runs fetched per PR, defaults to `20`
+- `PRS_NO_ANIMATION=1`: show a still loading picture instead of the animated one
+- `PRS_LOADING_ART=contours|plasma|torus`: pick the loading art (default `contours`)
 
 Example:
 
 ```bash
-GHUI_PR_FETCH_LIMIT=100 prs
+PRS_PR_FETCH_LIMIT=100 prs
 ```
 
 You can also copy `.env.example` to `.env` and edit the values locally.
 
-prs stores UI preferences in `config.json` under `GHUI_CONFIG_DIR` when set,
+prs stores UI preferences in `config.json` under `PRS_CONFIG_DIR` when set,
 otherwise under the platform config directory. On Linux this is normally
-`~/.config/ghui/config.json`.
+`~/.config/prs/config.json`.
 
 Example:
 
@@ -155,6 +157,17 @@ duration, reviewed head, stale state, log path). In the brief view:
 - `ctrl-u` / `ctrl-d`, `gg` / `G`: page, or jump to the top or bottom
 - `esc`: go back to where you opened it from
 
+The `B` picker also manages presets and saves changes to `config.json`:
+
+- `enter`: run the selected preset
+- `e`: edit its skill, model, budget, and extra prompt. `tab` completes skills
+  found in `~/.claude/skills`, installed plugins (`plugin:skill`), the
+  project's `.claude/skills`, and `~/.codex/skills`.
+- `n`: new preset (pick claude or codex, then name it)
+- `d`: make it the default
+- `x` / `D`: delete it, after asking (the last preset stays). A deleted
+  built-in is saved as `null`.
+
 Configure it in `config.json` (all keys optional):
 
 ```json
@@ -198,9 +211,12 @@ prs always opens on the **sections** view, including inside a git repository. Th
 
 Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SECTIONS_PATH`). If the file is missing, the built-in defaults below apply. If it fails to parse or validate, prs shows the defaults with the error above them. Set `PRS_DEFAULT_VIEW=queue` to start on the authored queue instead.
 
+From the command palette (`ctrl-p`), **Edit sections config** creates the file from a commented template if needed, opens it in `$VISUAL`/`$EDITOR`, and reloads sections when the editor exits. **Choose my teams** lists your teams by size; `space` toggles, `enter` writes `vars.my_teams` and leaves the rest of the file as it was.
+
 ```yaml
 vars:
-  # Optional. If unset, my_teams = every team from `gh api user/teams`.
+  # Optional. If unset, my_teams = your smallest team from `gh api user/teams`
+  # (ties included; every team if you have one, or GitHub hides counts).
   my_teams: [my-org/backend]
   bots: ["app/dependabot", "app/renovate", "app/github-actions"]
 
@@ -242,8 +258,15 @@ The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `fi
 | `age`, `idle` | Since created / updated, e.g. `idle>3d`, `age<2h`, `1w` |
 | `risk:low\|medium\|high` (also `risk>=medium`), `brief:none\|running\|done\|stale` | From the latest agent review; `risk` is unknown until a brief is done, and `stale` means the brief is for an older head |
 | `me.reviewed`, `me.reviewed_since_push` | Whether you reviewed, and whether that review is on the current head |
+| `section:<id>` | In that section (e.g. `section:needs-me`). Works from any view once sections have loaded |
 
 A predicate on data that hasn't loaded yet counts as unknown, and unknown never hides a PR. For example, `author:alice size>400 fix` keeps alice's PRs that match "fix", including ones whose size isn't known yet.
+
+Risk works the same way: `risk:high` keeps PRs that have no brief yet (the filter bar says how many, e.g. "12 PRs have no brief (shown as unknown)"). To see only reviewed PRs, add `brief:done`: `risk:high brief:done`.
+
+While typing after `/`, a popover suggests field names, then values (authors, repos and labels from the loaded PRs by frequency; the fixed values for `ci`, `review`, `risk`, `brief`, `draft`; examples like `>3d` for numbers). `tab` completes the first (or highlighted) suggestion, `up` / `down` highlight one and `enter` accepts it, and `esc` closes the popover before it cancels the filter. It also shows how many PRs match and warns about typos like `ci:passs`. With an empty prompt it lists your last 10 filters (kept in `recent-filters.json` next to `config.json`).
+
+- `section:needs-me ci:pass -review:approved`: PRs waiting on you with green CI that nobody has approved yet. In the sections view, `ci:pass -review:approved` alone does the same inside each section.
 
 ## Keybindings
 
@@ -255,6 +278,7 @@ A predicate on data that hasn't loaded yet counts as unknown, and unknown never 
 - `[` / `]`: jump between sections (or repository groups)
 - `z` / `Z`: collapse or expand the current section / all sections
 - `ctrl-p` / `cmd-k`: open the command palette
+- `?`: icon legend (what the review, check and brief glyphs mean)
 - `/`: filter
 - `enter`: expand details; normal PR actions still work while details are expanded
 - `esc`: return from expanded details, leave diff/comment mode, or close modal

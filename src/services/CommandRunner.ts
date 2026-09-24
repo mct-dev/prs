@@ -138,7 +138,7 @@ export class CommandRunner extends Context.Service<
 							...(result.exitCode === 0 ? {} : { "github.rate_limit.kind": classifyGitHubRateLimit(result.stderr || result.stdout) ?? "none" }),
 						}),
 					),
-					Effect.withSpan("ghui.command.runProcess", {
+					Effect.withSpan("prs.command.runProcess", {
 						attributes,
 					}),
 				)

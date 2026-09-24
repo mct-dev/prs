@@ -43,6 +43,8 @@ export interface ModalLayouts {
 	readonly Theme: ModalRect
 	readonly OpenRepository: ModalRect
 	readonly CommandPalette: ModalRect
+	readonly Legend: ModalRect
+	readonly Teams: ModalRect
 }
 
 export const computeModalLayouts = ({ contentWidth, terminalHeight, longestLabelName, longestDiffFileName, changedFilesModalActive }: ModalLayoutInput): ModalLayouts => {
@@ -72,11 +74,13 @@ export const computeModalLayouts = ({ contentWidth, terminalHeight, longestLabel
 		Comment: sized(46, 76, 8, 16),
 		CommentThread: sized(50, 86, 8, 22),
 		Filter: sized(58, 76, 10, 12),
-		ReviewPreset: sized(58, 84, 10, 14),
+		ReviewPreset: sized(60, 90, 12, 18),
 		SubmitReview: sized(54, 84, 8, 18),
 		Merge: sized(46, 68, 14, 20),
 		Theme: sized(38, 58, 12, 16),
 		OpenRepository: sized(46, 76, 8, 8),
 		CommandPalette: sized(50, 88, 8, 24),
+		Legend: sized(46, 60, 12, 18),
+		Teams: sized(52, 80, 10, 20),
 	}
 }

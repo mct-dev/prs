@@ -7,6 +7,7 @@ import type {
 	LabelModalState,
 	MergeModalState,
 	OpenRepositoryModalState,
+	ReviewPresetModalState,
 	SubmitReviewModalState,
 	ThemeModalState,
 } from "../ui/modals/types.js"
@@ -14,8 +15,14 @@ import { canEditComment } from "../ui/comments/useCommentMutations.js"
 import type { CommentCardActions } from "../ui/comments/useCommentCardActions.js"
 import type { RunsViewCtx } from "../keymap/runsView.js"
 import type { BriefViewCtx } from "../keymap/briefView.js"
+import type { ReviewPresetModalCtx } from "../keymap/reviewPresetModal.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { useKeymapWiring } from "./useKeymapWiring.js"
+import { useFilterPopoverControls } from "../ui/filter/useFilterPopover.js"
+import { useAtom } from "@effect/atom-react"
+import { moveTeamsSelection, toggleTeamsSelection } from "../ui/modals/teamsModalState.js"
+import { activeModalAtom } from "../ui/modals/atoms.js"
+import { Modal, type TeamsModalState } from "../ui/modals/types.js"
 import type { CommentEditorValue } from "../ui/commentEditor.js"
 
 export interface UseAppKeymapInput {
@@ -69,7 +76,9 @@ export interface UseAppKeymapInput {
 	readonly moveChangedFileSelection: (delta: -1 | 1) => void
 	readonly applySelectedFilter: () => void
 	readonly moveFilterSelection: (delta: -1 | 1) => void
-	readonly moveReviewPresetSelection: (delta: -1 | 1) => void
+	readonly reviewPresetModal: ReviewPresetModalState
+	readonly reviewPresetModalCtx: ReviewPresetModalCtx
+	readonly editReviewPresetText: (transform: (value: string) => string) => void
 	readonly setSubmitReviewModal: (next: SubmitReviewModalState | ((prev: SubmitReviewModalState) => SubmitReviewModalState)) => void
 	readonly confirmSubmitReview: () => void
 	readonly editSubmitReview: (transform: (value: CommentEditorValue) => CommentEditorValue) => void
@@ -180,6 +189,11 @@ export interface UseAppKeymapInput {
  * over a flat bundle and lets this hook produce the right shape.
  */
 export const useAppKeymap = (i: UseAppKeymapInput): void => {
+	const filterPopover = useFilterPopoverControls()
+	const [activeModal, setActiveModal] = useAtom(activeModalAtom)
+	const legendModalActive = Modal.$is("Legend")(activeModal)
+	const teamsModalActive = Modal.$is("Teams")(activeModal)
+	const updateTeamsModal = (update: (state: TeamsModalState) => TeamsModalState) => setActiveModal((modal) => (Modal.$is("Teams")(modal) ? Modal.Teams(update(modal)) : modal))
 	useKeymapWiring({
 		disabled: i.disabled,
 		ctxInput: {
@@ -198,6 +212,8 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				commentModalActive: i.commentModalActive,
 				deleteCommentModalActive: i.deleteCommentModalActive,
 				commandPaletteActive: i.commandPaletteActive,
+				legendModalActive,
+				teamsModalActive,
 				filterMode: i.filterMode,
 				diffFullView: i.diffFullView,
 				runsFullView: i.runsFullView,
@@ -211,6 +227,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 					i.changedFilesModalActive ||
 					i.submitReviewModalActive ||
 					i.labelModalActive ||
+					(i.reviewPresetModalActive && (i.reviewPresetModal.mode === "name" || i.reviewPresetModal.mode === "edit")) ||
 					i.filterMode ||
 					(i.themeModalActive && i.themeModal.filterMode),
 			},
@@ -235,11 +252,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				moveChangedFileSelection: i.moveChangedFileSelection,
 			},
 			filterModal: { closeActiveModal: i.closeActiveModal, applySelected: i.applySelectedFilter, moveSelection: i.moveFilterSelection },
-			reviewPresetModal: {
-				closeModal: i.closeActiveModal,
-				runSelected: () => i.runCommandById("pull.agent-review-preset-run"),
-				moveSelection: i.moveReviewPresetSelection,
-			},
+			reviewPresetModal: i.reviewPresetModalCtx,
 			submitReviewModal: {
 				submitReviewModal: i.submitReviewModal,
 				closeActiveModal: i.closeActiveModal,
@@ -260,6 +273,12 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 			openRepositoryModal: { closeActiveModal: i.closeActiveModal, openRepositoryFromInput: i.openRepositoryFromInput },
 			commentModal: { closeActiveModal: i.closeActiveModal },
 			deleteCommentModal: { closeActiveModal: i.closeActiveModal, confirmDeleteComment: i.confirmDeleteComment },
+			teamsModal: {
+				closeModal: i.closeActiveModal,
+				save: () => i.runCommandById("sections.save-teams"),
+				toggle: () => updateTeamsModal(toggleTeamsSelection),
+				moveSelection: (delta) => updateTeamsModal((state) => moveTeamsSelection(state, delta)),
+			},
 			commandPalette: {
 				closeActiveModal: i.closeActiveModal,
 				selectedCommand: i.commandPaletteSelectedCommand,
@@ -274,7 +293,9 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				commitFilter: () => {
 					i.setFilterQuery(i.filterDraft)
 					i.setFilterMode(false)
+					filterPopover.remember(i.filterDraft)
 				},
+				popover: filterPopover,
 			},
 			diff: {
 				halfPage: i.halfPage,
@@ -355,11 +376,16 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 							: i.setSelectedIndex(index),
 			},
 			openCommandPalette: () => i.runCommandById("command.open"),
+			openLegend: () => i.runCommandById("legend.open"),
+			closeLegend: i.closeActiveModal,
 			handleQuitOrClose: i.handleQuitOrClose,
 		},
 		textInput: {
 			commandPaletteActive: i.commandPaletteActive,
 			openRepositoryModalActive: i.openRepositoryModalActive,
+			reviewPresetModalActive: i.reviewPresetModalActive,
+			reviewPresetModal: i.reviewPresetModal,
+			editReviewPresetText: i.editReviewPresetText,
 			themeModalActive: i.themeModalActive,
 			commentModalActive: i.commentModalActive,
 			submitReviewModalActive: i.submitReviewModalActive,

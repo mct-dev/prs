@@ -24,6 +24,8 @@ import { PullRequestDiffPane } from "../ui/PullRequestDiffPane.js"
 import { PullRequestList } from "../ui/PullRequestList.js"
 import { briefStatusFor } from "../review/briefStatus.js"
 import { agentReviewIndexAtom, selectedBriefStatusAtom } from "../ui/review/atoms.js"
+import { unknownRiskCountAtom } from "../ui/pullRequests/atoms.js"
+import { riskUnknownNote, usesRiskFilter } from "../filter/suggest.js"
 import { PullRequestRunsPane } from "../ui/runs/RunsPane.js"
 import type { RunsViewModel } from "../hooks/useRunsView.js"
 import type { BriefViewModel } from "../hooks/useBriefView.js"
@@ -166,6 +168,8 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 	} = props
 	const selectedBrief = useAtomValue(selectedBriefStatusAtom)
 	const reviewIndex = useAtomValue(agentReviewIndexAtom)
+	const unknownRiskCount = useAtomValue(unknownRiskCountAtom)
+	const filterNote = activeFilterLabel && usesRiskFilter(activeFilterLabel) && unknownRiskCount > 0 ? riskUnknownNote(unknownRiskCount) : null
 	const briefStatusOf = (pullRequest: PullRequestItem) => briefStatusFor(reviewIndex, pullRequest)
 
 	if (commentsViewActive && commentSubject) {
@@ -406,7 +410,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 	const widePullRequestFilterBar = activeFilterLabel ? (
 		<box height={ACTIVE_FILTER_BAR_HEIGHT} flexDirection="column">
 			<box paddingLeft={sectionPadding}>
-				<ActiveFilterBar label={activeFilterLabel} width={leftContentWidth} />
+				<ActiveFilterBar label={activeFilterLabel} width={leftContentWidth} note={filterNote} />
 			</box>
 			<Divider width={leftPaneWidth} />
 		</box>
@@ -414,7 +418,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 	const narrowPullRequestFilterBar = activeFilterLabel ? (
 		<box height={ACTIVE_FILTER_BAR_HEIGHT} flexDirection="column">
 			<box paddingLeft={sectionPadding} paddingRight={sectionPadding}>
-				<ActiveFilterBar label={activeFilterLabel} width={fullscreenContentWidth} />
+				<ActiveFilterBar label={activeFilterLabel} width={fullscreenContentWidth} note={filterNote} />
 			</box>
 			<Divider width={contentWidth} />
 		</box>

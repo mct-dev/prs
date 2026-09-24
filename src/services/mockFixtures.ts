@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
+import { envVar } from "../env.js"
 import type { IssueItem, PullRequestComment, PullRequestItem, PullRequestReviewComment } from "../domain.js"
 
 export interface MockFixturePullRequest extends PullRequestItem {
@@ -19,7 +20,7 @@ export interface MockFixtureSnapshot {
 	readonly issues: readonly MockFixtureIssue[]
 }
 
-const fixturePath = () => resolve(process.cwd(), process.env.GHUI_MOCK_FIXTURE_PATH ?? ".ghui/opencode-fixtures.json")
+const fixturePath = () => resolve(process.cwd(), envVar("MOCK_FIXTURE_PATH") ?? ".prs/opencode-fixtures.json")
 
 const asDate = (value: unknown) => (typeof value === "string" ? new Date(value) : value instanceof Date ? value : new Date())
 

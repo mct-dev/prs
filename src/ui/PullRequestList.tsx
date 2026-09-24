@@ -23,12 +23,16 @@ export interface PullRequestSectionHeader {
 	readonly count: number
 	/** Keyboard cursor rests on this header (collapsed or empty section). */
 	readonly focused?: boolean
+	/** Why PRs are in this section, shown dimmed after the count (active section only). */
+	readonly reason?: string | null
 }
 
 export interface PullRequestSections {
 	readonly headers: readonly PullRequestSectionHeader[]
 	/** `sections.yaml` problem; the defaults render below it. */
 	readonly configError: string | null
+	/** Why the selected PR is in its section; shown on its meta line when it fits. */
+	readonly selectedReason?: string | null
 }
 
 const pullRequestListRowHeight = (row: PullRequestListRow) => (row._tag === "pull-request" && !row.compact ? 2 : 1)
@@ -104,8 +108,30 @@ const SectionHeaderLine = ({
 		<span fg={colors.count}> {section.count}</span>
 		{section.status === "loading" ? <span fg={colors.muted}> {loadingIndicator}</span> : null}
 		{section.status === "error" ? <span fg={colors.error}> !</span> : null}
+		{sectionReasonText(section, contentWidth) ? <span fg={colors.muted}>{sectionReasonText(section, contentWidth)}</span> : null}
 	</TextLine>
 )
+
+/** Minimum cells worth spending on a truncated reason. */
+const MIN_REASON_WIDTH = 16
+
+/** `  · reason` fitted after the header text, or null when there is no room. */
+export const sectionReasonText = (section: PullRequestSectionHeader, contentWidth: number) => {
+	if (!section.reason) return null
+	const used = 2 + section.title.length + 1 + String(section.count).length + (section.status === "ready" ? 0 : 2)
+	const available = contentWidth - used - 4
+	if (available < Math.min(section.reason.length, MIN_REASON_WIDTH)) return null
+	return `  · ${fitCell(section.reason, Math.min(available, section.reason.length))}`
+}
+
+/** The per-PR reason fitted after the meta line's author and branch, or null. */
+export const rowReasonText = (reason: string | null | undefined, author: string, available: number) => {
+	if (!reason) return null
+	const text = reason.startsWith(`@${author} `) ? reason.slice(author.length + 2) : reason
+	const width = available - 3
+	if (width < Math.min(text.length, MIN_REASON_WIDTH)) return null
+	return ` · ${fitCell(text, Math.min(width, text.length))}`
+}
 
 const buildSectionRows = (
 	rows: PullRequestListRow[],
@@ -208,9 +234,11 @@ const PullRequestRow = ({
 	compact,
 	showRepository,
 	briefStatus,
+	reason,
 	onSelect,
 	onHoverChange,
 }: {
+	reason?: string | null
 	pullRequest: PullRequestItem
 	selected: boolean
 	hovered: boolean
@@ -232,14 +260,18 @@ const PullRequestRow = ({
 	const fillerWidth = Math.max(0, contentWidth - rowWidth)
 	const metaIndentWidth = reviewWidth + 1
 	const metaWidth = Math.max(8, contentWidth - metaIndentWidth)
-	const branchText =
+	const fullBranchText =
 		pullRequest.headRefName === pullRequest.baseRefName
 			? null
 			: pullRequest.baseRefName === pullRequest.defaultBranchName
 				? pullRequest.headRefName
 				: `${pullRequest.headRefName} → ${pullRequest.baseRefName}`
 	const authorText = showRepository ? `@${pullRequest.author} · ${pullRequest.repository}` : `@${pullRequest.author}`
-	const branchWidth = branchText ? Math.max(0, metaWidth - authorText.length - 1) : 0
+	// On the selected row the section reason wins over the branch, which the details pane also shows.
+	const reasonWithBranch = selected && fullBranchText ? rowReasonText(reason, pullRequest.author, metaWidth - authorText.length - fullBranchText.length - 1) : null
+	const reasonText = reasonWithBranch ?? (selected ? rowReasonText(reason, pullRequest.author, metaWidth - authorText.length) : null)
+	const branchText = reasonText && !reasonWithBranch ? null : fullBranchText
+	const branchWidth = branchText ? Math.max(0, metaWidth - authorText.length - 1 - (reasonText?.length ?? 0)) : 0
 	const display = pullRequestRowDisplay(pullRequest, selected)
 
 	return (
@@ -270,13 +302,14 @@ const PullRequestRow = ({
 					{compact ? null : (
 						<TextLine width={contentWidth} fg={colors.muted} bg={rowBg}>
 							<span>{" ".repeat(metaIndentWidth)}</span>
-							<MatchedCell text={authorText} width={branchText ? authorText.length : metaWidth} query={filterText} />
+							<MatchedCell text={authorText} width={branchText || reasonText ? authorText.length : metaWidth} query={filterText} />
 							{branchText ? <span> </span> : null}
 							{branchText ? (
 								<span fg={colors.separator}>
 									<MatchedCell text={branchText} width={branchWidth} query={filterText} />
 								</span>
 							) : null}
+							{reasonText ? <span>{fitCell(reasonText, Math.max(0, metaWidth - authorText.length - (branchText ? branchWidth + 1 : 0)))}</span> : null}
 						</TextLine>
 					)}
 				</>
@@ -384,6 +417,7 @@ export const PullRequestList = ({
 						compact={row.compact}
 						showRepository={row.showRepository ?? false}
 						briefStatus={briefStatusOf ? briefStatusOf(row.pullRequest) : null}
+						reason={pullRequestUrl === selectedUrl ? (sections?.selectedReason ?? null) : null}
 						onSelect={() => onSelectPullRequest(pullRequestUrl)}
 						onHoverChange={onHoverChange(pullRequestUrl)}
 					/>

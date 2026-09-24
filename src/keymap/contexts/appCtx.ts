@@ -7,6 +7,7 @@ import { buildCommentThreadModalCtx, type BuildCommentThreadModalCtxInput } from
 import { buildDetailViewCtx, type BuildDetailViewCtxInput } from "./detailViewCtx.ts"
 import { buildDiffViewCtx, type BuildDiffViewCtxInput } from "./diffViewCtx.ts"
 import type { ReviewPresetModalCtx } from "../reviewPresetModal.ts"
+import type { TeamsModalCtx } from "../teamsModal.ts"
 import type { RunsViewCtx } from "../runsView.ts"
 import type { BriefViewCtx } from "../briefView.ts"
 import { buildFilterModeCtx, type BuildFilterModeCtxInput } from "./filterModeCtx.ts"
@@ -63,6 +64,8 @@ export interface BuildAppCtxFlags {
 	readonly commentModalActive: boolean
 	readonly deleteCommentModalActive: boolean
 	readonly commandPaletteActive: boolean
+	readonly legendModalActive: boolean
+	readonly teamsModalActive: boolean
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
@@ -88,6 +91,7 @@ export interface BuildAppCtxInput {
 	readonly commentModal: BuildCommentModalCtxInput
 	readonly deleteCommentModal: BuildDeleteCommentModalCtxInput
 	readonly commandPalette: BuildCommandPaletteCtxInput
+	readonly teamsModal: TeamsModalCtx
 	readonly filterModeCtx: BuildFilterModeCtxInput
 	readonly diff: BuildDiffViewCtxInput
 	readonly runs: RunsViewCtx
@@ -96,6 +100,8 @@ export interface BuildAppCtxInput {
 	readonly commentsView: BuildCommentsViewCtxInput
 	readonly listNav: BuildListNavCtxInput
 	readonly openCommandPalette: () => void
+	readonly openLegend: () => void
+	readonly closeLegend: () => void
 	readonly handleQuitOrClose: () => void
 }
 
@@ -123,6 +129,7 @@ export const buildAppCtx = (input: BuildAppCtxInput): AppCtx => ({
 	commentModal: buildCommentModalCtx(input.commentModal),
 	deleteCommentModal: { closeModal: input.deleteCommentModal.closeActiveModal, confirmDelete: input.deleteCommentModal.confirmDeleteComment },
 	commandPalette: buildCommandPaletteCtx(input.commandPalette),
+	teamsModal: input.teamsModal,
 	filterModeCtx: buildFilterModeCtx(input.filterModeCtx),
 	diff: buildDiffViewCtx(input.diff),
 	runs: input.runs,
@@ -131,5 +138,7 @@ export const buildAppCtx = (input: BuildAppCtxInput): AppCtx => ({
 	commentsView: buildCommentsViewCtx(input.commentsView),
 	listNav: buildListNavCtx(input.listNav),
 	openCommandPalette: input.openCommandPalette,
+	openLegend: input.openLegend,
+	closeLegend: input.closeLegend,
 	handleQuitOrClose: input.handleQuitOrClose,
 })

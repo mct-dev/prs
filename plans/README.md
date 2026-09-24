@@ -34,3 +34,4 @@ When a plan ships, leave the file in place and update the **Status** line so we 
 - [`open-in-editor.md`](./open-in-editor.md) — open a PR in a configurable editor command (nvim/diffview/octo, code, …) via `e`, with `repoPaths` mapping and TUI suspend/resume.
 - [`pr-runs-view-mockups.md`](./pr-runs-view-mockups.md) — UI mock-ups for the per-PR GitHub Actions runs view.
 - [`github-actions-runs.md`](./github-actions-runs.md) — per-PR workflow runs view (`a`): runs list → jobs/steps/log investigation, as a diff-view-peer PR view mode.
+- [`rebrand.md`](./rebrand.md) — ghui → prs audit: user-visible strings, `PRS_*` env vars with `GHUI_*` fallback, safe `prs upgrade`, abstract loading art, and what was left alone.

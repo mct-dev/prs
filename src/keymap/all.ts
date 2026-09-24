@@ -18,6 +18,7 @@ import { pullRequestStateModalKeymap, type PullRequestStateModalCtx } from "./pu
 import { reviewPresetModalKeymap, type ReviewPresetModalCtx } from "./reviewPresetModal.ts"
 import { runsViewKeymap, type RunsViewCtx } from "./runsView.ts"
 import { briefViewKeymap, type BriefViewCtx } from "./briefView.ts"
+import { teamsModalKeymap, type TeamsModalCtx } from "./teamsModal.ts"
 import { submitReviewModalKeymap, type SubmitReviewModalCtx } from "./submitReviewModal.ts"
 import { themeModalKeymap, type ThemeModalCtx } from "./themeModal.ts"
 
@@ -37,6 +38,8 @@ export interface AppCtx {
 	readonly commentModalActive: boolean
 	readonly deleteCommentModalActive: boolean
 	readonly commandPaletteActive: boolean
+	readonly legendModalActive: boolean
+	readonly teamsModalActive: boolean
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
@@ -63,6 +66,7 @@ export interface AppCtx {
 	readonly commentModal: CommentModalCtx
 	readonly deleteCommentModal: DeleteCommentModalCtx
 	readonly commandPalette: CommandPaletteCtx
+	readonly teamsModal: TeamsModalCtx
 	readonly filterModeCtx: FilterModeCtx
 	readonly diff: DiffViewCtx
 	readonly runs: RunsViewCtx
@@ -73,6 +77,8 @@ export interface AppCtx {
 
 	// Always-on / app-level
 	readonly openCommandPalette: () => void
+	readonly openLegend: () => void
+	readonly closeLegend: () => void
 	readonly handleQuitOrClose: () => void
 }
 
@@ -92,14 +98,17 @@ const modalActive = (a: AppCtx): boolean =>
 	a.openRepositoryModalActive ||
 	a.commentModalActive ||
 	a.deleteCommentModalActive ||
-	a.commandPaletteActive
+	a.commandPaletteActive ||
+	a.legendModalActive ||
+	a.teamsModalActive
 
 const inListMode = (a: AppCtx): boolean => !modalActive(a) && !a.filterMode && !a.diffFullView && !a.runsFullView && !a.briefFullView && !a.detailFullView && !a.commentsViewActive
 
 export const appKeymap = App(
 	// Always-on: command palette opener
 	{ id: "command.open", title: "Open command palette", keys: ["ctrl+p", "meta+k"], run: (s) => s.openCommandPalette() },
-	{ id: "command.open-help", title: "Open command palette", keys: ["?"], when: (s) => !s.textInputActive, run: (s) => s.openCommandPalette() },
+	{ id: "legend.open", title: "Show icon legend", keys: ["?"], when: (s) => !s.textInputActive && !modalActive(s), run: (s) => s.openLegend() },
+	{ id: "legend.close", title: "Close legend", keys: ["escape", "?", "return"], when: (s) => s.legendModalActive, run: (s) => s.closeLegend() },
 
 	// Quit / close-active-modal — gated to "not editing text"
 	{
@@ -131,6 +140,7 @@ export const appKeymap = App(
 	commentModalKeymap.scope((a) => a.commentModalActive && a.commentModal),
 	deleteCommentModalKeymap.scope((a) => a.deleteCommentModalActive && a.deleteCommentModal),
 	commandPaletteKeymap.scope((a) => a.commandPaletteActive && a.commandPalette),
+	teamsModalKeymap.scope((a) => a.teamsModalActive && a.teamsModal),
 	filterModeKeymap.scope((a) => a.filterMode && a.filterModeCtx),
 
 	// Full-view layers (only when no modal is on top)

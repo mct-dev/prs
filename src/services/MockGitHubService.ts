@@ -8,11 +8,13 @@ import type {
 	PullRequestItem,
 	PullRequestMergeInfo,
 	PullRequestQueueMode,
+	PullRequestReviewers,
 	PullRequestReviewComment,
 	ReviewStatus,
 } from "../domain.js"
 import type { ItemListInput } from "../item.js"
 import { mergeInfoFromPullRequest } from "../mergeActions.js"
+import type { ViewerTeam } from "../sections/teams.js"
 import { mockAuthor, mockBody, mockIssueTitle, mockLabels, mockPullRequestBranch, mockPullRequestTitle } from "./mockData.js"
 import { mockWorkflowRunDetails, mockWorkflowRuns } from "./mockRuns.js"
 import { GitHubService } from "./GitHubService.js"
@@ -30,6 +32,21 @@ export interface MockOptions {
 const REVIEW_CYCLE: readonly ReviewStatus[] = ["approved", "changes", "review", "none", "draft"]
 const MERGEABLE_CYCLE: readonly Mergeable[] = ["mergeable", "conflicting", "unknown"]
 const MOCK_REPOSITORIES = ["mock-org/repo-0", "mock-org/repo-1", "mock-org/repo-2", "mock-org/repo-3"] as const
+
+/** A reviewer mix that follows the PR's review status, so the details pane has something to show. */
+const mockReviewers = (index: number, review: ReviewStatus, repository: string): PullRequestReviewers => {
+	const first = mockAuthor(index + 1)
+	const second = mockAuthor(index + 2)
+	const lead = review === "approved" ? "approved" : review === "changes" ? "changes" : review === "none" ? "commented" : "requested"
+	return {
+		reviewers: [
+			{ kind: "user", login: first, state: lead, codeOwner: false, isViewer: false },
+			...(second === first ? [] : [{ kind: "user" as const, login: second, state: "requested" as const, codeOwner: false, isViewer: false }]),
+			{ kind: "team", login: `${repository.split("/")[0]}/reviewers`, state: "requested", codeOwner: index % 2 === 0, isViewer: false },
+		],
+		requiredApprovals: index % 3 === 0 ? null : 1,
+	}
+}
 
 const mockRepository = (index: number, primaryRepository: string | null) =>
 	index === 0 && primaryRepository ? primaryRepository : (MOCK_REPOSITORIES[index % MOCK_REPOSITORIES.length] ?? `mock-org/repo-${index}`)
@@ -72,6 +89,7 @@ const buildPullRequest = (index: number, options: Required<MockOptions>): PullRe
 		state: "open",
 		reviewStatus: review,
 		...synthCheckSummary(passed, total),
+		reviewers: mockReviewers(index, review, repository),
 		autoMergeEnabled: index % 11 === 0,
 		detailLoaded: true,
 		createdAt,
@@ -166,6 +184,12 @@ const uniqueLabels = (items: readonly { readonly labels: readonly { readonly nam
 }
 
 const mockTeamMembers = Array.from({ length: 6 }, (_, index) => mockAuthor(index * 2 + 1))
+// mock-team is the strictly smallest, so the default {my_teams} picks it.
+const mockViewerTeams: readonly ViewerTeam[] = [
+	{ slug: "mock-org/mock-team", name: "Mock team", members: mockTeamMembers.length },
+	{ slug: "mock-org/platform", name: "Platform", members: 14 },
+	{ slug: "mock-org/engineering", name: "Engineering", members: 40 },
+]
 
 // Tiny interpreter for the qualifiers sections use, so mock mode shows
 // plausible sections. Positive `author:` terms OR together like on GitHub.
@@ -549,6 +573,7 @@ export const MockGitHubService = {
 				},
 				listTeamMembers: () => Effect.succeed(mockTeamMembers),
 				listViewerTeams: () => Effect.succeed(["mock-org/mock-team"]),
+				listViewerTeamsDetailed: () => Effect.succeed(mockViewerTeams),
 				listPullRequestPage: (input: ItemListInput<"pullRequest">) => {
 					const queueMode = queueModeForListMode(input.mode)
 					const filtered = filterByView(queueMode, input.repository, pullRequestSource(queueMode, input.repository), username, strictUserScope)

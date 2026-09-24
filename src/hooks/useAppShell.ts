@@ -64,6 +64,7 @@ import { useDiffLocationPreservation } from "../ui/diff/useDiffLocationPreservat
 import { useDiffPrefetch } from "../ui/diff/useDiffPrefetch.js"
 import { showScrollbarsAtom, themeIdAtom } from "../ui/theme/atoms.js"
 import { useThemeModal } from "../ui/theme/useThemeModal.js"
+import { useReviewPresetModal } from "../ui/review/useReviewPresetModal.js"
 import { useMergeFlow } from "../ui/merge/useMergeFlow.js"
 import { initialCommentModalState, submitReviewOptions } from "../ui/modals.js"
 import { useClampedIndex } from "../ui/useClampedIndex.js"
@@ -157,6 +158,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		deleteCommentModal,
 		changedFilesModal,
 		filterModal,
+		reviewPresetModal,
 		submitReviewModal,
 		themeModal,
 		commandPalette,
@@ -482,11 +484,6 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		if (!selectedRepositoryItem) return
 		switchViewTo({ _tag: "Repository", repository: selectedRepositoryItem.repository })
 	}
-	const moveReviewPresetSelection = (delta: -1 | 1) =>
-		setReviewPresetModal((current) => ({
-			...current,
-			selectedIndex: current.presets.length === 0 ? 0 : (((current.selectedIndex + delta) % current.presets.length) + current.presets.length) % current.presets.length,
-		}))
 	const { openFilterModal, moveFilterSelection, applySelectedFilter } = useFilterModal({
 		activeWorkspaceSurface,
 		activeView,
@@ -930,6 +927,13 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		flashNotice,
 	})
 
+	const reviewPresetModalActions = useReviewPresetModal({
+		reviewPresetModal,
+		setReviewPresetModal,
+		closeActiveModal,
+		runSelected: () => runCommandById("pull.agent-review-preset-run"),
+		flashNotice,
+	})
 	const briefView = useBriefView({ selectedPullRequest, halfPage, contentWidth: fullscreenContentWidth, height: wideBodyHeight, runCommandById })
 
 	useCommandHandoffs({
@@ -981,6 +985,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 	const runCommandPaletteCommand = (command: AppCommand) => {
 		runCommand(command, { notifyDisabled: true, closePalette: true })
 	}
+	// In the sections view j/k (and counted / half-page steps) stay inside the current section.
+	const sectionsNavActive = activeView._tag === "Sections" && activeWorkspaceSurface === "pullRequests"
 	const {
 		stepSelected,
 		stepSelectedDown,
@@ -990,6 +996,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		moveSelectedToPreviousGroup: moveSelectedToPreviousRepositoryGroup,
 		moveSelectedToNextGroup: moveSelectedToNextRepositoryGroup,
 	} = useListSelectionStepping({
+		clampToGroup: sectionsNavActive,
 		activeWorkspaceSurface,
 		visiblePullRequests,
 		issues,
@@ -1003,7 +1010,6 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		setSelectedRepositoryIndex,
 	})
 	// In the sections view `[` / `]` move the section cursor, which can rest on collapsed or empty sections.
-	const sectionsNavActive = activeView._tag === "Sections" && activeWorkspaceSurface === "pullRequests"
 	const moveSelectedToPreviousGroup = sectionsNavActive ? () => stepSectionBy(-1) : moveSelectedToPreviousRepositoryGroup
 	const moveSelectedToNextGroup = sectionsNavActive ? () => stepSectionBy(1) : moveSelectedToNextRepositoryGroup
 	const handleQuitOrClose = () => {
@@ -1063,7 +1069,9 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		moveChangedFileSelection,
 		applySelectedFilter,
 		moveFilterSelection,
-		moveReviewPresetSelection,
+		reviewPresetModal,
+		reviewPresetModalCtx: reviewPresetModalActions.ctx,
+		editReviewPresetText: reviewPresetModalActions.editText,
 		setSubmitReviewModal,
 		confirmSubmitReview,
 		editSubmitReview,

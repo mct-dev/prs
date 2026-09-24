@@ -49,3 +49,17 @@ export const groupIndexAt = (groupStarts: readonly number[], current: number): n
 	}
 	return low
 }
+
+/**
+ * Move `current` by `delta` rows without leaving its group: the result is
+ * clamped to the group's first and last row, so j/k never cross into (or wrap
+ * around to) another group. `total` is the number of rows across all groups.
+ */
+export const stepWithinGroup = (groupStarts: readonly number[], total: number, current: number, delta: number): number => {
+	if (total <= 0) return 0
+	const clamped = Math.max(0, Math.min(total - 1, current))
+	const group = groupIndexAt(groupStarts, clamped)
+	const first = groupStarts[group] ?? 0
+	const last = (groupStarts[group + 1] ?? total) - 1
+	return Math.max(first, Math.min(last, clamped + delta))
+}
