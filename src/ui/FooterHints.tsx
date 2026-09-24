@@ -1,4 +1,5 @@
 import { Data } from "effect"
+import { describeFilterQuery } from "../filter/parse.js"
 import { colors } from "./colors.js"
 import { HintRow, TextLine, type HintItem } from "./primitives.js"
 
@@ -41,7 +42,7 @@ interface HintsContext {
 const FILTER_CURSOR = "█"
 
 const filterPlaceholder = (ctx: HintsContext) => `${ctx.filterPlaceholder.charAt(0).toUpperCase()}${ctx.filterPlaceholder.slice(1)}`
-const activeFilterLabel = (ctx: HintsContext) => (ctx.filterText.length > 0 ? ctx.filterText : filterPlaceholder(ctx))
+const activeFilterLabel = (ctx: HintsContext) => (ctx.filterText.length > 0 ? describeFilterQuery(ctx.filterText) || ctx.filterText : filterPlaceholder(ctx))
 
 const FilterEditingPrompt = (ctx: HintsContext) => {
 	const placeholder = filterPlaceholder(ctx)

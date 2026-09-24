@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { registerHandoff } from "../commands/handoffs.js"
 import type { PullRequestItem } from "../domain.js"
-import type { PullRequestView } from "../pullRequestViews.js"
+import { type PullRequestView, sectionsView } from "../pullRequestViews.js"
 
 export interface UseCommandHandoffsInput {
 	readonly renderer: { destroy: () => void }
@@ -27,6 +27,8 @@ export interface UseCommandHandoffsInput {
 	readonly openReplyToSelectedComment: () => void
 	readonly openEditSelectedComment: () => void
 	readonly openDeleteSelectedComment: () => void
+	readonly toggleSelectedSection: () => void
+	readonly toggleAllSections: () => void
 }
 
 /**
@@ -61,6 +63,8 @@ export const useCommandHandoffs = ({
 	openReplyToSelectedComment,
 	openEditSelectedComment,
 	openDeleteSelectedComment,
+	toggleSelectedSection,
+	toggleAllSections,
 }: UseCommandHandoffsInput): void => {
 	useEffect(() => registerHandoff("quit", () => renderer.destroy()), [renderer])
 	useEffect(() => registerHandoff("refreshPullRequests", () => refreshPullRequests("Refreshed", { resetTransientState: true })), [refreshPullRequests])
@@ -101,5 +105,8 @@ export const useCommandHandoffs = ({
 	useEffect(() => registerHandoff("viewAuthored", () => switchViewTo({ _tag: "Queue", mode: "authored", repository: selectedRepository })), [selectedRepository, switchViewTo])
 	useEffect(() => registerHandoff("viewReview", () => switchViewTo({ _tag: "Queue", mode: "review", repository: selectedRepository })), [selectedRepository, switchViewTo])
 	useEffect(() => registerHandoff("viewAssigned", () => switchViewTo({ _tag: "Queue", mode: "assigned", repository: selectedRepository })), [selectedRepository, switchViewTo])
+	useEffect(() => registerHandoff("viewSections", () => switchViewTo(sectionsView)), [switchViewTo])
+	useEffect(() => registerHandoff("toggleSelectedSection", toggleSelectedSection), [toggleSelectedSection])
+	useEffect(() => registerHandoff("toggleAllSections", toggleAllSections), [toggleAllSections])
 	useEffect(() => registerHandoff("viewMentioned", () => switchViewTo({ _tag: "Queue", mode: "mentioned", repository: selectedRepository })), [selectedRepository, switchViewTo])
 }

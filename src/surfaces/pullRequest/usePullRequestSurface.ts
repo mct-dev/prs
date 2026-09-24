@@ -19,6 +19,7 @@ import { effectiveFilterQueryAtom } from "../../ui/filter/atoms.js"
 import {
 	activeViewAtom,
 	activeViewsAtom,
+	collapsedSectionsAtom,
 	displayedPullRequestsAtom,
 	groupStartsAtom,
 	hasMorePullRequestsAtom,
@@ -31,11 +32,14 @@ import {
 	recentlyCompletedPullRequestsAtom,
 	resolveLoad,
 	retryProgressAtom,
+	sectionGroupsAtom,
+	sectionsConfigErrorAtom,
 	selectedPullRequestAtom,
 	visibleGroupsAtom,
 	visiblePullRequestsAtom,
 } from "../../ui/pullRequests/atoms.js"
-import { buildPullRequestListRows, pullRequestListRowIndex, type PullRequestGroups, type PullRequestListRow } from "../../ui/PullRequestList.js"
+import { describeFilterQuery } from "../../filter/parse.js"
+import { buildPullRequestListRows, pullRequestListRowIndex, type PullRequestGroups, type PullRequestListRow, type PullRequestSections } from "../../ui/PullRequestList.js"
 import { useScrollFollowSelected } from "../../ui/useScrollFollowSelected.js"
 import { useScrollPersistence } from "../../ui/useScrollPersistence.js"
 import { AUTO_REFRESH_JITTER_MS, FOCUS_RETURN_REFRESH_MIN_MS, FOCUSED_IDLE_REFRESH_MS } from "../../workspace/placeholders.js"
@@ -97,6 +101,14 @@ export interface PullRequestSurfaceShell {
 	readonly selectedRepository: string | null
 	readonly pullRequestActiveFilterLabel: string | null
 	readonly compactPullRequestRows: boolean
+	/** Section headers when the sections view is active, else null. */
+	readonly pullRequestSections: PullRequestSections | null
+	/** Collapse or expand one section; no-op outside the sections view. */
+	readonly toggleSection: (id: string) => void
+	/** Collapse every section, or expand all when all are collapsed. */
+	readonly toggleAllSections: () => void
+	/** Collapse or expand the section containing the selected PR. */
+	readonly toggleSelectedSection: () => void
 	readonly pullRequestListRows: readonly PullRequestListRow[]
 	readonly selectedPullRequestRowIndex: number | null
 	// Atom setters re-exposed for App-shell-level consumers (modals, mutations,
@@ -186,14 +198,50 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 	const pullRequestFetchInFlight = pullRequestResult.waiting
 	const selectedRepository = useAtomValue(selectedRepositoryAtom)
 	const pullRequestAuthorFilterActive = selectedRepository !== null && activeView._tag === "Queue" && activeView.mode === "authored"
-	const pullRequestActiveFilterLabel = pullRequestAuthorFilterActive ? "author:@me" : null
+	const effectiveFilterQuery = useAtomValue(effectiveFilterQueryAtom)
+	const describedFilter = effectiveFilterQuery.length > 0 ? describeFilterQuery(effectiveFilterQuery) : ""
+	const pullRequestActiveFilterLabel =
+		[pullRequestAuthorFilterActive ? "author:@me" : null, describedFilter.length > 0 ? describedFilter : null].filter((part) => part !== null).join(" · ") || null
 	const compactPullRequestRows = activeView._tag === "Queue" && activeView.mode === "authored"
 	const pullRequestError = AsyncResult.isFailure(pullRequestResult) ? errorMessage(Cause.squash(pullRequestResult.cause)) : null
 
 	const visibleGroups = useAtomValue(visibleGroupsAtom)
 	const visiblePullRequests = useAtomValue(visiblePullRequestsAtom)
 	const selectedPullRequest = useAtomValue(selectedPullRequestAtom)
-	const filterActive = useAtomValue(effectiveFilterQueryAtom).length > 0
+	const filterActive = effectiveFilterQuery.length > 0
+	const sectionGroups = useAtomValue(sectionGroupsAtom)
+	const sectionsConfigError = useAtomValue(sectionsConfigErrorAtom)
+	const setCollapsedSections = useAtomSet(collapsedSectionsAtom)
+	const pullRequestSections = useMemo<PullRequestSections | null>(
+		() =>
+			activeView._tag === "Sections"
+				? {
+						headers: sectionGroups.map((group) => ({
+							id: group.id,
+							title: group.title,
+							status: group.status,
+							error: group.error,
+							collapsed: group.collapsed,
+							count: group.pullRequests.length,
+						})),
+						configError: sectionsConfigError,
+					}
+				: null,
+		[activeView._tag, sectionGroups, sectionsConfigError],
+	)
+	const toggleSection = useCallback(
+		(id: string) => {
+			const group = sectionGroups.find((candidate) => candidate.id === id)
+			if (!group) return
+			setCollapsedSections((current) => ({ ...current, [id]: !group.collapsed }))
+		},
+		[sectionGroups, setCollapsedSections],
+	)
+	const toggleAllSections = useCallback(() => {
+		if (sectionGroups.length === 0) return
+		const collapse = sectionGroups.some((group) => !group.collapsed)
+		setCollapsedSections(Object.fromEntries(sectionGroups.map((group) => [group.id, collapse])))
+	}, [sectionGroups, setCollapsedSections])
 	const activeViews = useAtomValue(activeViewsAtom)
 	const currentQueueCacheKey = viewCacheKey(activeView)
 	const loadedPullRequestCount = useAtomValue(loadedPullRequestCountAtom)
@@ -246,8 +294,19 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 				hasMore: loadMoreSlotAvailable,
 				isLoadingMore: isLoadingMorePullRequests,
 				compact: compactPullRequestRows,
+				sections: pullRequestSections,
 			}),
-		[visibleGroups, pullRequestStatus, pullRequestError, visibleFilterText, loadedPullRequestCount, loadMoreSlotAvailable, isLoadingMorePullRequests, compactPullRequestRows],
+		[
+			visibleGroups,
+			pullRequestStatus,
+			pullRequestError,
+			visibleFilterText,
+			loadedPullRequestCount,
+			loadMoreSlotAvailable,
+			isLoadingMorePullRequests,
+			compactPullRequestRows,
+			pullRequestSections,
+		],
 	)
 	const selectedPullRequestRowIndex = pullRequestListRowIndex(pullRequestListRows, selectedPullRequest?.url ?? null, loadMoreRowSelected)
 
@@ -321,6 +380,12 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		}
 	}
 
+	const toggleSelectedSection = useCallback(() => {
+		const url = selectedPullRequest?.url
+		const section = url ? visibleGroups.find(([, pullRequests]) => pullRequests.some((pullRequest) => pullRequest.url === url)) : undefined
+		if (section) toggleSection(section[0])
+	}, [selectedPullRequest, visibleGroups, toggleSection])
+
 	// `isFullscreen` is provisionally `false` for the PR Surface here — the
 	// detail/diff/comments full-view booleans still live in App-shell during
 	// the transition. After step 4c (diff system collapse) and step 5
@@ -353,6 +418,10 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		selectedRepository,
 		pullRequestActiveFilterLabel,
 		compactPullRequestRows,
+		pullRequestSections,
+		toggleSection,
+		toggleAllSections,
+		toggleSelectedSection,
 		pullRequestListRows,
 		selectedPullRequestRowIndex,
 		setPullRequestOverrides,

@@ -6,7 +6,8 @@ import type { DetailCommentsStatus } from "../ui/DetailsPane.js"
 import { getDetailHeaderHeight, getDetailJunctionRows, getScrollableDetailBodyHeight } from "../ui/DetailsPane.js"
 import { getIssueDetailJunctionRows, issueListVisualLineCount } from "../ui/IssueList.js"
 import type { IssueList } from "../ui/IssueList.js"
-import { type PullRequestGroups, type PullRequestListRow, pullRequestListVisualLineCount } from "../ui/PullRequestList.js"
+import { filterHelpText } from "../filter/parse.js"
+import { type PullRequestGroups, type PullRequestListRow, type PullRequestSections, pullRequestListVisualLineCount } from "../ui/PullRequestList.js"
 import type { PullRequestList } from "../ui/PullRequestList.js"
 import type { RepoList, RepositoryListItem } from "../ui/RepoList.js"
 import { workspaceTabSeparatorColumns } from "../ui/WorkspaceTabs.js"
@@ -40,6 +41,8 @@ export interface WorkspaceDerivationsInput {
 	readonly pullRequestError: string | null
 	readonly pullRequestActiveFilterLabel: string | null
 	readonly compactPullRequestRows: boolean
+	readonly pullRequestSections: PullRequestSections | null
+	readonly toggleSection: (id: string) => void
 	readonly issueActiveFilterLabel: string | null
 	readonly pullRequestListRows: readonly PullRequestListRow[]
 	readonly visibleGroups: PullRequestGroups
@@ -142,6 +145,8 @@ export const computeWorkspaceDerivations = (input: WorkspaceDerivationsInput): W
 		pullRequestError,
 		pullRequestActiveFilterLabel,
 		compactPullRequestRows,
+		pullRequestSections,
+		toggleSection,
 		issueActiveFilterLabel,
 		pullRequestListRows,
 		visibleGroups,
@@ -226,6 +231,8 @@ export const computeWorkspaceDerivations = (input: WorkspaceDerivationsInput): W
 		showTitle: false,
 		showRepositoryGroups: selectedRepository === null,
 		compact: compactPullRequestRows,
+		sections: pullRequestSections,
+		onToggleSection: toggleSection,
 	} as const
 	const issueListProps = {
 		issues,
@@ -270,7 +277,8 @@ export const computeWorkspaceDerivations = (input: WorkspaceDerivationsInput): W
 		pullRequests: hasMorePullRequests ? `${visiblePullRequests.length}+` : visiblePullRequests.length,
 		issues: hasMoreIssues ? `${issues.length}+` : issues.length,
 	}
-	const filterPlaceholder = activeWorkspaceSurface === "pullRequests" ? "filter pull requests" : activeWorkspaceSurface === "issues" ? "filter issues" : "filter repositories"
+	const filterPlaceholder =
+		activeWorkspaceSurface === "pullRequests" ? `filter pull requests · ${filterHelpText}` : activeWorkspaceSurface === "issues" ? "filter issues" : "filter repositories"
 	const workspaceTabJunctions = workspaceTabSeparatorColumns(workspaceTabCounts, workspaceTabSurfaces)
 	// Three horizontal dividers, three junction sets. The diff file panel
 	// (when visible) introduces a vertical rail that starts at the top divider

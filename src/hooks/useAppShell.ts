@@ -289,6 +289,10 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		selectedRepository,
 		pullRequestActiveFilterLabel,
 		compactPullRequestRows,
+		pullRequestSections,
+		toggleSection,
+		toggleAllSections,
+		toggleSelectedSection,
 		pullRequestListRows,
 		setPullRequestOverrides,
 		setRecentlyCompletedPullRequests,
@@ -906,6 +910,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		openReplyToSelectedComment,
 		openEditSelectedComment,
 		openDeleteSelectedComment,
+		toggleSelectedSection,
+		toggleAllSections,
 	})
 
 	// === Helpers used by the keymap layers ===
@@ -1104,6 +1110,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		pullRequestError,
 		pullRequestActiveFilterLabel,
 		compactPullRequestRows,
+		pullRequestSections,
+		toggleSection,
 		issueActiveFilterLabel,
 		pullRequestListRows,
 		visibleGroups,

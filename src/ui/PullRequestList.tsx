@@ -8,16 +8,42 @@ import { pullRequestRowDisplay, repoColor, reviewIcon } from "./pullRequests.js"
 
 export type PullRequestGroups = Array<[string, PullRequestItem[]]>
 
+/** Header meta for the sections view; groups are keyed by section id. */
+export interface PullRequestSectionHeader {
+	readonly id: string
+	readonly title: string
+	readonly status: "loading" | "ready" | "error"
+	readonly error: string | null
+	readonly collapsed: boolean
+	readonly count: number
+}
+
+export interface PullRequestSections {
+	readonly headers: readonly PullRequestSectionHeader[]
+	/** `sections.yaml` problem; the defaults render below it. */
+	readonly configError: string | null
+}
+
 const pullRequestListRowHeight = (row: PullRequestListRow) => (row._tag === "pull-request" && !row.compact ? 2 : 1)
 
 export type PullRequestListRow =
 	| { readonly _tag: "title" }
 	| { readonly _tag: "message"; readonly text: string; readonly color: string }
 	| { readonly _tag: "group"; readonly repository: string; readonly pullRequests: readonly PullRequestItem[] }
-	| { readonly _tag: "pull-request"; readonly pullRequest: PullRequestItem; readonly numberWidth: number; readonly ageWidth: number; readonly compact: boolean }
+	| { readonly _tag: "section"; readonly section: PullRequestSectionHeader }
+	| {
+			readonly _tag: "pull-request"
+			readonly pullRequest: PullRequestItem
+			readonly numberWidth: number
+			readonly ageWidth: number
+			readonly compact: boolean
+			readonly showRepository?: boolean
+	  }
 	| { readonly _tag: "load-more"; readonly text: string }
 
 const GROUP_ICON = "◆"
+const SECTION_OPEN_ICON = "▾"
+const SECTION_COLLAPSED_ICON = "▸"
 
 const getRowLayout = (contentWidth: number, numberWidth: number, ageWidth: number) => {
 	const reviewWidth = 1
@@ -48,6 +74,55 @@ const GroupTitle = ({ label, color, filterText }: { label: string; color: string
 	</TextLine>
 )
 
+const SectionHeaderLine = ({
+	section,
+	loadingIndicator,
+	contentWidth,
+	onToggle,
+}: {
+	section: PullRequestSectionHeader
+	loadingIndicator: string
+	contentWidth: number
+	onToggle: () => void
+}) => (
+	<TextLine width={contentWidth} onMouseDown={onToggle}>
+		<span fg={colors.accent}>{section.collapsed ? SECTION_COLLAPSED_ICON : SECTION_OPEN_ICON} </span>
+		<span fg={colors.accent} attributes={TextAttributes.BOLD}>
+			{section.title}
+		</span>
+		<span fg={colors.count}> {section.count}</span>
+		{section.status === "loading" ? <span fg={colors.muted}> {loadingIndicator}</span> : null}
+		{section.status === "error" ? <span fg={colors.error}> !</span> : null}
+	</TextLine>
+)
+
+const buildSectionRows = (
+	rows: PullRequestListRow[],
+	sections: PullRequestSections,
+	groups: PullRequestGroups,
+	status: LoadStatus,
+	error: string | null,
+	filterText: string,
+	compact: boolean,
+) => {
+	if (sections.configError) rows.push({ _tag: "message", text: `! ${sections.configError} (using defaults)`, color: colors.error })
+	const itemCount = groups.reduce((count, [, pullRequests]) => count + pullRequests.length, 0)
+	if (status === "loading" && sections.headers.length === 0) rows.push({ _tag: "message", text: "- Loading sections...", color: colors.muted })
+	if (status === "error" && sections.headers.length === 0) rows.push({ _tag: "message", text: `- ${error ?? "Could not load sections."}`, color: colors.error })
+	if (filterText.length > 0 && itemCount === 0 && sections.headers.length > 0) rows.push({ _tag: "message", text: "- No matching pull requests.", color: colors.muted })
+	const bySection = new Map(groups)
+	for (const section of sections.headers) {
+		rows.push({ _tag: "section", section })
+		if (section.error) rows.push({ _tag: "message", text: `  ! ${section.error}`, color: colors.error })
+		if (section.collapsed) continue
+		const pullRequests = bySection.get(section.id) ?? []
+		const numberWidth = groupNumberWidth(pullRequests)
+		const ageWidth = groupAgeWidth(pullRequests)
+		for (const pullRequest of pullRequests) rows.push({ _tag: "pull-request", pullRequest, numberWidth, ageWidth, compact, showRepository: true })
+	}
+	return rows
+}
+
 export const buildPullRequestListRows = ({
 	groups,
 	status,
@@ -60,6 +135,7 @@ export const buildPullRequestListRows = ({
 	showTitle = true,
 	showRepositoryGroups = true,
 	compact = false,
+	sections = null,
 }: {
 	readonly groups: PullRequestGroups
 	readonly status: LoadStatus
@@ -72,9 +148,11 @@ export const buildPullRequestListRows = ({
 	readonly showTitle?: boolean
 	readonly showRepositoryGroups?: boolean
 	readonly compact?: boolean
+	readonly sections?: PullRequestSections | null
 }): readonly PullRequestListRow[] => {
 	const itemCount = groups.reduce((count, [, pullRequests]) => count + pullRequests.length, 0)
 	const rows: PullRequestListRow[] = showTitle ? [{ _tag: "title" }] : []
+	if (sections) return buildSectionRows(rows, sections, groups, status, error, filterText, compact)
 	if (status === "loading" && itemCount === 0) rows.push({ _tag: "message", text: "- Loading pull requests...", color: colors.muted })
 	if (status === "error") rows.push({ _tag: "message", text: `- ${error ?? "Could not load pull requests."}`, color: colors.error })
 	if (status === "ready" && itemCount === 0)
@@ -116,6 +194,7 @@ const PullRequestRow = ({
 	ageColWidth,
 	filterText,
 	compact,
+	showRepository,
 	onSelect,
 	onHoverChange,
 }: {
@@ -127,6 +206,7 @@ const PullRequestRow = ({
 	ageColWidth: number
 	filterText: string
 	compact: boolean
+	showRepository: boolean
 	onSelect: () => void
 	onHoverChange: (hovered: boolean) => void
 }) => {
@@ -143,7 +223,7 @@ const PullRequestRow = ({
 			: pullRequest.baseRefName === pullRequest.defaultBranchName
 				? pullRequest.headRefName
 				: `${pullRequest.headRefName} → ${pullRequest.baseRefName}`
-	const authorText = `@${pullRequest.author}`
+	const authorText = showRepository ? `@${pullRequest.author} · ${pullRequest.repository}` : `@${pullRequest.author}`
 	const branchWidth = branchText ? Math.max(0, metaWidth - authorText.length - 1) : 0
 	const display = pullRequestRowDisplay(pullRequest, selected)
 
@@ -200,6 +280,8 @@ export const PullRequestList = ({
 	showTitle = true,
 	showRepositoryGroups = true,
 	compact = false,
+	sections = null,
+	onToggleSection,
 }: {
 	groups: PullRequestGroups
 	selectedUrl: string | null
@@ -217,6 +299,8 @@ export const PullRequestList = ({
 	showTitle?: boolean
 	showRepositoryGroups?: boolean
 	compact?: boolean
+	sections?: PullRequestSections | null
+	onToggleSection?: (id: string) => void
 }) => {
 	const rows = buildPullRequestListRows({
 		groups,
@@ -230,6 +314,7 @@ export const PullRequestList = ({
 		showTitle,
 		showRepositoryGroups,
 		compact,
+		sections,
 	})
 	const { isHovered, onHoverChange } = useHoverState<string>()
 
@@ -248,6 +333,16 @@ export const PullRequestList = ({
 							)}
 						</SelectableRow>
 					)
+				if (row._tag === "section")
+					return (
+						<SectionHeaderLine
+							key={`section-${row.section.id}`}
+							section={row.section}
+							loadingIndicator={loadingIndicator}
+							contentWidth={contentWidth}
+							onToggle={() => onToggleSection?.(row.section.id)}
+						/>
+					)
 				if (row._tag === "group") return <GroupTitle key={`group-${row.repository}`} label={row.repository} color={repoColor(row.repository)} filterText={filterText} />
 
 				const pullRequestUrl = row.pullRequest.url
@@ -262,6 +357,7 @@ export const PullRequestList = ({
 						ageColWidth={row.ageWidth}
 						filterText={filterText}
 						compact={row.compact}
+						showRepository={row.showRepository ?? false}
 						onSelect={() => onSelectPullRequest(pullRequestUrl)}
 						onHoverChange={onHoverChange(pullRequestUrl)}
 					/>
