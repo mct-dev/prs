@@ -12,6 +12,8 @@ export interface BriefViewSegment {
 	readonly text: string
 	readonly fg: string
 	readonly bold?: boolean
+	/** Recomputes the text from the current time; the pane re-renders it on its own tick. */
+	readonly live?: (now: Date) => string
 }
 
 /** One body row of the brief view. Focus-area rows carry their index so they can be selected. */
@@ -27,6 +29,11 @@ const blank: BriefViewRow = { segments: [] }
 const text = (value: string, fg: string = colors.text, bold = false): BriefViewSegment => (bold ? { text: value, fg, bold } : { text: value, fg })
 const row = (...segments: readonly BriefViewSegment[]): BriefViewRow => ({ segments })
 const heading = (title: string, suffix?: string): BriefViewRow => row(text(title, colors.count, true), ...(suffix ? [text(suffix, colors.muted)] : []))
+
+const elapsed = (startedAt: Date, now: Date): BriefViewSegment => {
+	const live = (at: Date) => ` · ${formatDuration(startedAt, null, at)} elapsed`
+	return { text: live(now), fg: colors.muted, live }
+}
 
 const oneLine = (value: string) => value.replace(/\s+/g, " ").trim()
 
@@ -44,7 +51,7 @@ const clampRow = (viewRow: BriefViewRow, width: number): BriefViewRow => {
 		if (remaining <= 0) break
 		const clipped = segment.text.length > remaining ? segment.text.slice(0, remaining) : segment.text
 		remaining -= clipped.length
-		segments.push(clipped === segment.text ? segment : { ...segment, text: clipped })
+		segments.push(clipped === segment.text ? segment : { text: clipped, fg: segment.fg, ...(segment.bold ? { bold: true } : {}) })
 	}
 	return segments.length === viewRow.segments.length && remaining >= 0 && segments.every((segment, index) => segment === viewRow.segments[index])
 		? viewRow
@@ -102,7 +109,7 @@ const buildRows = (status: BriefStatus, entry: ReviewEntry | null, headRefOid: s
 			]
 		case "running":
 			return [
-				row(text("Agent review running", colors.status.pending, true), text(` · ${formatDuration(status.startedAt, null, now)} elapsed`, colors.muted)),
+				row(text("Agent review running", colors.status.pending, true), elapsed(status.startedAt, now)),
 				blank,
 				...(entry ? [field("Preset", `${entry.record.preset} · ${entry.record.agent}`, width), ...logRows(entry.record.logPath, width)] : []),
 				blank,

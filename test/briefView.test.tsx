@@ -7,6 +7,7 @@ import type { RiskBrief } from "../src/review/briefSchema.ts"
 import { briefStatusFor, reviewEntryFromRecord, reviewKey, type ReviewEntry } from "../src/review/briefStatus.ts"
 import type { AgentReviewRecord } from "../src/review/types.ts"
 import { BriefPane } from "../src/ui/review/BriefPane.tsx"
+import { LiveText } from "../src/ui/review/LiveText.tsx"
 import { briefViewRows, focusRowSpan, resolveBriefDiffTarget, scrollToKeepVisible } from "../src/ui/review/briefViewRows.ts"
 
 // @ts-expect-error — globalThis.IS_REACT_ACT_ENVIRONMENT
@@ -117,6 +118,36 @@ describe("brief view", () => {
 			"Log       /tmp/prs-reviews/run-1.log",
 		])
 			expect(frame).toContain(expected)
+	})
+
+	test("the running elapsed time is a live segment that ticks on its own", async () => {
+		const entry = reviewEntryFromRecord(record({ status: "running", briefJson: null, finishedAt: null }))
+		const rows = briefViewRows({ status: statusOf(entry), entry, headRefOid: pullRequest.headRefOid, width: 88, now })
+		const segment = rows[0]!.segments.find((candidate) => candidate.live)!
+		expect(segment.text).toBe(" · 2m elapsed")
+		expect(segment.live!(new Date(now.getTime() + 65_000))).toBe(" · 3m5s elapsed")
+
+		const setup = await createTestRenderer({ width: 20, height: 1 })
+		const root = createRoot(setup.renderer)
+		let ticks = 0
+		act(() => {
+			root.render(
+				<text>
+					<LiveText text="start" fg="#ffffff" live={() => `tick ${++ticks}`} intervalMs={10} />
+				</text>,
+			)
+		})
+		await setup.renderOnce()
+		const first = setup.captureCharFrame()
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 35))
+		})
+		await setup.renderOnce()
+		const later = setup.captureCharFrame()
+		act(() => root.unmount())
+		setup.renderer.destroy()
+		expect(first).toContain("start")
+		expect(later).toContain("tick")
 	})
 
 	test("idle, running and error states", async () => {

@@ -6,6 +6,7 @@ import { Divider, Filler, fitCell, PaddedRow, TextLine } from "../primitives.js"
 import { shortRepoName } from "../pullRequests.js"
 import { BriefSpinner } from "./BriefSpinner.js"
 import type { BriefViewRow } from "./briefViewRows.js"
+import { LiveText } from "./LiveText.js"
 
 export interface BriefPaneProps {
 	readonly pullRequest: PullRequestItem
@@ -79,7 +80,9 @@ export const BriefPane = ({ pullRequest, status, rows, focusIndex, scrollTop, co
 							<TextLine width={paneWidth} bg={bg}>
 								<span> </span>
 								{viewRow.segments.map((segment, segmentIndex) =>
-									segment.bold ? (
+									segment.live ? (
+										<LiveText key={segmentIndex} text={segment.text} fg={segment.fg} live={segment.live} />
+									) : segment.bold ? (
 										<span key={segmentIndex} fg={segment.fg} attributes={TextAttributes.BOLD}>
 											{segment.text}
 										</span>
