@@ -394,6 +394,12 @@ const baseFilterContext = (get: Atom.AtomContext) => {
 	return makeFilterContext({ now: new Date(), lookups, ...(AsyncResult.isSuccess(username) ? { viewer: username.value } : {}) })
 }
 
+/** Displayed PRs with no brief risk yet. `risk:` never hides them (unknown passes). */
+export const unknownRiskCountAtom = Atom.make((get) => {
+	const { lookups } = baseFilterContext(get)
+	return get(displayedPullRequestsAtom).filter((pullRequest) => lookups.risk(pullRequest) === "unknown").length
+})
+
 /**
  * url → section ids, assigned over the (unfiltered) sections load so
  * `section:<id>` works from any view. Null until sections have loaded.

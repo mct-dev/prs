@@ -246,6 +246,10 @@ The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `fi
 
 A predicate on data that hasn't loaded yet counts as unknown, and unknown never hides a PR. For example, `author:alice size>400 fix` keeps alice's PRs that match "fix", including ones whose size isn't known yet.
 
+Risk works the same way: `risk:high` keeps PRs that have no brief yet (the filter bar says how many, e.g. "12 PRs have no brief (shown as unknown)"). To see only reviewed PRs, add `brief:done`: `risk:high brief:done`.
+
+While typing after `/`, a popover suggests field names, then values (authors, repos and labels from the loaded PRs by frequency; the fixed values for `ci`, `review`, `risk`, `brief`, `draft`; examples like `>3d` for numbers). `tab` completes the first (or highlighted) suggestion, `up` / `down` highlight one and `enter` accepts it, and `esc` closes the popover before it cancels the filter. It also shows how many PRs match and warns about typos like `ci:passs`. With an empty prompt it lists your last 10 filters (kept in `recent-filters.json` next to `config.json`).
+
 - `section:needs-me ci:pass -review:approved`: PRs waiting on you with green CI that nobody has approved yet. In the sections view, `ci:pass -review:approved` alone does the same inside each section.
 
 ## Keybindings

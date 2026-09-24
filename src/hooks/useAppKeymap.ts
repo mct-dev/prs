@@ -15,6 +15,7 @@ import type { RunsViewCtx } from "../keymap/runsView.js"
 import type { BriefViewCtx } from "../keymap/briefView.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { useKeymapWiring } from "./useKeymapWiring.js"
+import { useFilterPopoverControls } from "../ui/filter/useFilterPopover.js"
 import type { CommentEditorValue } from "../ui/commentEditor.js"
 
 export interface UseAppKeymapInput {
@@ -178,6 +179,7 @@ export interface UseAppKeymapInput {
  * over a flat bundle and lets this hook produce the right shape.
  */
 export const useAppKeymap = (i: UseAppKeymapInput): void => {
+	const filterPopover = useFilterPopoverControls()
 	useKeymapWiring({
 		disabled: i.disabled,
 		ctxInput: {
@@ -272,7 +274,9 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				commitFilter: () => {
 					i.setFilterQuery(i.filterDraft)
 					i.setFilterMode(false)
+					filterPopover.remember(i.filterDraft)
 				},
+				popover: filterPopover,
 			},
 			diff: {
 				halfPage: i.halfPage,

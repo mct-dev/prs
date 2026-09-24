@@ -23,6 +23,12 @@ describe("parseFilterToken", () => {
 		expect(parseFilterToken('label:"needs review"')).toMatchObject({ value: "needs review" })
 	})
 
+	test("a known field with no value yet is ignored, not searched as text", () => {
+		expect(parseFilterQuery("author: ci:pass")).toEqual({ predicates: [predicate("ci:pass")], text: "" })
+		expect(parseFilterQuery("-review: age>")).toEqual({ predicates: [], text: "" })
+		expect(parseFilterQuery("fix: typo").text).toBe("fix: typo")
+	})
+
 	test("unknown fields and bare negated words stay free text", () => {
 		expect(parseFilterToken("foo:bar")).toBeNull()
 		expect(parseFilterToken("-word")).toBeNull()

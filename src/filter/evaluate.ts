@@ -1,6 +1,6 @@
 import type { PullRequestItem } from "../domain.js"
 import { filterByScore, pullRequestFilterScore } from "../ui/filter/scoring.js"
-import { type FilterExpr, type FilterPredicate, parseFilterQuery } from "./parse.js"
+import { type FilterExpr, type FilterField, type FilterPredicate, parseFilterQuery } from "./parse.js"
 
 // Three-valued evaluation: a predicate on data that has not loaded yet is
 // "unknown", and unknown never hides a PR. `not unknown` stays unknown.
@@ -99,6 +99,35 @@ const reviewAliases: Record<string, PullRequestItem["reviewStatus"]> = {
 	review: "review",
 	none: "none",
 	draft: "draft",
+}
+
+const briefValues: ReadonlySet<string> = new Set<BriefStatus>(["none", "stale", "running", "done"])
+
+/** Whether `value` is one `field` can ever match (used to warn about typos like `ci:passs`). */
+export const isValidFilterValue = (field: FilterField, value: string): boolean => {
+	const normalized = value.toLowerCase()
+	switch (field) {
+		case "draft":
+		case "me.reviewed":
+		case "me.reviewed_since_push":
+			return parseBoolean(normalized) !== null
+		case "size":
+		case "files":
+			return parseCount(normalized) !== null
+		case "age":
+		case "idle":
+			return parseDuration(normalized) !== null
+		case "ci":
+			return normalized in ciAliases
+		case "review":
+			return normalized in reviewAliases
+		case "risk":
+			return parseRisk(normalized) !== null
+		case "brief":
+			return briefValues.has(normalized)
+		default:
+			return normalized.length > 0
+	}
 }
 
 // Glob → RegExp for `file:` (supports `**`, `*`, `?`). Kept for when file lists load.
