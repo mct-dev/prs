@@ -181,7 +181,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 		id: "command.open",
 		title: "Open command palette",
 		scope: "Global",
-		subtitle: "Search every available route through ghui",
+		subtitle: "Search every available route through prs",
 		shortcut: "ctrl-p/cmd-k/?",
 		keywords: ["palette", "commands", "deck", "help", "keys", "keyboard", "shortcuts"],
 		run: Atom.set(activeModalAtom, Modal.CommandPalette(initialCommandPaletteState)),
@@ -1016,7 +1016,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 
 	defineCommand({
 		id: "app.quit",
-		title: "Quit ghui",
+		title: "Quit prs",
 		scope: "System",
 		subtitle: "Leave the terminal UI",
 		shortcut: "q",

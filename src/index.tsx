@@ -16,7 +16,7 @@ import { SPINNER_INTERVAL_MS } from "./ui/spinner.js"
 
 process.env.OTUI_USE_ALTERNATE_SCREEN = "true"
 
-const addGhUiParsers = () =>
+const addPrsParsers = () =>
 	addDefaultParsers([
 		{
 			filetype: "bash",
@@ -120,7 +120,7 @@ process.on("SIGUSR2", () => {
 
 const Bootstrap = () => {
 	const [appBundle, setAppBundle] = useState<AppBundle | null>(null)
-	const [bootHint, setBootHint] = useState("Starting ghui")
+	const [bootHint, setBootHint] = useState("Starting prs")
 	const [systemThemeGeneration, setSystemThemeGeneration] = useState(0)
 
 	useEffect(() => {
@@ -128,13 +128,13 @@ const Bootstrap = () => {
 		notifySystemThemeReload = () => setSystemThemeGeneration((current) => current + 1)
 		const timer = globalThis.setTimeout(() => {
 			setBootHint("Registering syntax parsers")
-			addGhUiParsers()
+			addPrsParsers()
 
-			setBootHint("Loading ghui app")
+			setBootHint("Loading prs app")
 			void Promise.all([import("@effect/atom-react"), import("./App.js")]).then(
 				([{ RegistryProvider }, { App }]) => {
 					if (cancelled) return
-					setBootHint("Mounting ghui app")
+					setBootHint("Mounting prs app")
 					setAppBundle({ RegistryProvider, App })
 				},
 				(error) => {
