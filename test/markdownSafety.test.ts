@@ -59,6 +59,35 @@ describe("markdown renderer: pathological input", () => {
 		expect(markdownPlainText(render.lines[0]!)).toBe(PLAIN_TEXT_NOTE)
 	})
 
+	for (const separator of ["\n2. ", "\n    - ", "\n10) ", "\n\n"]) {
+		test(`marker runs joined by ${JSON.stringify(separator)} stay under the time budget`, () => {
+			const body = Array.from({ length: 11 }, () => "*a ".repeat(590)).join(separator)
+			const started = performance.now()
+			renderMarkdownUncached(body, { width: 80 })
+			expect(performance.now() - started).toBeLessThan(200)
+		})
+	}
+
+	test("bot-sized fences and HTML tables still render as markdown", () => {
+		const fence = [
+			"Suggested change:",
+			"",
+			"```tsx",
+			...Array.from({ length: 150 }, (_, index) => `  <Item key={item_${index}} onClick={() => handle_click(*ptr, [a, b])} />`),
+			"```",
+		].join("\n")
+		expect(markdownPlainText(renderMarkdownUncached(fence, { width: 100 }).lines[0]!)).toBe("Suggested change:")
+		const table = [
+			"## Coverage",
+			"",
+			"<table>",
+			"<tr><th>File</th><th>Lines</th></tr>",
+			...Array.from({ length: 80 }, (_, index) => `<tr><td><code>src/module_${index}/file_name.ts</code></td><td><b>9${index % 10}%</b></td></tr>`),
+			"</table>",
+		].join("\n")
+		expect(markdownPlainText(renderMarkdownUncached(table, { width: 100 }).lines[0]!)).toBe("Coverage")
+	})
+
 	test("an ordinary long bullet list still renders as markdown", () => {
 		const body = Array.from({ length: 400 }, (_, index) => `- item ${index} with *some* emphasis`).join("\n")
 		const render = renderMarkdownUncached(body, { width: 80 })

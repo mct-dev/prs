@@ -3,6 +3,7 @@ import { formatRelativeDate } from "../date.js"
 import type { DiffCommentSide } from "../domain.js"
 import { isSafeUrl } from "../safeUrl.js"
 import { colors } from "./colors.js"
+import { stripControls } from "./markdown/html.js"
 import { fitCell, TextLine } from "./primitives.js"
 
 export interface CommentSegment {
@@ -116,7 +117,7 @@ export const COMMENT_BODY_INDENT = "  "
 const COMMENT_QUOTE_PREFIX = `${COMMENT_BODY_INDENT}▎ `
 
 export const commentBodyRows = ({ keyPrefix, body, width }: { readonly keyPrefix: string; readonly body: string; readonly width: number }): readonly CommentDisplayLine[] =>
-	wrapCommentText(body, Math.max(1, width - COMMENT_BODY_INDENT.length)).map((line, index) => ({
+	wrapCommentText(stripControls(body), Math.max(1, width - COMMENT_BODY_INDENT.length)).map((line, index) => ({
 		key: `${keyPrefix}:body:${index}`,
 		segments: line.quote
 			? [{ text: COMMENT_QUOTE_PREFIX, fg: colors.separator }, ...inlineCommentSegments(line.text, colors.muted)]
@@ -144,7 +145,7 @@ export const commentDisplayRows = ({
 const QUOTE_BODY_LIMIT = 480
 
 export const quotedReplyBody = (author: string, body: string): string => {
-	const trimmed = body.trim().slice(0, QUOTE_BODY_LIMIT)
+	const trimmed = stripControls(body).trim().slice(0, QUOTE_BODY_LIMIT)
 	const quoted =
 		trimmed.length > 0
 			? trimmed

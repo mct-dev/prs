@@ -1,4 +1,4 @@
-import { marked, type Token, type Tokens } from "marked"
+import { Lexer, type Token, type Tokens } from "marked"
 import { decodeEntities, hasControls, htmlToMarkdown, stripControls, replaceEmojiShortcodes, splitBody, attribute, type BodyChunk } from "./html.js"
 import type { MarkdownLine, MarkdownLink, MarkdownOptions, MarkdownRender, MarkdownRole, MarkdownSpan } from "./types.js"
 import { breakByWidth, mergeSpans, spansWidth, textWidth, wrapSpans } from "./wrap.js"
@@ -13,7 +13,7 @@ export const MAX_NEST_DEPTH = 6
 // (tens of seconds at 64k chars), and it runs on the UI thread. Past these
 // budgets a body renders as plain wrapped text instead.
 export const MARKDOWN_MAX_CHARS = 20_000
-const MAX_MARKERS_PER_PARAGRAPH = 600
+const MAX_MARKERS_PER_PARAGRAPH = 400
 export const PLAIN_TEXT_NOTE = "(large comment, shown as plain text)"
 const BULLETS = ["•", "◦", "▪"] as const
 
@@ -289,7 +289,7 @@ const renderDetails = (chunk: Extract<BodyChunk, { kind: "details" }>, width: nu
 	const body = renderChunks(chunk.body, Math.max(1, width - 2), context, depth)
 	const open = context.detailsOpen ?? (chunk.open || body.length <= DETAILS_AUTO_OPEN_MAX_LINES)
 	const summary = inlineSpans(
-		marked.lexer(chunk.summary, { gfm: true }).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
+		lex(chunk.summary).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
 		{ role: "summary", bold: true },
 		context,
 	)
@@ -359,7 +359,7 @@ const renderBlocks = (tokens: readonly Token[], width: number, context: RenderCo
 const renderChunks = (chunks: readonly BodyChunk[], width: number, context: RenderContext, depth: number): MarkdownLine[] => {
 	const out: MarkdownLine[] = []
 	for (const chunk of chunks) {
-		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(marked.lexer(chunk.text, { gfm: true }), width, context, depth, true)
+		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text), width, context, depth, true)
 		if (lines.length === 0) continue
 		if (out.length > 0) out.push(blank)
 		out.push(...lines)
@@ -367,19 +367,30 @@ const renderChunks = (chunks: readonly BodyChunk[], width: number, context: Rend
 	return out
 }
 
-const INLINE_MARKERS = /[*_<[`~]/g
-const LIST_MARKER = /^\s*(?:[*+-]|\d+[.)])\s/gm
-// Inline lexing happens per paragraph or list item, so that is the unit the
-// marker budget applies to.
-const INLINE_RUN_BREAK = /\n[ \t]*\n|\n(?=[ \t]*(?:[*+-]|\d+[.)])[ \t])/
-
 // `marked` recurses once per `>`, so thousands of them overflow the stack.
 const DEEP_QUOTE = /^(?:[ \t]*>){33}/m
 
-export const exceedsMarkdownBudget = (body: string) =>
-	body.length > MARKDOWN_MAX_CHARS ||
-	DEEP_QUOTE.test(body) ||
-	body.split(INLINE_RUN_BREAK).some((run) => (run.replace(LIST_MARKER, "").match(INLINE_MARKERS)?.length ?? 0) > MAX_MARKERS_PER_PARAGRAPH)
+export const exceedsMarkdownBudget = (body: string) => body.length > MARKDOWN_MAX_CHARS || DEEP_QUOTE.test(body)
+
+class MarkdownBudgetError extends Error {}
+
+const INLINE_MARKERS = /[*_<[`~]/g
+
+// marked.lexer, split in two: run the (linear) block pass, check every inline
+// source it queued against the marker budget, and only then run the
+// quadratic-prone inline pass. Measuring marked's own inline runs avoids
+// re-implementing CommonMark's paragraph rules, and fences or HTML blocks
+// (never inline-lexed) do not count.
+const lex = (source: string): Token[] => {
+	const lexer = new Lexer({ gfm: true })
+	lexer.blockTokens(source.replace(/\r\n?/g, "\n"), lexer.tokens)
+	for (const entry of lexer.inlineQueue) {
+		if ((entry.src.match(INLINE_MARKERS)?.length ?? 0) > MAX_MARKERS_PER_PARAGRAPH) throw new MarkdownBudgetError()
+	}
+	for (const entry of lexer.inlineQueue) lexer.inlineTokens(entry.src, entry.tokens)
+	lexer.inlineQueue = []
+	return lexer.tokens
+}
 
 const renderPlain = (body: string, width: number): MarkdownLine[] => [
 	{ spans: [{ text: PLAIN_TEXT_NOTE, role: "muted" }] },
