@@ -63,6 +63,7 @@ export interface BuildAppCtxFlags {
 	readonly commentModalActive: boolean
 	readonly deleteCommentModalActive: boolean
 	readonly commandPaletteActive: boolean
+	readonly legendModalActive: boolean
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
@@ -96,6 +97,8 @@ export interface BuildAppCtxInput {
 	readonly commentsView: BuildCommentsViewCtxInput
 	readonly listNav: BuildListNavCtxInput
 	readonly openCommandPalette: () => void
+	readonly openLegend: () => void
+	readonly closeLegend: () => void
 	readonly handleQuitOrClose: () => void
 }
 
@@ -131,5 +134,7 @@ export const buildAppCtx = (input: BuildAppCtxInput): AppCtx => ({
 	commentsView: buildCommentsViewCtx(input.commentsView),
 	listNav: buildListNavCtx(input.listNav),
 	openCommandPalette: input.openCommandPalette,
+	openLegend: input.openLegend,
+	closeLegend: input.closeLegend,
 	handleQuitOrClose: input.handleQuitOrClose,
 })

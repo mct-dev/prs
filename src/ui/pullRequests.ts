@@ -41,7 +41,7 @@ export const issueMetadataText = (issue: IssueItem) => {
 
 export const statusColor = (status: PullRequestItem["reviewStatus"] | PullRequestItem["checkStatus"]) => colors.status[status]
 
-const REVIEW_ICON: Record<ReviewStatus, string> = {
+export const REVIEW_ICON: Record<ReviewStatus, string> = {
 	draft: "◌",
 	approved: "✓",
 	changes: "!",
@@ -49,7 +49,7 @@ const REVIEW_ICON: Record<ReviewStatus, string> = {
 	none: "⌥",
 }
 
-const CHECK_ICON: Record<PullRequestItem["checkStatus"], string> = {
+export const CHECK_ICON: Record<PullRequestItem["checkStatus"], string> = {
 	passing: "✓",
 	failing: "×",
 	pending: "◐",
@@ -59,7 +59,7 @@ const CHECK_ICON: Record<PullRequestItem["checkStatus"], string> = {
 // Distinct icon while detail hydration is still in flight. We use a dot for
 // "checks unknown" and a dash for "no checks configured" so the column never
 // looks like layout breakage — every state has a glyph.
-const CHECK_UNHYDRATED_ICON = "·"
+export const CHECK_UNHYDRATED_ICON = "·"
 
 export const reviewIcon = (pullRequest: PullRequestItem) => {
 	if (pullRequest.state === "merged") return "✓"

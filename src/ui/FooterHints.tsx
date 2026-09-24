@@ -151,6 +151,7 @@ const defaultHints = (ctx: HintsContext): readonly HintItem[] => {
 		{ key: "d", label: "diff", when: ctx.canOpenDiff },
 		{ key: "b", label: "review", when: ctx.canOpenDiff },
 		{ key: "v", label: "brief", when: ctx.canOpenDiff },
+		{ key: "?", label: "legend", when: ctx.canOpenDetails },
 		{ key: "ctrl-p", label: "commands" },
 	]
 }

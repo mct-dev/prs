@@ -37,6 +37,7 @@ export interface AppCtx {
 	readonly commentModalActive: boolean
 	readonly deleteCommentModalActive: boolean
 	readonly commandPaletteActive: boolean
+	readonly legendModalActive: boolean
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
@@ -73,6 +74,8 @@ export interface AppCtx {
 
 	// Always-on / app-level
 	readonly openCommandPalette: () => void
+	readonly openLegend: () => void
+	readonly closeLegend: () => void
 	readonly handleQuitOrClose: () => void
 }
 
@@ -92,14 +95,16 @@ const modalActive = (a: AppCtx): boolean =>
 	a.openRepositoryModalActive ||
 	a.commentModalActive ||
 	a.deleteCommentModalActive ||
-	a.commandPaletteActive
+	a.commandPaletteActive ||
+	a.legendModalActive
 
 const inListMode = (a: AppCtx): boolean => !modalActive(a) && !a.filterMode && !a.diffFullView && !a.runsFullView && !a.briefFullView && !a.detailFullView && !a.commentsViewActive
 
 export const appKeymap = App(
 	// Always-on: command palette opener
 	{ id: "command.open", title: "Open command palette", keys: ["ctrl+p", "meta+k"], run: (s) => s.openCommandPalette() },
-	{ id: "command.open-help", title: "Open command palette", keys: ["?"], when: (s) => !s.textInputActive, run: (s) => s.openCommandPalette() },
+	{ id: "legend.open", title: "Show icon legend", keys: ["?"], when: (s) => !s.textInputActive && !s.legendModalActive, run: (s) => s.openLegend() },
+	{ id: "legend.close", title: "Close legend", keys: ["escape", "?", "return"], when: (s) => s.legendModalActive, run: (s) => s.closeLegend() },
 
 	// Quit / close-active-modal — gated to "not editing text"
 	{

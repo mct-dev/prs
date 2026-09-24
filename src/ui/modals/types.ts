@@ -281,6 +281,7 @@ export type Modal = Data.TaggedEnum<{
 	Theme: ThemeModalState
 	CommandPalette: CommandPaletteState
 	OpenRepository: OpenRepositoryModalState
+	Legend: {}
 }>
 
 export const Modal = Data.taggedEnum<Modal>()
@@ -304,4 +305,5 @@ export const modalInitialStates = {
 	Theme: initialThemeModalState,
 	CommandPalette: initialCommandPaletteState,
 	OpenRepository: initialOpenRepositoryModalState,
+	Legend: {},
 } as const satisfies { [Tag in Exclude<ModalTag, "None">]: ModalState<Tag> }

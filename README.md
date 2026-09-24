@@ -262,6 +262,7 @@ While typing after `/`, a popover suggests field names, then values (authors, re
 - `[` / `]`: jump between sections (or repository groups)
 - `z` / `Z`: collapse or expand the current section / all sections
 - `ctrl-p` / `cmd-k`: open the command palette
+- `?`: icon legend (what the review, check and brief glyphs mean)
 - `/`: filter
 - `enter`: expand details; normal PR actions still work while details are expanded
 - `esc`: return from expanded details, leave diff/comment mode, or close modal

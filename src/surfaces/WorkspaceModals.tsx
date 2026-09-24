@@ -1,6 +1,7 @@
 import type { AppCommand } from "../commands.js"
 import type { PullRequestLabel, PullRequestReviewComment } from "../domain.js"
 import { CommandPalette } from "../ui/CommandPalette.js"
+import { LegendModal } from "../ui/LegendModal.js"
 import {
 	ChangedFilesModal,
 	type ChangedFileSearchResult,
@@ -96,4 +97,5 @@ export const WorkspaceModals = (props: WorkspaceModalsProps) =>
 				{...layoutToProps(props.layouts.CommandPalette)}
 			/>
 		),
+		Legend: () => <LegendModal {...layoutToProps(props.layouts.Legend)} />,
 	})

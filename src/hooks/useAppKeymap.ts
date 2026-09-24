@@ -16,6 +16,9 @@ import type { BriefViewCtx } from "../keymap/briefView.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { useKeymapWiring } from "./useKeymapWiring.js"
 import { useFilterPopoverControls } from "../ui/filter/useFilterPopover.js"
+import { useAtomValue } from "@effect/atom-react"
+import { activeModalAtom } from "../ui/modals/atoms.js"
+import { Modal } from "../ui/modals/types.js"
 import type { CommentEditorValue } from "../ui/commentEditor.js"
 
 export interface UseAppKeymapInput {
@@ -180,6 +183,7 @@ export interface UseAppKeymapInput {
  */
 export const useAppKeymap = (i: UseAppKeymapInput): void => {
 	const filterPopover = useFilterPopoverControls()
+	const legendModalActive = Modal.$is("Legend")(useAtomValue(activeModalAtom))
 	useKeymapWiring({
 		disabled: i.disabled,
 		ctxInput: {
@@ -198,6 +202,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				commentModalActive: i.commentModalActive,
 				deleteCommentModalActive: i.deleteCommentModalActive,
 				commandPaletteActive: i.commandPaletteActive,
+				legendModalActive,
 				filterMode: i.filterMode,
 				diffFullView: i.diffFullView,
 				runsFullView: i.runsFullView,
@@ -355,6 +360,8 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 							: i.setSelectedIndex(index),
 			},
 			openCommandPalette: () => i.runCommandById("command.open"),
+			openLegend: () => i.runCommandById("legend.open"),
+			closeLegend: i.closeActiveModal,
 			handleQuitOrClose: i.handleQuitOrClose,
 		},
 		textInput: {
