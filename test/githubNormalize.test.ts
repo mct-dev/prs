@@ -13,6 +13,7 @@ import {
 	parseIssueComments,
 	parseIssueSearchNode,
 	parsePullRequest,
+	markResolvedComments,
 	parsePullRequestComment,
 	parsePullRequestComments,
 	parsePullRequestMergeInfo,
@@ -24,6 +25,7 @@ import {
 } from "../src/services/githubNormalize.ts"
 import {
 	type MergeInfoResponseSchema,
+	parseResolvedThreadRoots,
 	type RawCheckContext,
 	RawCheckContextSchema,
 	type RawIssueSearchNode,
@@ -287,6 +289,27 @@ describe("parsePullRequestComment", () => {
 		const comment = parsePullRequestComment({ path: "x", line: 1, side: "RIGHT", in_reply_to_id: 555, id: 1 })
 		expect(comment?.inReplyTo).toBe("555")
 	})
+
+	test("marks comments whose line is gone as outdated", () => {
+		expect(parsePullRequestComment({ path: "src/foo.ts", original_line: 7, side: "RIGHT", id: 1 })?.outdated).toBe(true)
+		expect(parsePullRequestComment({ path: "src/foo.ts", line: 7, original_line: 7, side: "RIGHT", id: 1 })?.outdated).toBeUndefined()
+	})
+
+	test("keeps file-level comments with line 0", () => {
+		const comment = parsePullRequestComment({ path: "src/foo.ts", subject_type: "file", id: 2 })
+		expect(comment).toMatchObject({ path: "src/foo.ts", line: 0, side: "RIGHT", subjectType: "file" })
+	})
+
+	test("flags bot authors and edits", () => {
+		const bot = parsePullRequestComment({ path: "x", line: 1, side: "RIGHT", id: 3, user: { login: "review-helper[bot]" } })
+		expect(bot?.authorIsBot).toBe(true)
+		const app = parsePullRequestComment({ path: "x", line: 1, side: "RIGHT", id: 4, user: { login: "helper", type: "Bot" } })
+		expect(app?.authorIsBot).toBe(true)
+		const edited = parsePullRequestComment({ path: "x", line: 1, side: "RIGHT", id: 5, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T01:00:00Z" })
+		expect(edited?.editedAt?.toISOString()).toBe("2026-01-01T01:00:00.000Z")
+		const quick = parsePullRequestComment({ path: "x", line: 1, side: "RIGHT", id: 6, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:20Z" })
+		expect(quick?.editedAt).toBeUndefined()
+	})
 })
 
 describe("parsePullRequestComments and parseIssueComments handle slurped pages", () => {
@@ -471,5 +494,29 @@ describe("comment fallbacks", () => {
 		expect(edit._tag).toBe("review-comment")
 		expect(edit.id).toBe("9999")
 		expect(edit.body).toBe("new body")
+	})
+})
+
+describe("review thread resolution", () => {
+	test("marks a resolved root and its replies", () => {
+		const root = parsePullRequestComment({ id: 10, path: "a.ts", line: 3, side: "RIGHT" })!
+		const reply = parsePullRequestComment({ id: 11, path: "a.ts", line: 3, side: "RIGHT", in_reply_to_id: 10 })!
+		const other = parsePullRequestComment({ id: 12, path: "b.ts", line: 1, side: "RIGHT" })!
+		const roots = parseResolvedThreadRoots({
+			data: {
+				repository: {
+					pullRequest: {
+						reviewThreads: {
+							nodes: [
+								{ isResolved: true, comments: { nodes: [{ databaseId: 10 }] } },
+								{ isResolved: false, comments: { nodes: [{ databaseId: 12 }] } },
+							],
+						},
+					},
+				},
+			},
+		})
+		expect([...roots]).toEqual(["10"])
+		expect(markResolvedComments([root, reply, other], roots).map((comment) => comment.resolved ?? false)).toEqual([true, true, false])
 	})
 })

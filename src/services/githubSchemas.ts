@@ -248,19 +248,69 @@ export const PullRequestCommentSchema = Schema.Struct({
 	html_url: OptionalNullableString,
 	url: OptionalNullableString,
 	created_at: OptionalNullableString,
+	updated_at: OptionalNullableString,
 	user: Schema.optionalKey(
 		Schema.NullOr(
 			Schema.Struct({
 				login: OptionalNullableString,
+				type: OptionalNullableString,
 			}),
 		),
 	),
 	path: OptionalNullableString,
+	subject_type: OptionalNullableString,
 	line: OptionalNullableNumber,
 	original_line: OptionalNullableNumber,
 	side: Schema.optionalKey(Schema.NullOr(DiffCommentSide)),
 	in_reply_to_id: Schema.optionalKey(Schema.NullOr(Schema.Union([Schema.Number, Schema.String]))),
 })
+
+// Read-only: which review threads are resolved, keyed by the thread's first
+// comment. REST review comments don't carry resolution state.
+export const reviewThreadResolutionQuery = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes {
+          isResolved
+          comments(first: 1) { nodes { databaseId } }
+        }
+      }
+    }
+  }
+}`
+
+export const ReviewThreadResolutionResponseSchema = Schema.Struct({
+	data: Schema.Struct({
+		repository: Schema.NullOr(
+			Schema.Struct({
+				pullRequest: Schema.NullOr(
+					Schema.Struct({
+						reviewThreads: Schema.Struct({
+							nodes: Schema.Array(
+								Schema.NullOr(
+									Schema.Struct({
+										isResolved: Schema.Boolean,
+										comments: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(Schema.Struct({ databaseId: Schema.NullOr(Schema.Number) }))) }),
+									}),
+								),
+							),
+						}),
+					}),
+				),
+			}),
+		),
+	}),
+})
+
+export const parseResolvedThreadRoots = (response: typeof ReviewThreadResolutionResponseSchema.Type): ReadonlySet<string> =>
+	new Set(
+		(response.data.repository?.pullRequest?.reviewThreads.nodes ?? []).flatMap((thread) => {
+			const root = thread?.comments.nodes[0]?.databaseId
+			return thread?.isResolved && root != null ? [String(root)] : []
+		}),
+	)
 
 export const PullRequestFileSchema = Schema.Struct({
 	filename: Schema.String,

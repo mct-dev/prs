@@ -24,7 +24,11 @@ const fixturePath = () => resolve(process.cwd(), process.env.GHUI_MOCK_FIXTURE_P
 const asDate = (value: unknown) => (typeof value === "string" ? new Date(value) : value instanceof Date ? value : new Date())
 
 const reviveComment = (comment: PullRequestComment): PullRequestComment =>
-	({ ...comment, createdAt: comment.createdAt === null ? null : asDate(comment.createdAt) }) as PullRequestComment
+	({
+		...comment,
+		createdAt: comment.createdAt === null ? null : asDate(comment.createdAt),
+		...(comment.editedAt ? { editedAt: asDate(comment.editedAt) } : {}),
+	}) as PullRequestComment
 
 export const loadMockFixtureSnapshot = (): MockFixtureSnapshot | null => {
 	const path = fixturePath()

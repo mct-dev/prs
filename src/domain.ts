@@ -107,9 +107,20 @@ export interface SubmitPullRequestReviewInput {
 	readonly body: string
 }
 
-export interface PullRequestReviewComment {
+// Display metadata shared by issue and review comments. Optional so older
+// cached payloads and hand-built comments stay valid.
+export interface CommentDisplayMeta {
+	// Author is a GitHub App / bot account (`user.type === "Bot"` or `[bot]`).
+	readonly authorIsBot?: boolean
+	// Set when `updated_at` is meaningfully after `created_at`. Heuristic:
+	// GitHub's REST payload has no explicit "edited" flag.
+	readonly editedAt?: Date | null
+}
+
+export interface PullRequestReviewComment extends CommentDisplayMeta {
 	readonly id: string
 	readonly path: string
+	// 0 for file-level comments (`subjectType === "file"`).
 	readonly line: number
 	readonly side: DiffCommentSide
 	readonly author: string
@@ -117,17 +128,24 @@ export interface PullRequestReviewComment {
 	readonly createdAt: Date | null
 	readonly url: string | null
 	readonly inReplyTo: string | null
+	// "file" comments attach to a path, not a line.
+	readonly subjectType?: "line" | "file"
+	// The anchored line no longer exists in the current diff; `line` holds
+	// the original line instead.
+	readonly outdated?: boolean
+	// The review thread was resolved on GitHub (read-only; from GraphQL).
+	readonly resolved?: boolean
 }
 
 export type PullRequestComment =
-	| {
+	| ({
 			readonly _tag: "comment"
 			readonly id: string
 			readonly author: string
 			readonly body: string
 			readonly createdAt: Date | null
 			readonly url: string | null
-	  }
+	  } & CommentDisplayMeta)
 	| ({ readonly _tag: "review-comment" } & PullRequestReviewComment)
 
 export const isReviewComment = (comment: PullRequestComment): comment is PullRequestComment & { readonly _tag: "review-comment" } => comment._tag === "review-comment"
