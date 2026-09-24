@@ -152,7 +152,7 @@ In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, 
 
 - **Phases 1 and 2 (sections and filters): implemented** on `feat/sections`.
   - Code: `src/sections/` (config, compile, merge, load) and `src/filter/` (parse, evaluate).
-  - The sections view is always the home view, in a repo and in mock mode too (`PRS_DEFAULT_VIEW=queue` opts out). `risk:` and `brief:` go through an injectable lookup, which returns unknown until phase 4.
+  - The sections view is always the home view, in a repo and in mock mode too (`PRS_DEFAULT_VIEW=queue` opts out). `risk:` and `brief:` go through an injectable lookup, backed by the live agent review index (`src/ui/review/indexAtom.ts`).
   - Differences from the spec above:
     - Section headers are not selectable rows. A section cursor driven by `[` / `]` can rest on a collapsed or empty section, and `z` (section under the cursor), `Z` (all sections) or a click on the header toggles them, instead of Enter.
     - `me.reviewed` and `me.reviewed_since_push` also work in the `/` filter.

@@ -206,7 +206,7 @@ sections:
     collapsed: true
 ```
 
-- Every query gets `is:pr is:open archived:false`. `{me}` is your login. A list var expands to repeated qualifiers, and `-author:{bots}` expands to repeated negated ones.
+- Every query gets `is:pr is:open archived:false`, plus `sort:updated-desc` unless it has its own `sort:`. `{me}` is your login. A list var expands to repeated qualifiers, and `-author:{bots}` expands to repeated negated ones.
 - `any:` runs one search per branch and merges the results. `exclude:` is negated onto every branch.
 - `team-authors:org/team` expands to the team's members, which are cached for a day. Long author lists are split across several searches.
 - A PR appears only in the first section it matches, unless that section sets `exclusive: false`.
@@ -221,7 +221,7 @@ The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `fi
 | `author`, `repo`, `draft`, `review:approved\|changes\|none` | PR metadata (`author:@me` works) |
 | `label`, `size`, `files`, `file:glob`, `ci:pass\|fail\|pending\|none` | Need PR details; unknown until loaded |
 | `age`, `idle` | Since created / updated, e.g. `idle>3d`, `age<2h`, `1w` |
-| `risk`, `brief` | From agent briefs (unknown until those exist) |
+| `risk:low\|medium\|high` (also `risk>=medium`), `brief:none\|running\|done\|stale` | From the latest agent review; `risk` is unknown until a brief is done, and `stale` means the brief is for an older head |
 | `me.reviewed`, `me.reviewed_since_push` | Whether you reviewed, and whether that review is on the current head |
 
 A predicate on data that hasn't loaded yet counts as unknown, and unknown never hides a PR. For example, `author:alice size>400 fix` keeps alice's PRs that match "fix", including ones whose size isn't known yet.

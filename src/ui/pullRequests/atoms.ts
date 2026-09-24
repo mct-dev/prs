@@ -12,8 +12,9 @@ import { freshPullRequestLoad, mergePullRequestDetail } from "../../pullRequestC
 export { nextLoadAfterPage } from "../../pullRequestCache.js"
 import type { PullRequestLoad } from "../../pullRequestLoad.js"
 import { activePullRequestViews, type PullRequestView, SECTIONS_VIEW_CACHE_KEY, sectionsView, viewCacheKey, viewRepository, viewToListInput } from "../../pullRequestViews.js"
-import { filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
+import { type FilterLookups, filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
 import { parseFilterQuery } from "../../filter/parse.js"
+import { briefFilterValue, briefRisk, briefStatusFor } from "../../review/briefStatus.js"
 import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
 import type { SectionCursor } from "../../sections/cursor.js"
@@ -22,6 +23,7 @@ import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
 import { githubRuntime, homePullRequestView, pullRequestPageSize } from "../../services/runtime.js"
 import { effectiveFilterQueryAtom } from "../filter/atoms.js"
+import { agentReviewIndexAtom } from "../review/indexAtom.js"
 import { initialRetryProgress, RetryProgress } from "../FooterHints.js"
 import { selectedIndexAtom } from "../listSelection/atoms.js"
 import { groupBy } from "../pullRequests.js"
@@ -382,7 +384,12 @@ export const filteredPullRequestsAtom = Atom.make((get) => {
 
 const filterContext = (get: Atom.AtomContext) => {
 	const username = get(usernameAtom)
-	return makeFilterContext({ now: new Date(), ...(AsyncResult.isSuccess(username) ? { viewer: username.value } : {}) })
+	const reviews = get(agentReviewIndexAtom)
+	const lookups: FilterLookups = {
+		risk: (pullRequest) => briefRisk(briefStatusFor(reviews, pullRequest)) ?? "unknown",
+		brief: (pullRequest) => briefFilterValue(briefStatusFor(reviews, pullRequest)),
+	}
+	return makeFilterContext({ now: new Date(), lookups, ...(AsyncResult.isSuccess(username) ? { viewer: username.value } : {}) })
 }
 
 export interface SectionGroupView {
