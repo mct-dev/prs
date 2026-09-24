@@ -148,7 +148,18 @@ Read-only is a hard rule. The review must never post, approve, or push.
 
 ## Status
 
-In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, cache, commands, minimal brief block) → 4 brief UI.
+In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, cache, commands, minimal brief block) → 4 brief UI (done).
+
+- **Phase 4 (brief UI): shipped** on `feat/brief-ui`.
+  - Keys: `b` runs the default preset (a second `b` while one is running only shows a notice), `B` opens a preset picker built from config, and `v` opens the full brief view from the list or details. Footer hints and palette entries cover all three. "Cancel agent review" is in the palette.
+  - List glyph (`briefGlyph` in `src/ui/review/briefDisplay.ts`): a spinner while running, a risk-colored dot when done, a dim ring when stale, an error mark on failure, and nothing when idle.
+  - Full brief view (`src/ui/review/BriefPane.tsx`, `briefViewRows.ts`, `src/hooks/useBriefView.ts`): all brief fields plus run metadata, and the idle, running (elapsed) and error (message plus log) states. A selectable focus list: `enter` lands the diff on that file and the nearest new-side line, `o` pages the log, and `esc` returns.
+  - The details brief block's hint rows mention `b`, `B` and `v`, and its row count stays fixed.
+  - Deferred:
+    - Cancel has no list key (it is in the palette, and `x` in the brief view), because `x` in the list already closes the PR.
+    - There is no live tail of the agent log; `L` pages it as it is.
+    - Mock mode (`GHUI_MOCK_PR_COUNT`) seeds no briefs, so the brief UI there shows only the idle state until a real review runs.
+    - A focus area whose file is not in the loaded diff shows a notice and does not jump.
 
 - **Phases 1 and 2 (sections and filters): implemented** on `feat/sections`.
   - Code: `src/sections/` (config, compile, merge, load) and `src/filter/` (parse, evaluate).

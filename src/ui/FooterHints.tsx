@@ -21,6 +21,8 @@ interface HintsContext {
 	readonly diffRangeActive: boolean
 	readonly runsFullView: boolean
 	readonly runsInDetail: boolean
+	readonly briefFullView: boolean
+	readonly briefRunning: boolean
 	readonly commentsViewActive: boolean
 	readonly commentsViewOnRealComment: boolean
 	readonly commentsViewCanEditSelected: boolean
@@ -84,6 +86,18 @@ const detailFullViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "↑↓", label: "scroll" },
 	{ key: "r", label: ctx.hasError ? "retry" : "refresh" },
 	{ key: "d", label: "diff", when: ctx.canOpenDiff },
+	{ key: "b/B", label: "agent review", when: ctx.canOpenDiff },
+	{ key: "v", label: "brief", when: ctx.canOpenDiff },
+]
+
+const briefViewHints = (ctx: HintsContext): readonly HintItem[] => [
+	{ key: "esc", label: "back" },
+	{ key: "↑↓", label: "focus" },
+	{ key: "enter", label: "diff" },
+	{ key: "L", label: "log" },
+	{ key: "o", label: "browser" },
+	{ key: "x", label: "cancel", when: ctx.briefRunning },
+	{ key: "b/B", label: "review", when: !ctx.briefRunning },
 ]
 
 const commentsViewHints = (ctx: HintsContext): readonly HintItem[] => [
@@ -135,6 +149,8 @@ const defaultHints = (ctx: HintsContext): readonly HintItem[] => {
 		{ key: "enter", label: "details", when: ctx.canOpenDetails },
 		{ key: "c", label: "comments", when: ctx.canOpenComments },
 		{ key: "d", label: "diff", when: ctx.canOpenDiff },
+		{ key: "b", label: "review", when: ctx.canOpenDiff },
+		{ key: "v", label: "brief", when: ctx.canOpenDiff },
 		{ key: "ctrl-p", label: "commands" },
 	]
 }
@@ -142,6 +158,7 @@ const defaultHints = (ctx: HintsContext): readonly HintItem[] => {
 const footerHints = (ctx: HintsContext): readonly HintItem[] => {
 	if (ctx.commentsViewActive) return commentsViewHints(ctx)
 	if (ctx.runsFullView) return runsViewHints(ctx)
+	if (ctx.briefFullView) return briefViewHints(ctx)
 	if (ctx.diffFullView) return diffViewHints(ctx)
 	if (ctx.detailFullView) return detailFullViewHints(ctx)
 	return defaultHints(ctx)

@@ -12,6 +12,7 @@ import type {
 } from "../ui/modals/types.js"
 import { canEditComment } from "../ui/comments/useCommentMutations.js"
 import type { RunsViewCtx } from "../keymap/runsView.js"
+import type { BriefViewCtx } from "../keymap/briefView.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { useKeymapWiring } from "./useKeymapWiring.js"
 import type { CommentEditorValue } from "../ui/commentEditor.js"
@@ -26,6 +27,7 @@ export interface UseAppKeymapInput {
 	readonly commentThreadModalActive: boolean
 	readonly changedFilesModalActive: boolean
 	readonly filterModalActive: boolean
+	readonly reviewPresetModalActive: boolean
 	readonly submitReviewModalActive: boolean
 	readonly labelModalActive: boolean
 	readonly themeModalActive: boolean
@@ -36,6 +38,7 @@ export interface UseAppKeymapInput {
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
+	readonly briefFullView: boolean
 	readonly detailFullView: boolean
 	readonly commentsViewActive: boolean
 
@@ -65,6 +68,7 @@ export interface UseAppKeymapInput {
 	readonly moveChangedFileSelection: (delta: -1 | 1) => void
 	readonly applySelectedFilter: () => void
 	readonly moveFilterSelection: (delta: -1 | 1) => void
+	readonly moveReviewPresetSelection: (delta: -1 | 1) => void
 	readonly setSubmitReviewModal: (next: SubmitReviewModalState | ((prev: SubmitReviewModalState) => SubmitReviewModalState)) => void
 	readonly confirmSubmitReview: () => void
 	readonly editSubmitReview: (transform: (value: CommentEditorValue) => CommentEditorValue) => void
@@ -90,6 +94,7 @@ export interface UseAppKeymapInput {
 
 	// Runs view (pre-built ctx; the runs feature owns its own atom logic)
 	readonly runsViewCtx: RunsViewCtx
+	readonly briefViewCtx: BriefViewCtx
 
 	// Diff actions
 	readonly halfPage: number
@@ -183,6 +188,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				commentThreadModalActive: i.commentThreadModalActive,
 				changedFilesModalActive: i.changedFilesModalActive,
 				filterModalActive: i.filterModalActive,
+				reviewPresetModalActive: i.reviewPresetModalActive,
 				submitReviewModalActive: i.submitReviewModalActive,
 				labelModalActive: i.labelModalActive,
 				themeModalActive: i.themeModalActive,
@@ -193,6 +199,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				filterMode: i.filterMode,
 				diffFullView: i.diffFullView,
 				runsFullView: i.runsFullView,
+				briefFullView: i.briefFullView,
 				detailFullView: i.detailFullView,
 				commentsViewActive: i.commentsViewActive,
 				textInputActive:
@@ -226,6 +233,11 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				moveChangedFileSelection: i.moveChangedFileSelection,
 			},
 			filterModal: { closeActiveModal: i.closeActiveModal, applySelected: i.applySelectedFilter, moveSelection: i.moveFilterSelection },
+			reviewPresetModal: {
+				closeModal: i.closeActiveModal,
+				runSelected: () => i.runCommandById("pull.agent-review-preset-run"),
+				moveSelection: i.moveReviewPresetSelection,
+			},
 			submitReviewModal: {
 				submitReviewModal: i.submitReviewModal,
 				closeActiveModal: i.closeActiveModal,
@@ -274,6 +286,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				selectDiffCommentSide: i.selectDiffCommentSide,
 			},
 			runs: i.runsViewCtx,
+			brief: i.briefViewCtx,
 			detail: {
 				halfPage: i.halfPage,
 				activeSurface: i.activeWorkspaceSurface,

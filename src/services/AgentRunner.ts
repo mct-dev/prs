@@ -5,7 +5,7 @@ import { Context, Effect, Exit, FiberMap, Layer, Schema, Semaphore, Stream, Subs
 import { config } from "../config.js"
 import type { RiskBrief } from "../review/briefSchema.js"
 import { type BriefStatus, briefStatusFor, reviewEntryFromRecord, type ReviewIndex, reviewKey } from "../review/briefStatus.js"
-import { resolvePreset } from "../review/config.js"
+import { type ReviewConfig, resolvePreset } from "../review/config.js"
 import { initialReviewRecord, type ReviewPaths, runReview } from "../review/runReview.js"
 import type { AgentReviewRecord } from "../review/types.js"
 import type { WorkspacePullRequest } from "../review/workspace.js"
@@ -55,6 +55,8 @@ export class AgentRunner extends Context.Service<
 		readonly latestBrief: (repository: string, number: number, currentHeadSha: string) => Effect.Effect<LatestBrief | null>
 		readonly briefStatus: (pullRequest: Pick<WorkspacePullRequest, "repository" | "number" | "headRefOid">) => Effect.Effect<BriefStatus>
 		readonly index: Effect.Effect<ReviewIndex>
+		/** The review config (presets, default preset) as currently stored. */
+		readonly config: Effect.Effect<ReviewConfig>
 		/** Current index followed by every change. */
 		readonly changes: Stream.Stream<ReviewIndex>
 	}
@@ -165,6 +167,7 @@ export class AgentRunner extends Context.Service<
 					latestBrief,
 					briefStatus,
 					index: SubscriptionRef.get(ref),
+					config: Effect.map(options.loadConfig, (stored) => stored.review),
 					changes: SubscriptionRef.changes(ref),
 				})
 			}),

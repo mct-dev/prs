@@ -25,6 +25,25 @@ const fallbackCommand = (repoPath: string | null): string | null => {
 
 const editorError = (detail: string, cause?: unknown) => new CommandError({ command: "editor", args: [], detail, cause: cause ?? detail })
 
+/**
+ * argv for paging `path`: `$PAGER` split on whitespace (so `less -R` works),
+ * or `less` when it is unset or blank. It is spawned directly, never through a
+ * shell, so neither the pager value nor the path is interpreted.
+ */
+export const pagerArgv = (pager: string | undefined, path: string): readonly string[] => {
+	const words = (pager ?? "")
+		.trim()
+		.split(/\s+/)
+		.filter((word) => word.length > 0)
+	return [...(words.length > 0 ? words : ["less"]), path]
+}
+
+const runArgv = async (cmd: readonly string[]): Promise<void> => {
+	const proc = Bun.spawn({ cmd: [...cmd], stdin: "inherit", stdout: "inherit", stderr: "inherit" })
+	const exitCode = await proc.exited
+	if (exitCode !== 0) throw new Error(`${cmd[0]} exited with code ${exitCode}`)
+}
+
 const runInShell = async (command: string): Promise<void> => {
 	const shell = process.env.SHELL || "/bin/sh"
 	const proc = Bun.spawn({
@@ -41,6 +60,8 @@ export class EditorOpener extends Context.Service<
 	EditorOpener,
 	{
 		readonly openPullRequest: (pullRequest: PullRequestItem) => Effect.Effect<void, CommandError>
+		/** Page a local file (e.g. an agent review log) in `$PAGER`, suspending the TUI. */
+		readonly pageFile: (path: string) => Effect.Effect<void, CommandError>
 	}
 >()("ghui/EditorOpener") {
 	static readonly layerNoDeps = Layer.effect(
@@ -67,7 +88,15 @@ export class EditorOpener extends Context.Service<
 				})
 			})
 
-			return EditorOpener.of({ openPullRequest })
+			const pageFile = Effect.fn("EditorOpener.pageFile")(function* (path: string) {
+				const argv = pagerArgv(process.env.PAGER, path)
+				yield* Effect.tryPromise({
+					try: () => withTuiSuspended(() => runArgv(argv)),
+					catch: (cause) => editorError(cause instanceof Error ? cause.message : "Failed to launch pager", cause),
+				})
+			})
+
+			return EditorOpener.of({ openPullRequest, pageFile })
 		}),
 	)
 
@@ -78,6 +107,7 @@ export class EditorOpener extends Context.Service<
 		EditorOpener,
 		EditorOpener.of({
 			openPullRequest: () => Effect.void,
+			pageFile: () => Effect.void,
 		}),
 	)
 }

@@ -1,5 +1,6 @@
 import { homedir } from "node:os"
 import { describe, expect, test } from "bun:test"
+import { pagerArgv } from "../src/services/EditorOpener.ts"
 import { commandNeedsRepoPath, type EditorCommandFields, renderEditorCommand, resolveRepoPath } from "../src/editorCommand.js"
 
 const fields: EditorCommandFields = {
@@ -86,5 +87,18 @@ describe("commandNeedsRepoPath", () => {
 
 	test("false otherwise", () => {
 		expect(commandNeedsRepoPath("gh pr view {{number}}")).toBe(false)
+	})
+})
+
+describe("pagerArgv", () => {
+	test("falls back to less when PAGER is unset, empty or blank", () => {
+		expect(pagerArgv(undefined, "/tmp/run.log")).toEqual(["less", "/tmp/run.log"])
+		expect(pagerArgv("", "/tmp/run.log")).toEqual(["less", "/tmp/run.log"])
+		expect(pagerArgv("   ", "/tmp/run.log")).toEqual(["less", "/tmp/run.log"])
+	})
+
+	test("splits PAGER into argv and passes the path as one untouched argument", () => {
+		expect(pagerArgv("  less  -R ", "/tmp/a b; rm -rf ~.log")).toEqual(["less", "-R", "/tmp/a b; rm -rf ~.log"])
+		expect(pagerArgv("bat --paging=always", "/tmp/$(x).log")).toEqual(["bat", "--paging=always", "/tmp/$(x).log"])
 	})
 })

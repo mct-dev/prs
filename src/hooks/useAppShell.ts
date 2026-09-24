@@ -50,6 +50,9 @@ import { useViewModeState } from "./useViewModeState.js"
 import { useFilterModal } from "../ui/filter/useFilterModal.js"
 import { DIFF_FILE_PANEL_AUTO_THRESHOLD, diffFilePanelOverrideAtom, selectedDiffKeyAtom, selectedDiffStateAtom } from "../ui/diff/atoms.js"
 import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
+import { briefFullViewAtom } from "../ui/review/briefViewAtoms.js"
+import { useBriefDiffTarget } from "../ui/review/useBriefDiffTarget.js"
+import { useBriefView } from "./useBriefView.js"
 import { runsFullViewAtom } from "../ui/runs/atoms.js"
 import { diffCommentThreadMapKey } from "../ui/diff/comments.js"
 import { useDiffLineColors } from "../ui/diff/useDiffLineColors.js"
@@ -137,6 +140,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		commentThreadModalActive,
 		changedFilesModalActive,
 		filterModalActive,
+		reviewPresetModalActive,
 		submitReviewModalActive,
 		themeModalActive,
 		commandPaletteActive,
@@ -161,6 +165,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		setCommentThreadModal,
 		setChangedFilesModal,
 		setFilterModal,
+		setReviewPresetModal,
 		setSubmitReviewModal,
 		setThemeModal,
 		setCommandPalette,
@@ -193,7 +198,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 	const terminalTooSmall = isTerminalTooSmall(terminalWidth, terminalHeight)
 	const runsFullView = useAtomValue(runsFullViewAtom)
 	const selectedBrief = useAtomValue(selectedBriefStatusAtom)
-	const showWorkspaceTabs = !detailFullView && !diffFullView && !runsFullView && !commentsViewActive
+	const briefFullView = useAtomValue(briefFullViewAtom)
+	const showWorkspaceTabs = !detailFullView && !diffFullView && !runsFullView && !briefFullView && !commentsViewActive
 	const diffFilePanelOverride = useAtomValue(diffFilePanelOverrideAtom)
 	const setDiffFilePanelOverride = useAtomSet(diffFilePanelOverrideAtom)
 	// Effective panel visibility: the override (true/false) wins if set, else
@@ -469,6 +475,11 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		if (!selectedRepositoryItem) return
 		switchViewTo({ _tag: "Repository", repository: selectedRepositoryItem.repository })
 	}
+	const moveReviewPresetSelection = (delta: -1 | 1) =>
+		setReviewPresetModal((current) => ({
+			...current,
+			selectedIndex: current.presets.length === 0 ? 0 : (((current.selectedIndex + delta) % current.presets.length) + current.presets.length) % current.presets.length,
+		}))
 	const { openFilterModal, moveFilterSelection, applySelectedFilter } = useFilterModal({
 		activeWorkspaceSurface,
 		activeView,
@@ -717,6 +728,19 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		moveDiffCommentThread,
 	} = diffNav
 
+	useBriefDiffTarget({
+		selectedPullRequestUrl: selectedPullRequest?.url ?? null,
+		selectedHeadSha: selectedPullRequest?.headRefOid ?? null,
+		diffFullView,
+		readyDiffFiles,
+		diffCommentAnchors,
+		setDiffFileIndex,
+		setDiffCommentAnchorIndex,
+		ensureDiffLineVisible,
+		scrollToDiffFile: diffNav.scrollToDiffFile,
+		flashNotice,
+	})
+
 	const { submitCommentModal, openNewIssueCommentModal, openReplyToSelectedComment, openEditSelectedComment, openDeleteSelectedComment, confirmDeleteComment } =
 		useCommentMutations({
 			selectedCommentSubject,
@@ -882,6 +906,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		flashNotice,
 	})
 
+	const briefView = useBriefView({ selectedPullRequest, halfPage, contentWidth: fullscreenContentWidth, height: wideBodyHeight, runCommandById })
+
 	useCommandHandoffs({
 		renderer,
 		selectedPullRequest,
@@ -976,6 +1002,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		commentThreadModalActive,
 		changedFilesModalActive,
 		filterModalActive,
+		reviewPresetModalActive,
 		submitReviewModalActive,
 		labelModalActive,
 		themeModalActive,
@@ -987,6 +1014,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		diffFullView,
 		runsFullView: runsView.runsFullView,
 		runsViewCtx: runsView.ctx,
+		briefFullView,
+		briefViewCtx: briefView.ctx,
 		detailFullView,
 		commentsViewActive,
 		themeModal,
@@ -1010,6 +1039,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		moveChangedFileSelection,
 		applySelectedFilter,
 		moveFilterSelection,
+		moveReviewPresetSelection,
 		setSubmitReviewModal,
 		confirmSubmitReview,
 		editSubmitReview,
@@ -1108,6 +1138,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		detailFullView,
 		diffFullView,
 		runsFullView,
+		briefFullView,
 		commentsViewActive,
 		activeWorkspaceSurface,
 		workspaceTabSurfaces,
@@ -1187,6 +1218,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		diffCommentRangeActive,
 		runsFullView,
 		runsInDetail: runsView.inDetail,
+		briefFullView,
+		briefRunning: selectedBrief._tag === "running",
 		commentsViewActive,
 		selectedCommentsStatus,
 		selectedOrderedComment,
@@ -1234,6 +1267,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 			commentsViewActive,
 			diffFullView,
 			runsView,
+			briefView,
 			detailFullView,
 			layout,
 			derivations,

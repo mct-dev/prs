@@ -15,6 +15,7 @@ interface PullRequestResult {
 }
 
 export interface UseLoadingStatusInput {
+	/** An agent review is running somewhere; only ticks the spinner, not the surface loading state. */
 	readonly selectedPullRequestDetailKey: string | null
 	readonly detailHydrationState: Readonly<Record<string, DetailHydrationState>>
 	readonly pullRequestResult: PullRequestResult

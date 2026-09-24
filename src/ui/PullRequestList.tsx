@@ -1,10 +1,13 @@
 import { TextAttributes } from "@opentui/core"
 import type { LoadStatus, PullRequestItem } from "../domain.js"
+import type { BriefStatus } from "../review/briefStatus.js"
 import { daysOpen } from "../date.js"
 import { colors } from "./colors.js"
 import { SelectableRow, useHoverState } from "./listSelection/SelectableRow.js"
 import { fitCell, MatchedCell, PlainLine, SectionTitle, TextLine } from "./primitives.js"
 import { pullRequestRowDisplay, repoColor, reviewIcon } from "./pullRequests.js"
+import { briefGlyph } from "./review/briefDisplay.js"
+import { BriefSpinner } from "./review/BriefSpinner.js"
 
 export type PullRequestGroups = Array<[string, PullRequestItem[]]>
 
@@ -49,12 +52,16 @@ const GROUP_ICON = "◆"
 const SECTION_OPEN_ICON = "▾"
 const SECTION_COLLAPSED_ICON = "▸"
 
-const getRowLayout = (contentWidth: number, numberWidth: number, ageWidth: number) => {
+/** Columns reserved for the agent review glyph (space + one cell) when shown. */
+export const BRIEF_GLYPH_WIDTH = 2
+
+export const getRowLayout = (contentWidth: number, numberWidth: number, ageWidth: number, showBrief = false) => {
 	const reviewWidth = 1
 	const checkWidth = 2
-	const fixedWidth = reviewWidth + 1 + numberWidth + 1 + checkWidth + ageWidth
+	const briefWidth = showBrief ? BRIEF_GLYPH_WIDTH : 0
+	const fixedWidth = reviewWidth + 1 + numberWidth + 1 + checkWidth + ageWidth + briefWidth
 	const titleWidth = Math.max(8, contentWidth - fixedWidth)
-	return { reviewWidth, checkWidth, ageWidth, numberWidth, titleWidth }
+	return { reviewWidth, checkWidth, ageWidth, numberWidth, titleWidth, briefWidth }
 }
 
 const groupNumberWidth = (pullRequests: readonly PullRequestItem[]) => {
@@ -200,6 +207,7 @@ const PullRequestRow = ({
 	filterText,
 	compact,
 	showRepository,
+	briefStatus,
 	onSelect,
 	onHoverChange,
 }: {
@@ -212,13 +220,15 @@ const PullRequestRow = ({
 	filterText: string
 	compact: boolean
 	showRepository: boolean
+	briefStatus: BriefStatus | null
 	onSelect: () => void
 	onHoverChange: (hovered: boolean) => void
 }) => {
 	const ageText = `${daysOpen(pullRequest.updatedAt)}d`
 	const title = pullRequest.title.trim()
-	const { reviewWidth, checkWidth, ageWidth, numberWidth, titleWidth } = getRowLayout(contentWidth, numWidth, ageColWidth)
-	const rowWidth = reviewWidth + 1 + numberWidth + 1 + titleWidth + checkWidth + ageWidth
+	const { reviewWidth, checkWidth, ageWidth, numberWidth, titleWidth, briefWidth } = getRowLayout(contentWidth, numWidth, ageColWidth, briefStatus !== null)
+	const rowWidth = reviewWidth + 1 + numberWidth + 1 + titleWidth + checkWidth + ageWidth + briefWidth
+	const glyph = briefStatus ? briefGlyph(briefStatus) : null
 	const fillerWidth = Math.max(0, contentWidth - rowWidth)
 	const metaIndentWidth = reviewWidth + 1
 	const metaWidth = Math.max(8, contentWidth - metaIndentWidth)
@@ -248,6 +258,13 @@ const PullRequestRow = ({
 						</span>
 						<span fg={colors.muted}>{fitCell(ageText, ageWidth, "right")}</span>
 						<span fg={display.checkFg}>{fitCell(display.checkText, checkWidth, "right")}</span>
+						{glyph ? (
+							briefStatus?._tag === "running" ? (
+								<BriefSpinner fg={glyph.fg} width={briefWidth} />
+							) : (
+								<span fg={glyph.fg}>{fitCell(glyph.text, briefWidth, "right")}</span>
+							)
+						) : null}
 						{fillerWidth > 0 ? <span>{" ".repeat(fillerWidth)}</span> : null}
 					</TextLine>
 					{compact ? null : (
@@ -287,6 +304,7 @@ export const PullRequestList = ({
 	compact = false,
 	sections = null,
 	onToggleSection,
+	briefStatusOf,
 }: {
 	groups: PullRequestGroups
 	selectedUrl: string | null
@@ -306,6 +324,8 @@ export const PullRequestList = ({
 	compact?: boolean
 	sections?: PullRequestSections | null
 	onToggleSection?: (id: string) => void
+	/** Agent review state per PR; when set, rows reserve a glyph column for it. */
+	briefStatusOf?: (pullRequest: PullRequestItem) => BriefStatus
 }) => {
 	const rows = buildPullRequestListRows({
 		groups,
@@ -363,6 +383,7 @@ export const PullRequestList = ({
 						filterText={filterText}
 						compact={row.compact}
 						showRepository={row.showRepository ?? false}
+						briefStatus={briefStatusOf ? briefStatusOf(row.pullRequest) : null}
 						onSelect={() => onSelectPullRequest(pullRequestUrl)}
 						onHoverChange={onHoverChange(pullRequestUrl)}
 					/>

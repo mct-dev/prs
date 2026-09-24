@@ -22,9 +22,12 @@ import { SplitPane } from "../ui/paneLayout.js"
 import { Divider, Filler, PlainLine, SeparatorColumn } from "../ui/primitives.js"
 import { PullRequestDiffPane } from "../ui/PullRequestDiffPane.js"
 import { PullRequestList } from "../ui/PullRequestList.js"
-import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
+import { briefStatusFor } from "../review/briefStatus.js"
+import { agentReviewIndexAtom, selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { PullRequestRunsPane } from "../ui/runs/RunsPane.js"
 import type { RunsViewModel } from "../hooks/useRunsView.js"
+import type { BriefViewModel } from "../hooks/useBriefView.js"
+import { BriefPane } from "../ui/review/BriefPane.js"
 import type { DiffFilePanelBundle } from "./WorkspaceContent.js"
 
 export interface PullRequestSurfaceProps {
@@ -69,6 +72,7 @@ export interface PullRequestSurfaceProps {
 	readonly commentSubject: IssueItem | PullRequestItem | null
 	readonly diffFullView: boolean
 	readonly runsView: RunsViewModel
+	readonly briefView: BriefViewModel
 	readonly displayedDiffState: PullRequestDiffState | undefined
 	readonly stackedDiffFiles: readonly StackedDiffFilePatch[]
 	readonly diffScrollTop: number
@@ -138,6 +142,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 		commentSubject,
 		diffFullView,
 		runsView,
+		briefView,
 		displayedDiffState,
 		stackedDiffFiles,
 		diffScrollTop,
@@ -160,6 +165,8 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 		onLinkOpen,
 	} = props
 	const selectedBrief = useAtomValue(selectedBriefStatusAtom)
+	const reviewIndex = useAtomValue(agentReviewIndexAtom)
+	const briefStatusOf = (pullRequest: PullRequestItem) => briefStatusFor(reviewIndex, pullRequest)
 
 	if (commentsViewActive && commentSubject) {
 		return (
@@ -195,6 +202,21 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 				height={wideBodyHeight}
 				loadingIndicator={loadingIndicator}
 				showScrollbar={showScrollbars}
+			/>
+		)
+	}
+
+	if (briefView.briefFullView && selectedPullRequest) {
+		return (
+			<BriefPane
+				pullRequest={selectedPullRequest}
+				status={briefView.status}
+				rows={briefView.rows}
+				focusIndex={briefView.focusIndex}
+				scrollTop={briefView.scrollTop}
+				contentWidth={fullscreenContentWidth}
+				height={wideBodyHeight}
+				onClickFocus={briefView.clickFocus}
 			/>
 		)
 	}
@@ -399,12 +421,12 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 	) : null
 	const widePullRequestList = (
 		<box paddingLeft={sectionPadding} paddingRight={0}>
-			<PullRequestList key={`wide-${leftContentWidth}`} {...prListProps} contentWidth={leftContentWidth} />
+			<PullRequestList key={`wide-${leftContentWidth}`} {...prListProps} briefStatusOf={briefStatusOf} contentWidth={leftContentWidth} />
 		</box>
 	)
 	const narrowPullRequestList = (
 		<box paddingLeft={sectionPadding} paddingRight={sectionPadding}>
-			<PullRequestList key={`narrow-${fullscreenContentWidth}`} {...prListProps} contentWidth={fullscreenContentWidth} />
+			<PullRequestList key={`narrow-${fullscreenContentWidth}`} {...prListProps} briefStatusOf={briefStatusOf} contentWidth={fullscreenContentWidth} />
 		</box>
 	)
 

@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { formatRelativeDate } from "../date.js"
 import type { CheckItem, PullRequestComment, PullRequestItem, PullRequestLabel } from "../domain.js"
-import type { RiskLevel } from "../review/briefSchema.js"
+import { riskColor } from "./review/briefDisplay.js"
 import type { BriefStatus } from "../review/briefStatus.js"
 import { colors, type ThemeId } from "./colors.js"
 import { commentCountText, CommentSegmentsLine, type CommentSegment } from "./comments.js"
@@ -438,8 +438,6 @@ interface BriefSegment {
 
 type BriefRow = readonly BriefSegment[]
 
-const riskColor = (risk: RiskLevel) => (risk === "high" ? colors.status.failing : risk === "medium" ? colors.status.pending : colors.status.passing)
-
 const briefHeading = (suffix: readonly BriefSegment[]): BriefRow => [{ text: "Risk brief", fg: colors.count, bold: true }, ...suffix]
 
 const clampLines = (lines: readonly string[], limit: number, width: number): string[] => {
@@ -461,11 +459,11 @@ export const riskBriefRows = (brief: BriefStatus, contentWidth: number): readonl
 	const width = Math.max(1, contentWidth)
 	switch (brief._tag) {
 		case "idle":
-			return [briefHeading([]), [{ text: fitCell("b: run agent review", width), fg: colors.muted }]]
+			return [briefHeading([]), [{ text: fitCell("b run agent review · B pick preset · v brief view", width), fg: colors.muted }]]
 		case "running":
 			return [
 				briefHeading([{ text: " · running…", fg: colors.status.pending }]),
-				[{ text: fitCell(`Agent review started ${formatRelativeDate(brief.startedAt)}`, width), fg: colors.muted }],
+				[{ text: fitCell(`Agent review started ${formatRelativeDate(brief.startedAt)} · v brief view`, width), fg: colors.muted }],
 			]
 		case "error":
 			return [
@@ -474,12 +472,16 @@ export const riskBriefRows = (brief: BriefStatus, contentWidth: number): readonl
 			]
 		case "done": {
 			const { risk, summary, focus_areas: focusAreas } = brief.brief
-			const heading = briefHeading([
+			const headingSuffix: BriefSegment[] = [
 				{ text: " · ", fg: colors.muted },
 				{ text: risk.toUpperCase(), fg: riskColor(risk), bold: true },
 				...(brief.stale ? [{ text: " · stale", fg: colors.status.pending }] : []),
 				...(brief.costUsd !== null ? [{ text: ` · $${brief.costUsd.toFixed(2)}`, fg: colors.muted }] : []),
-			])
+			]
+			// The view hint is dropped rather than wrapped so the row count stays fixed.
+			const viewHint: BriefSegment = { text: " · v full brief", fg: colors.muted }
+			const headingLength = briefHeading(headingSuffix).reduce((total, segment) => total + segment.text.length, 0)
+			const heading = briefHeading(headingLength + viewHint.text.length <= width ? [...headingSuffix, viewHint] : headingSuffix)
 			const summaryRows = clampLines(wrapText(summary.replace(/\s+/g, " ").trim(), width), RISK_BRIEF_SUMMARY_LINES, width).map(
 				(line): BriefRow => [{ text: line, fg: colors.text }],
 			)

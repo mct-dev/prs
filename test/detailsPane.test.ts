@@ -149,7 +149,7 @@ describe("risk brief block", () => {
 	const rowText = (row: ReturnType<typeof riskBriefRows>[number]) => row.map((segment) => segment.text).join("")
 
 	test("idle, running and error states take a heading plus one row", () => {
-		expect(riskBriefRows({ _tag: "idle" }, 58).map(rowText)[1]?.trim()).toBe("b: run agent review")
+		expect(riskBriefRows({ _tag: "idle" }, 58).map(rowText)[1]?.trim()).toBe("b run agent review · B pick preset · v brief view")
 		expect(rowText(riskBriefRows({ _tag: "running", startedAt: new Date(), runId: "r1" }, 58)[0]!)).toContain("running…")
 		const error = riskBriefRows({ _tag: "error", message: "agent exited\nwith 1", stale: true }, 58)
 		expect(error).toHaveLength(2)
@@ -159,13 +159,18 @@ describe("risk brief block", () => {
 
 	test("done shows risk, summary, up to three focus areas and a +N more row", () => {
 		const rows = riskBriefRows(brief(5), 58).map(rowText)
-		expect(rows[0]).toBe("Risk brief · HIGH · $0.42")
+		expect(rows[0]).toBe("Risk brief · HIGH · $0.42 · v full brief")
 		expect(rows[1]).toBe("Adds a cache layer for PR details.")
 		expect(rows[2]?.trim()).toBe("src/file0.ts:1-9 — touches invalidation")
 		expect(rows.slice(2, 5)).toHaveLength(3)
 		expect(rows[5]).toBe("+2 more")
 		expect(rows).toHaveLength(6)
 		expect(riskBriefRows(brief(2), 58)).toHaveLength(4)
+	})
+
+	test("the full-brief hint is dropped, not wrapped, when the heading is tight", () => {
+		expect(rowText(riskBriefRows(brief(2), 36)[0]!)).toBe("Risk brief · HIGH · $0.42")
+		expect(riskBriefRows(brief(2), 36)).toHaveLength(riskBriefRows(brief(2), 58).length)
 	})
 
 	test("stale flag and long summaries are clamped to two lines", () => {
