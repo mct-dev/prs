@@ -24,13 +24,13 @@ const archMap = {
 
 const help = `prs ${packageJson.version}
 
-Terminal UI for GitHub pull requests.
+Agent-assisted PR review in your terminal.
 
 Usage:
   prs              Start the TUI
-  prs upgrade      Upgrade prs to the latest npm release
+  prs upgrade      Update a clean source checkout (git pull --ff-only)
   prs -v, --version
-                    Print the installed version
+                   Print the installed version
   prs -h, --help   Show this help message
 `
 
@@ -60,12 +60,14 @@ if (process.argv[2] === "-v" || process.argv[2] === "--version" || process.argv[
 }
 
 if (process.argv[2] === "upgrade") {
-	const result = childProcess.spawnSync("npm", ["install", "-g", `${packageJson.name}@latest`], { stdio: "inherit" })
-	if (result.error) {
-		console.error(result.error.message)
-		process.exit(1)
-	}
-	process.exit(typeof result.status === "number" ? result.status : 0)
+	// prs is not on npm. A source checkout handles upgrade itself (src/upgrade.ts);
+	// otherwise print how to update from source.
+	const sourceEntry = path.join(path.dirname(fs.realpathSync(__filename)), "..", "src", "standalone.ts")
+	if (fs.existsSync(sourceEntry)) run("bun", [sourceEntry, "upgrade"])
+	console.error("prs is not published to npm. To update it from source, run in your prs checkout:")
+	console.error("  git pull --ff-only")
+	console.error("  bun install")
+	process.exit(1)
 }
 
 const scriptPath = fs.realpathSync(__filename)
