@@ -89,7 +89,7 @@ describe("small terminal fallback", () => {
 		act(() => setup.mockInput.pressKey("p", { ctrl: true }))
 		const modalOpen = await settle(setup.renderOnce, () => setup.captureCharFrame().includes("Commands"))
 		expect(modalOpen, setup.captureCharFrame()).toBe(true)
-		expect(setup.captureCharFrame()).toContain("30 commands")
+		expect(setup.captureCharFrame()).toContain("32 commands")
 
 		act(() => setup.resize(59, 15))
 		const fallbackVisible = await settle(setup.renderOnce, () => setup.captureCharFrame().includes("Terminal too small"))
@@ -104,7 +104,7 @@ describe("small terminal fallback", () => {
 		act(() => setup.resize(100, 20))
 		const modalRestored = await settle(setup.renderOnce, () => setup.captureCharFrame().includes("Commands"))
 		expect(modalRestored, setup.captureCharFrame()).toBe(true)
-		expect(setup.captureCharFrame()).toContain("30 commands")
+		expect(setup.captureCharFrame()).toContain("32 commands")
 		cleanup(setup)
 	})
 })

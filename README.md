@@ -198,6 +198,8 @@ prs always opens on the **sections** view, including inside a git repository. Th
 
 Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SECTIONS_PATH`). If the file is missing, the built-in defaults below apply. If it fails to parse or validate, prs shows the defaults with the error above them. Set `PRS_DEFAULT_VIEW=queue` to start on the authored queue instead.
 
+From the command palette (`ctrl-p`), **Edit sections config** creates the file from a commented template if needed, opens it in `$VISUAL`/`$EDITOR`, and reloads sections when the editor exits. **Choose my teams** lists your teams by size; `space` toggles, `enter` writes `vars.my_teams` and leaves the rest of the file as it was.
+
 ```yaml
 vars:
   # Optional. If unset, my_teams = your smallest team from `gh api user/teams`

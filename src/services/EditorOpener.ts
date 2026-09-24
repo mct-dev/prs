@@ -38,6 +38,15 @@ export const pagerArgv = (pager: string | undefined, path: string): readonly str
 	return [...(words.length > 0 ? words : ["less"]), path]
 }
 
+/**
+ * argv for editing `path`: `$VISUAL`, then `$EDITOR` (split on whitespace so
+ * `code -w` works), or `vi`. Spawned directly, never through a shell.
+ */
+export const editorArgv = (env: { readonly VISUAL?: string | undefined; readonly EDITOR?: string | undefined }, path: string): readonly string[] => {
+	const words = (env.VISUAL?.trim() || env.EDITOR?.trim() || "").split(/\s+/).filter((word) => word.length > 0)
+	return [...(words.length > 0 ? words : ["vi"]), path]
+}
+
 const runArgv = async (cmd: readonly string[]): Promise<void> => {
 	const proc = Bun.spawn({ cmd: [...cmd], stdin: "inherit", stdout: "inherit", stderr: "inherit" })
 	const exitCode = await proc.exited
@@ -62,6 +71,8 @@ export class EditorOpener extends Context.Service<
 		readonly openPullRequest: (pullRequest: PullRequestItem) => Effect.Effect<void, CommandError>
 		/** Page a local file (e.g. an agent review log) in `$PAGER`, suspending the TUI. */
 		readonly pageFile: (path: string) => Effect.Effect<void, CommandError>
+		/** Open a local file in `$VISUAL` / `$EDITOR`, suspending the TUI until it exits. */
+		readonly editFile: (path: string) => Effect.Effect<void, CommandError>
 	}
 >()("ghui/EditorOpener") {
 	static readonly layerNoDeps = Layer.effect(
@@ -96,7 +107,15 @@ export class EditorOpener extends Context.Service<
 				})
 			})
 
-			return EditorOpener.of({ openPullRequest, pageFile })
+			const editFile = Effect.fn("EditorOpener.editFile")(function* (path: string) {
+				const argv = editorArgv({ VISUAL: process.env.VISUAL, EDITOR: process.env.EDITOR }, path)
+				yield* Effect.tryPromise({
+					try: () => withTuiSuspended(() => runArgv(argv)),
+					catch: (cause) => editorError(cause instanceof Error ? cause.message : "Failed to launch editor", cause),
+				})
+			})
+
+			return EditorOpener.of({ openPullRequest, pageFile, editFile })
 		}),
 	)
 
@@ -108,6 +127,7 @@ export class EditorOpener extends Context.Service<
 		EditorOpener.of({
 			openPullRequest: () => Effect.void,
 			pageFile: () => Effect.void,
+			editFile: () => Effect.void,
 		}),
 	)
 }

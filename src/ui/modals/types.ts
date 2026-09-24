@@ -3,6 +3,7 @@ import type { DiffCommentSide, PullRequestLabel, PullRequestMergeInfo, PullReque
 import type { ThemeConfig, ThemeMode } from "../../themeConfig.js"
 import type { ThemeId, ThemeTone } from "../colors.js"
 import type { WorkspaceSurface } from "../../workspaceSurfaces.js"
+import type { ViewerTeam } from "../../sections/teams.js"
 
 export interface LabelModalState {
 	readonly repository: string | null
@@ -122,6 +123,17 @@ export interface ReviewPresetModalState {
 	readonly selectedIndex: number
 }
 
+export interface TeamsModalState {
+	readonly teams: readonly ViewerTeam[]
+	/** Slugs checked now; saved to `vars.my_teams`. */
+	readonly chosen: readonly string[]
+	/** Slugs in effect when the modal opened, so an unchanged save is a no-op. */
+	readonly initial: readonly string[]
+	readonly selectedIndex: number
+	readonly loading: boolean
+	readonly error: string | null
+}
+
 export interface SubmitReviewModalState {
 	readonly repository: string | null
 	readonly number: number | null
@@ -233,6 +245,15 @@ export const initialReviewPresetModalState: ReviewPresetModalState = {
 	selectedIndex: 0,
 }
 
+export const initialTeamsModalState: TeamsModalState = {
+	teams: [],
+	chosen: [],
+	initial: [],
+	selectedIndex: 0,
+	loading: true,
+	error: null,
+}
+
 export const initialSubmitReviewModalState: SubmitReviewModalState = {
 	repository: null,
 	number: null,
@@ -282,6 +303,7 @@ export type Modal = Data.TaggedEnum<{
 	CommandPalette: CommandPaletteState
 	OpenRepository: OpenRepositoryModalState
 	Legend: {}
+	Teams: TeamsModalState
 }>
 
 export const Modal = Data.taggedEnum<Modal>()
@@ -306,4 +328,5 @@ export const modalInitialStates = {
 	CommandPalette: initialCommandPaletteState,
 	OpenRepository: initialOpenRepositoryModalState,
 	Legend: {},
+	Teams: initialTeamsModalState,
 } as const satisfies { [Tag in Exclude<ModalTag, "None">]: ModalState<Tag> }

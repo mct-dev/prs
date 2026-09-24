@@ -16,9 +16,10 @@ import type { BriefViewCtx } from "../keymap/briefView.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { useKeymapWiring } from "./useKeymapWiring.js"
 import { useFilterPopoverControls } from "../ui/filter/useFilterPopover.js"
-import { useAtomValue } from "@effect/atom-react"
+import { useAtom } from "@effect/atom-react"
+import { moveTeamsSelection, toggleTeamsSelection } from "../ui/modals/teamsModalState.js"
 import { activeModalAtom } from "../ui/modals/atoms.js"
-import { Modal } from "../ui/modals/types.js"
+import { Modal, type TeamsModalState } from "../ui/modals/types.js"
 import type { CommentEditorValue } from "../ui/commentEditor.js"
 
 export interface UseAppKeymapInput {
@@ -183,7 +184,10 @@ export interface UseAppKeymapInput {
  */
 export const useAppKeymap = (i: UseAppKeymapInput): void => {
 	const filterPopover = useFilterPopoverControls()
-	const legendModalActive = Modal.$is("Legend")(useAtomValue(activeModalAtom))
+	const [activeModal, setActiveModal] = useAtom(activeModalAtom)
+	const legendModalActive = Modal.$is("Legend")(activeModal)
+	const teamsModalActive = Modal.$is("Teams")(activeModal)
+	const updateTeamsModal = (update: (state: TeamsModalState) => TeamsModalState) => setActiveModal((modal) => (Modal.$is("Teams")(modal) ? Modal.Teams(update(modal)) : modal))
 	useKeymapWiring({
 		disabled: i.disabled,
 		ctxInput: {
@@ -203,6 +207,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				deleteCommentModalActive: i.deleteCommentModalActive,
 				commandPaletteActive: i.commandPaletteActive,
 				legendModalActive,
+				teamsModalActive,
 				filterMode: i.filterMode,
 				diffFullView: i.diffFullView,
 				runsFullView: i.runsFullView,
@@ -265,6 +270,12 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 			openRepositoryModal: { closeActiveModal: i.closeActiveModal, openRepositoryFromInput: i.openRepositoryFromInput },
 			commentModal: { closeActiveModal: i.closeActiveModal },
 			deleteCommentModal: { closeActiveModal: i.closeActiveModal, confirmDeleteComment: i.confirmDeleteComment },
+			teamsModal: {
+				closeModal: i.closeActiveModal,
+				save: () => i.runCommandById("sections.save-teams"),
+				toggle: () => updateTeamsModal(toggleTeamsSelection),
+				moveSelection: (delta) => updateTeamsModal((state) => moveTeamsSelection(state, delta)),
+			},
 			commandPalette: {
 				closeActiveModal: i.closeActiveModal,
 				selectedCommand: i.commandPaletteSelectedCommand,
