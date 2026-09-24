@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test"
 import { act } from "react"
 import { ART_MAX_HEIGHT, ART_MAX_WIDTH, ART_MIN_HEIGHT, ART_MIN_WIDTH, artFrameText, artSizeFor, LOADING_ART_VARIANTS, renderArtFrame } from "../src/ui/loadingArt.ts"
-import { type ArtTimer, LoadingArt } from "../src/ui/LoadingLogo.tsx"
+import { type ArtTimer, LoadingArt, loadingArtAnimated } from "../src/ui/LoadingLogo.tsx"
 
 const isArtChar = (char: string) => char === " " || (char.charCodeAt(0) > 0x2800 && char.charCodeAt(0) <= 0x28ff)
 
@@ -52,6 +52,30 @@ describe("artSizeFor", () => {
 	test("gives up on panes too small for art", () => {
 		expect(artSizeFor(19, 40)).toBeNull()
 		expect(artSizeFor(120, 4)).toBeNull()
+	})
+})
+
+describe("loadingArtAnimated", () => {
+	test("PRS_NO_ANIMATION=1, or the legacy GHUI_ spelling, turns animation off", () => {
+		const saved = { prs: process.env.PRS_NO_ANIMATION, ghui: process.env.GHUI_NO_ANIMATION }
+		try {
+			delete process.env.PRS_NO_ANIMATION
+			delete process.env.GHUI_NO_ANIMATION
+			expect(loadingArtAnimated()).toBe(true)
+			process.env.PRS_NO_ANIMATION = "1"
+			expect(loadingArtAnimated()).toBe(false)
+			delete process.env.PRS_NO_ANIMATION
+			process.env.GHUI_NO_ANIMATION = "1"
+			expect(loadingArtAnimated()).toBe(false)
+		} finally {
+			for (const [key, value] of [
+				["PRS_NO_ANIMATION", saved.prs],
+				["GHUI_NO_ANIMATION", saved.ghui],
+			] as const) {
+				if (value === undefined) delete process.env[key]
+				else process.env[key] = value
+			}
+		}
 	})
 })
 
