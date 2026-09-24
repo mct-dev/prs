@@ -730,12 +730,14 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 
 	useBriefDiffTarget({
 		selectedPullRequestUrl: selectedPullRequest?.url ?? null,
+		selectedHeadSha: selectedPullRequest?.headRefOid ?? null,
 		diffFullView,
 		readyDiffFiles,
 		diffCommentAnchors,
 		setDiffFileIndex,
 		setDiffCommentAnchorIndex,
 		ensureDiffLineVisible,
+		scrollToDiffFile: diffNav.scrollToDiffFile,
 		flashNotice,
 	})
 

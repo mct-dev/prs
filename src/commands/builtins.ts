@@ -297,6 +297,8 @@ export const globalCommands: readonly CommandDefinition[] = [
 		run: Effect.gen(function* () {
 			yield* Atom.set(diffFullViewAtom, false)
 			yield* Atom.set(diffCommentRangeStartIndexAtom, null)
+			// A brief target still waiting on the diff must not land on a later open.
+			yield* Atom.set(pendingBriefDiffTargetAtom, null)
 		}),
 	}),
 
@@ -400,7 +402,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 			const entry = yield* Atom.get(selectedReviewEntryAtom)
 			const area = entry?.brief?.focus_areas[yield* Atom.get(briefFocusIndexAtom)]
 			if (!pullRequest || !area) return
-			yield* Atom.set(pendingBriefDiffTargetAtom, { url: pullRequest.url, file: area.file, lines: area.lines ?? null })
+			yield* Atom.set(pendingBriefDiffTargetAtom, { url: pullRequest.url, headSha: entry.record.headSha, file: area.file, lines: area.lines ?? null })
 			yield* Atom.set(briefFullViewAtom, false)
 			yield* Atom.set(briefReturnToDetailAtom, false)
 			yield* Effect.sync(() => invokeHandoff("openDiffView"))
@@ -835,6 +837,8 @@ export const globalCommands: readonly CommandDefinition[] = [
 		keywords: ["files", "patch"],
 		run: Effect.gen(function* () {
 			yield* Atom.set(briefFullViewAtom, false)
+			// A plain open starts at the top; only `brief.open-focus` parks a target.
+			yield* Atom.set(pendingBriefDiffTargetAtom, null)
 			yield* Effect.sync(() => invokeHandoff("openDiffView"))
 		}),
 	}),

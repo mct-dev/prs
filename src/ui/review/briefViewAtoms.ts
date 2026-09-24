@@ -19,9 +19,10 @@ export interface BriefDiffTarget {
 	readonly lines: string | null
 }
 
-/** A target parked for the diff view, tied to the PR it came from. */
+/** A target parked for the diff view, tied to the PR and head commit the brief was made for. */
 export interface PendingBriefDiffTarget extends BriefDiffTarget {
 	readonly url: string
+	readonly headSha: string
 }
 
 export const pendingBriefDiffTargetAtom = Atom.make<PendingBriefDiffTarget | null>(null)

@@ -79,7 +79,21 @@ describe("brief view commands", () => {
 			await run(registry, "brief.open-focus")
 			console.log(JSON.stringify({ target: registry.get(pendingBriefDiffTargetAtom), brief: registry.get(briefFullViewAtom), handoffs }))
 		`)
-		expect(JSON.parse(stdout)).toEqual({ target: { url: "https://example.test/pr/42", file: "src/b.ts", lines: null }, brief: false, handoffs: 1 })
+		expect(JSON.parse(stdout)).toEqual({ target: { url: "https://example.test/pr/42", headSha: "head-1", file: "src/b.ts", lines: null }, brief: false, handoffs: 1 })
+	})
+
+	test("a plain diff open or a diff close drops a parked target", async () => {
+		const stdout = await runIsolatedProbe(`${prelude}
+			let handoffs = 0
+			registerHandoff("openDiffView", () => { handoffs++ })
+			const target = { url: pr.url, headSha: pr.headRefOid, file: "src/a.ts", lines: "10" }
+			const opened = registryWith([[selectedPullRequestAtom, pr], [pendingBriefDiffTargetAtom, target]])
+			await run(opened, "diff.open")
+			const closed = registryWith([[selectedPullRequestAtom, pr], [pendingBriefDiffTargetAtom, target], [diffFullViewAtom, true]])
+			await run(closed, "diff.close")
+			console.log(JSON.stringify({ opened: opened.get(pendingBriefDiffTargetAtom), closed: closed.get(pendingBriefDiffTargetAtom), handoffs }))
+		`)
+		expect(JSON.parse(stdout)).toEqual({ opened: null, closed: null, handoffs: 1 })
 	})
 
 	test("o pages the log, or falls back to showing its path", async () => {

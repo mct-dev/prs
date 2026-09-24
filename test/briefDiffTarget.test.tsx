@@ -12,22 +12,29 @@ import { useBriefDiffTarget } from "../src/ui/review/useBriefDiffTarget.ts"
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const URL_A = "https://example.test/pr/1"
-const files = [{ name: "README.md" }, { name: "src/cache.ts" }]
+const HEAD = "head-1"
+const files = [{ name: "README.md" }, { name: "src/cache.ts" }, { name: "assets/logo.png" }]
 const anchor = (fileIndex: number, line: number, renderLine: number) => ({ fileIndex, line, side: "RIGHT", renderLine }) as unknown as StackedDiffCommentAnchor
 const anchors = [anchor(0, 1, 2), anchor(1, 30, 10), anchor(1, 42, 14), anchor(1, 50, 18)]
 
-const mount = async (pending: PendingBriefDiffTarget, selectedPullRequestUrl: string) => {
+const mount = async (
+	pending: PendingBriefDiffTarget,
+	selectedPullRequestUrl: string,
+	{ selectedHeadSha = HEAD, diffCommentAnchors = anchors }: { readonly selectedHeadSha?: string; readonly diffCommentAnchors?: readonly StackedDiffCommentAnchor[] } = {},
+) => {
 	const registry = AtomRegistry.make({ initialValues: [[pendingBriefDiffTargetAtom, pending]] })
-	const calls = { fileIndex: [] as number[], anchorIndex: [] as number[], visible: [] as number[], notices: [] as string[] }
+	const calls = { fileIndex: [] as number[], anchorIndex: [] as number[], visible: [] as number[], fileTop: [] as number[], notices: [] as string[] }
 	const Probe = () => {
 		useBriefDiffTarget({
 			selectedPullRequestUrl,
+			selectedHeadSha,
 			diffFullView: true,
 			readyDiffFiles: files,
-			diffCommentAnchors: anchors,
+			diffCommentAnchors,
 			setDiffFileIndex: (index) => calls.fileIndex.push(index),
 			setDiffCommentAnchorIndex: (index) => calls.anchorIndex.push(index),
 			ensureDiffLineVisible: (line) => calls.visible.push(line),
+			scrollToDiffFile: (index) => calls.fileTop.push(index),
 			flashNotice: (message) => calls.notices.push(message),
 		})
 		return <text>probe</text>
@@ -51,24 +58,51 @@ const mount = async (pending: PendingBriefDiffTarget, selectedPullRequestUrl: st
 
 describe("brief focus → diff", () => {
 	test("selects the focus area's file and nearest new-side line, then settles the scroll", async () => {
-		const { calls, remaining } = await mount({ url: URL_A, file: "src/cache.ts", lines: "40-58" }, URL_A)
+		const { calls, remaining } = await mount({ url: URL_A, headSha: HEAD, file: "src/cache.ts", lines: "40-58" }, URL_A)
 		expect(remaining).toBeNull()
 		expect(calls.fileIndex).toEqual([1])
 		expect(calls.anchorIndex).toEqual([2])
 		expect(calls.visible).toEqual([14, 14, 14, 14, 14, 14])
+		expect(calls.fileTop).toEqual([])
 		expect(calls.notices).toEqual([])
 	})
 
 	test("a file outside the diff flashes a notice and does not move", async () => {
-		const { calls, remaining } = await mount({ url: URL_A, file: "src/missing.ts", lines: "1" }, URL_A)
+		const { calls, remaining } = await mount({ url: URL_A, headSha: HEAD, file: "src/missing.ts", lines: "1" }, URL_A)
 		expect(remaining).toBeNull()
 		expect(calls.notices).toEqual(["Not in this diff: src/missing.ts"])
 		expect(calls.fileIndex).toEqual([])
 	})
 
 	test("a target parked for another PR is dropped, not applied", async () => {
-		const { calls, remaining } = await mount({ url: URL_A, file: "src/cache.ts", lines: "40" }, "https://example.test/pr/2")
+		const { calls, remaining } = await mount({ url: URL_A, headSha: HEAD, file: "src/cache.ts", lines: "40" }, "https://example.test/pr/2")
 		expect(remaining).toBeNull()
-		expect(calls).toEqual({ fileIndex: [], anchorIndex: [], visible: [], notices: [] })
+		expect(calls).toEqual({ fileIndex: [], anchorIndex: [], visible: [], fileTop: [], notices: [] })
+	})
+
+	test("a file with no anchors lands on the top of that file", async () => {
+		const { calls, remaining } = await mount({ url: URL_A, headSha: HEAD, file: "assets/logo.png", lines: "3" }, URL_A)
+		expect(remaining).toBeNull()
+		expect(calls.fileIndex).toEqual([2])
+		expect(calls.anchorIndex).toEqual([])
+		expect(calls.visible).toEqual([])
+		expect(calls.fileTop).toEqual([2, 2, 2, 2, 2, 2])
+	})
+
+	test("a diff with no anchors at all still lands on the file", async () => {
+		const { calls, remaining } = await mount({ url: URL_A, headSha: HEAD, file: "src/cache.ts", lines: "40" }, URL_A, { diffCommentAnchors: [] })
+		expect(remaining).toBeNull()
+		expect(calls.fileIndex).toEqual([1])
+		expect(calls.fileTop).toEqual([1, 1, 1, 1, 1, 1])
+	})
+
+	test("a brief for an older head jumps to the file, skips the line and says so", async () => {
+		const { calls, remaining } = await mount({ url: URL_A, headSha: "old-head", file: "src/cache.ts", lines: "40-58" }, URL_A)
+		expect(remaining).toBeNull()
+		expect(calls.fileIndex).toEqual([1])
+		expect(calls.anchorIndex).toEqual([])
+		expect(calls.visible).toEqual([])
+		expect(calls.fileTop).toEqual([1, 1, 1, 1, 1, 1])
+		expect(calls.notices).toEqual(["brief is stale; line numbers may be off"])
 	})
 })
