@@ -53,7 +53,7 @@ export interface WorkspaceContentProps {
 	readonly selectedDiffCommentLabel: string | null
 	readonly selectedDiffCommentThread: readonly PullRequestReviewComment[]
 	readonly selectDiffCommentLine: (renderLine: number, side: DiffCommentSide | null) => void
-	readonly setDiffRenderableRef: (index: number, diff: DiffRenderable | null) => void
+	readonly setDiffRenderableRef: (segmentKey: string, diff: DiffRenderable | null) => void
 	readonly loadingIndicator: string
 	readonly themeId: ThemeId
 	readonly systemThemeGeneration: number

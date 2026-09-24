@@ -1,5 +1,5 @@
 import type { DiffRenderable, MouseEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useMemo, type Ref } from "react"
+import { useMemo, type ReactNode, type Ref } from "react"
 import type { DiffCommentSide, PullRequestItem, PullRequestReviewComment } from "../domain.js"
 import { colors, lineNumberTextColor, type ThemeId } from "./colors.js"
 import { CommentBodyLine, commentCountText, commentMetaSegments, CommentSegmentsLine } from "./comments.js"
@@ -10,7 +10,9 @@ import {
 	diffFileStats,
 	diffFileStatsText,
 	diffStatText,
+	diffSegmentKey,
 	stackedDiffFileIndexAtLine,
+	type DiffFileSection,
 	type DiffFileStats,
 	type DiffView,
 	type DiffWhitespaceMode,
@@ -94,6 +96,7 @@ export const PullRequestDiffPane = ({
 	loadingIndicator,
 	scrollRef,
 	setDiffRef,
+	renderThreads,
 	selectedCommentAnchor,
 	selectedCommentLabel,
 	selectedCommentThread,
@@ -113,7 +116,8 @@ export const PullRequestDiffPane = ({
 	height: number
 	loadingIndicator: string
 	scrollRef: Ref<ScrollBoxRenderable>
-	setDiffRef: (index: number, diff: DiffRenderable | null) => void
+	setDiffRef: (segmentKey: string, diff: DiffRenderable | null) => void
+	renderThreads?: (stackedFile: StackedDiffFilePatch, section: Extract<DiffFileSection, { kind: "threads" }>) => ReactNode
 	selectedCommentAnchor: StackedDiffCommentAnchor | null
 	selectedCommentLabel: string | null
 	selectedCommentThread: readonly PullRequestReviewComment[]
@@ -224,30 +228,39 @@ export const PullRequestDiffPane = ({
 							<FileHeader file={stackedFile.file} index={stackedFile.index} count={readyFiles.length} width={paneWidth} />
 						</PaddedRow>
 						<Divider width={paneWidth} />
-						<diff
-							ref={(diff: DiffRenderable | null) => setDiffRef(stackedFile.index, diff)}
-							diff={stackedFile.file.patch}
-							view={view}
-							syncScroll
-							filetype={stackedFile.file.filetype ?? "text"}
-							syntaxStyle={syntaxStyle}
-							fg={colors.text}
-							showLineNumbers
-							wrapMode={wrapMode}
-							addedBg={colors.diff.addedBg}
-							removedBg={colors.diff.removedBg}
-							contextBg={colors.diff.contextBg}
-							addedSignColor={colors.status.passing}
-							removedSignColor={colors.status.failing}
-							lineNumberFg={diffLineNumberFg}
-							lineNumberBg={colors.diff.lineNumberBg}
-							addedLineNumberBg={colors.diff.addedLineNumberBg}
-							removedLineNumberBg={colors.diff.removedLineNumberBg}
-							selectionBg={colors.selectedBg}
-							selectionFg={colors.selectedText}
-							height={stackedFile.diffHeight}
-							style={{ flexShrink: 0 }}
-						/>
+						{stackedFile.sections.map((section) =>
+							section.kind === "diff" ? (
+								<diff
+									key={`diff-${section.segmentIndex}`}
+									ref={(diff: DiffRenderable | null) => setDiffRef(diffSegmentKey(stackedFile.index, section.segmentIndex), diff)}
+									diff={section.patch}
+									view={view}
+									syncScroll
+									filetype={stackedFile.file.filetype ?? "text"}
+									syntaxStyle={syntaxStyle}
+									fg={colors.text}
+									showLineNumbers
+									wrapMode={wrapMode}
+									addedBg={colors.diff.addedBg}
+									removedBg={colors.diff.removedBg}
+									contextBg={colors.diff.contextBg}
+									addedSignColor={colors.status.passing}
+									removedSignColor={colors.status.failing}
+									lineNumberFg={diffLineNumberFg}
+									lineNumberBg={colors.diff.lineNumberBg}
+									addedLineNumberBg={colors.diff.addedLineNumberBg}
+									removedLineNumberBg={colors.diff.removedLineNumberBg}
+									selectionBg={colors.selectedBg}
+									selectionFg={colors.selectedText}
+									height={section.height}
+									style={{ flexShrink: 0 }}
+								/>
+							) : (
+								<box key={`threads-${section.top}`} height={section.height} flexShrink={0} flexDirection="column">
+									{renderThreads?.(stackedFile, section)}
+								</box>
+							),
+						)}
 					</box>
 				))}
 			</scrollbox>

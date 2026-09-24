@@ -1,7 +1,7 @@
 import type { DiffRenderable } from "@opentui/core"
 import { type MutableRefObject, useEffect, useRef } from "react"
 import { colors, mixHex } from "../colors.js"
-import { type DiffCommentAnchor, type DiffCommentKind, type DiffView, type StackedDiffCommentAnchor } from "../diff.js"
+import { type DiffCommentAnchor, type DiffCommentKind, diffSegmentKey, type DiffView, type StackedDiffCommentAnchor } from "../diff.js"
 
 const DIFF_LAYOUT_RETRY_MS = 16
 const DIFF_LINE_COLOR_REAPPLY_ATTEMPTS = 8
@@ -70,6 +70,8 @@ const diffSideTargets = (diff: DiffRenderable, anchor: DiffCommentAnchor, view: 
 	return withSides.leftSide ? [withSides.leftSide] : []
 }
 
+const anchorSegmentKey = (anchor: StackedDiffCommentAnchor) => diffSegmentKey(anchor.fileIndex, anchor.segmentIndex)
+
 const setDiffCommentLineColor = (diff: DiffRenderable, entry: AppliedDiffLineColor) => {
 	for (const target of diffSideTargets(diff, entry.anchor, entry.view)) {
 		target.setLineColor(entry.anchor.colorLine, entry.color)
@@ -87,7 +89,8 @@ export interface UseDiffLineColorsInput {
 }
 
 export interface UseDiffLineColorsResult {
-	readonly setDiffRenderableRef: (index: number, diff: DiffRenderable | null) => void
+	// Keyed by diffSegmentKey: a file's diff can be split around thread rows.
+	readonly setDiffRenderableRef: (segmentKey: string, diff: DiffRenderable | null) => void
 	/** Clear cached renderables + applied colors. Call when opening a new diff view. */
 	readonly resetDiffLineColors: () => void
 }
@@ -111,7 +114,7 @@ export const useDiffLineColors = ({
 	suppressNextDiffCommentScrollRef,
 	ensureDiffLineVisible,
 }: UseDiffLineColorsInput): UseDiffLineColorsResult => {
-	const diffRenderableRefs = useRef(new Map<number, DiffRenderable>())
+	const diffRenderableRefs = useRef(new Map<string, DiffRenderable>())
 	const diffCommentLineColorsRef = useRef<AppliedDiffLineColorState>({ contextKey: null, entries: [] })
 	const diffLineColorRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	// `ensureDiffLineVisible` is a fresh closure each render (it captures
@@ -132,7 +135,7 @@ export const useDiffLineColors = ({
 	useEffect(() => {
 		const applyEntries = (entries: readonly AppliedDiffLineColor[]) => {
 			for (const entry of entries) {
-				const diff = diffRenderableRefs.current.get(entry.anchor.fileIndex)
+				const diff = diffRenderableRefs.current.get(anchorSegmentKey(entry.anchor))
 				if (diff) setDiffCommentLineColor(diff, entry)
 			}
 		}
@@ -141,7 +144,7 @@ export const useDiffLineColors = ({
 		const contextChanged = previous.contextKey !== diffLineColorContextKey
 		if (previous.contextKey === diffLineColorContextKey) {
 			for (const entry of previous.entries) {
-				const diff = diffRenderableRefs.current.get(entry.anchor.fileIndex)
+				const diff = diffRenderableRefs.current.get(anchorSegmentKey(entry.anchor))
 				if (diff) setDiffCommentLineColor(diff, { ...entry, color: originalDiffLineColor(entry.anchor) })
 			}
 		}
@@ -153,7 +156,7 @@ export const useDiffLineColors = ({
 			if (appliedKeys.has(key) && !override) return
 			appliedKeys.add(key)
 			const entry = { anchor, view: effectiveDiffRenderView, color } satisfies AppliedDiffLineColor
-			const diff = diffRenderableRefs.current.get(anchor.fileIndex)
+			const diff = diffRenderableRefs.current.get(anchorSegmentKey(anchor))
 			if (diff) setDiffCommentLineColor(diff, entry)
 			if (!nextEntries.some((existing) => existing.view === entry.view && existing.anchor.side === anchor.side && existing.anchor.renderLine === anchor.renderLine)) {
 				nextEntries.push(entry)
@@ -204,20 +207,21 @@ export const useDiffLineColors = ({
 		selectedDiffCommentAnchor?.colorLine,
 		selectedDiffCommentAnchor?.side,
 		selectedDiffCommentAnchor?.fileIndex,
+		selectedDiffCommentAnchor?.segmentIndex,
 		selectedDiffCommentRangeAnchors,
 		diffLineColorContextKey,
 		effectiveDiffRenderView,
 		diffCommentThreadAnchors,
 	])
 
-	const setDiffRenderableRef = (index: number, diff: DiffRenderable | null) => {
+	const setDiffRenderableRef = (segmentKey: string, diff: DiffRenderable | null) => {
 		if (diff) {
-			diffRenderableRefs.current.set(index, diff)
+			diffRenderableRefs.current.set(segmentKey, diff)
 			for (const entry of diffCommentLineColorsRef.current.entries) {
-				if (entry.anchor.fileIndex === index) setDiffCommentLineColor(diff, entry)
+				if (anchorSegmentKey(entry.anchor) === segmentKey) setDiffCommentLineColor(diff, entry)
 			}
 		} else {
-			diffRenderableRefs.current.delete(index)
+			diffRenderableRefs.current.delete(segmentKey)
 		}
 	}
 

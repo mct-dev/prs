@@ -83,7 +83,7 @@ export interface PullRequestSurfaceProps {
 	readonly selectedDiffCommentLabel: string | null
 	readonly selectedDiffCommentThread: readonly PullRequestReviewComment[]
 	readonly selectDiffCommentLine: (renderLine: number, side: DiffCommentSide | null) => void
-	readonly setDiffRenderableRef: (index: number, diff: DiffRenderable | null) => void
+	readonly setDiffRenderableRef: (segmentKey: string, diff: DiffRenderable | null) => void
 	readonly detailFullView: boolean
 	readonly loadingIndicator: string
 	readonly themeId: ThemeId
