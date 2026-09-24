@@ -132,9 +132,27 @@ prs can run a local coding agent (Claude Code or Codex) against a pull request
 and show a short **risk brief** at the top of the details pane: a risk level, a
 summary, and the files most worth your attention.
 
-Open a PR's details and press `b`, or run **Run agent review** from the
-command palette. **Cancel agent review** stops a running review. Briefs are
-cached per head commit and marked `stale` after a force-push.
+Select a PR (in the list or its details) and press `b` to run a review with
+the default preset, or `B` to pick a preset. Only one review runs per PR at a
+time; pressing `b` again while one is running just says so. **Cancel agent
+review** in the command palette stops a running review. Briefs are cached per
+head commit and marked `stale` after a force-push.
+
+The PR list shows each review's state in the row's gutter: a spinner while it
+runs, a dot colored by risk (low, medium, high) when it is done, a dim ring when
+the brief is for an older head, and an error mark when the run failed.
+
+Press `v` to open the full **brief view**. It shows the risk, confidence,
+summary, before/after, every focus area (file, lines, severity, why), what is
+safe to skip, open questions, test notes, and the run details (preset, cost,
+duration, reviewed head, stale state, log path). In the brief view:
+
+- `up` / `down` (`k` / `j`): select a focus area; the view scrolls past the ends
+- `enter`: open the diff at the focused file, on the nearest changed line
+- `o`: open the run log in `$PAGER` (or `less`), or show its path if that fails
+- `x`: cancel a running review; `b` / `B`: run again
+- `ctrl-u` / `ctrl-d`, `gg` / `G`: page, or jump to the top or bottom
+- `esc`: go back to where you opened it from
 
 Configure it in `config.json` (all keys optional):
 
@@ -242,7 +260,9 @@ A predicate on data that hasn't loaded yet counts as unknown, and unknown never 
 - `r`: refresh
 - `d`: view stacked diff for all changed files
 - `a`: view this PR's GitHub Actions runs (jobs, steps, and failing logs)
-- `b`: run an agent review (in the details view)
+- `b`: run an agent review with the default preset
+- `B`: pick an agent review preset, then run it
+- `v`: open the agent review brief view (in a diff, `v` starts a comment range instead)
 - `shift-r`: review or approve the selected pull request
 - `up` / `down` / `pageup` / `pagedown`: move comment target while viewing a diff
 - `enter`: open a commented diff line, or start a comment on an uncommented line
