@@ -14,10 +14,10 @@
 // step 2, we've reproduced the bug in headless mode and can diff each
 // atom's state to find where the broken data is coming from.
 //
-// Logs to /tmp/prs-debug.log (default GHUI_DEBUG_LOG path) so the
+// Logs to /tmp/prs-debug.log (default PRS_DEBUG_LOG path) so the
 // devLog instrumentation in atoms.ts fires.
 
-process.env.GHUI_DEBUG_LOG ??= "/tmp/prs-debug.log"
+if (!process.env.PRS_DEBUG_LOG && !process.env.GHUI_DEBUG_LOG) process.env.PRS_DEBUG_LOG = "/tmp/prs-debug.log"
 
 import * as Atom from "effect/unstable/reactivity/Atom"
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"

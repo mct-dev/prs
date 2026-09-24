@@ -43,8 +43,10 @@ const run = (target, args = process.argv.slice(2)) => {
 	process.exit(typeof result.status === "number" ? result.status : 0)
 }
 
-if (process.env.GHUI_BIN_PATH) {
-	run(process.env.GHUI_BIN_PATH)
+// PRS_BIN_PATH overrides the binary; GHUI_BIN_PATH is the legacy fallback.
+const binPathOverride = process.env.PRS_BIN_PATH ?? process.env.GHUI_BIN_PATH
+if (binPathOverride) {
+	run(binPathOverride)
 }
 
 if (process.argv[2] === "-h" || process.argv[2] === "--help" || process.argv[2] === "help") {
