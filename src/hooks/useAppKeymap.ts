@@ -11,6 +11,7 @@ import type {
 	ThemeModalState,
 } from "../ui/modals/types.js"
 import { canEditComment } from "../ui/comments/useCommentMutations.js"
+import type { CommentCardActions } from "../ui/comments/useCommentCardActions.js"
 import type { RunsViewCtx } from "../keymap/runsView.js"
 import type { BriefViewCtx } from "../keymap/briefView.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
@@ -121,6 +122,7 @@ export interface UseAppKeymapInput {
 	readonly openSelectedCommentInBrowser: () => void
 	readonly refreshSelectedComments: () => void
 	readonly confirmCommentSelection: () => void
+	readonly commentCardActions: CommentCardActions
 
 	// List nav
 	readonly visiblePullRequestsLength: number
@@ -305,6 +307,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				refreshSelectedComments: i.refreshSelectedComments,
 				confirmCommentSelection: i.confirmCommentSelection,
 				runCommandById: i.runCommandById,
+				cards: i.commentCardActions,
 			},
 			listNav: {
 				halfPage: i.halfPage,

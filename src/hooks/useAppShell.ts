@@ -30,6 +30,7 @@ import { useImperativeActions } from "./useImperativeActions.js"
 import { useScrollRefs } from "./useScrollRefs.js"
 import { useCommentsLoader } from "./useCommentsLoader.js"
 import { useCommentsViewActions } from "./useCommentsViewActions.js"
+import { useCommentCardActions } from "../ui/comments/useCommentCardActions.js"
 import { useDiffLoader } from "./useDiffLoader.js"
 import { useRunsView } from "./useRunsView.js"
 import { useLinkNavigation } from "./useLinkNavigation.js"
@@ -787,6 +788,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 			flashNotice,
 		})
 
+	const commentCardActions = useCommentCardActions({ openUrl, flashNotice })
+
 	const { movePullRequestStateSelection, confirmPullRequestStateChange, confirmCloseModal, toggleLabelAtIndex, confirmSubmitReview } = useItemModalActions({
 		pullRequestStateModal,
 		setPullRequestStateModal,
@@ -1080,6 +1083,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		openSelectedCommentInBrowser,
 		refreshSelectedComments,
 		confirmCommentSelection,
+		commentCardActions,
 		visiblePullRequestsLength: visiblePullRequests.length,
 		issuesLength: issues.length,
 		repositoryItemsLength: repositoryItems.length,

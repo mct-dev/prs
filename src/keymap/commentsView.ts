@@ -10,6 +10,9 @@ export interface CommentsViewCtx extends Scrollable {
 	readonly confirmSelection: () => void
 	readonly editSelected: () => void
 	readonly deleteSelected: () => void
+	readonly toggleCard: () => void
+	readonly toggleDetails: () => void
+	readonly openLink: (index: number) => void
 }
 
 const Comments = context<CommentsViewCtx>()
@@ -22,5 +25,13 @@ export const commentsViewKeymap = Comments(
 	{ id: "comments-view.open-browser", title: "Open in browser", keys: ["o"], run: (s) => s.openInBrowser() },
 	{ id: "comments-view.refresh", title: "Refresh", keys: ["r"], run: (s) => s.refresh() },
 	{ id: "comments-view.edit", title: "Edit comment", keys: ["e"], when: (s) => s.canEditSelected, run: (s) => s.editSelected() },
+	{ id: "comments-view.toggle-card", title: "Expand / collapse comment", keys: ["space"], run: (s) => s.toggleCard() },
+	{ id: "comments-view.toggle-details", title: "Expand / collapse details", keys: ["t"], run: (s) => s.toggleDetails() },
+	...Array.from({ length: 9 }, (_, offset) => ({
+		id: `comments-view.open-link-${offset + 1}`,
+		title: `Open link [${offset + 1}]`,
+		keys: [String(offset + 1)],
+		run: (s: CommentsViewCtx) => s.openLink(offset + 1),
+	})),
 	{ id: "comments-view.delete", title: "Delete comment", keys: ["x"], when: (s) => s.canEditSelected, run: (s) => s.deleteSelected() },
 )

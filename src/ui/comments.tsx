@@ -31,7 +31,7 @@ export const commentCountText = (count: number) => (count === 1 ? "1 comment" : 
 
 export const commentSideColor = (side: DiffCommentSide | null | undefined) => (side === "LEFT" ? colors.status.failing : side === "RIGHT" ? colors.status.passing : colors.count)
 
-const commentTimestamp = (date: Date | null) => {
+export const commentTimestamp = (date: Date | null) => {
 	if (!date) return ""
 	const ageMs = Date.now() - date.getTime()
 	const minuteMs = 60_000

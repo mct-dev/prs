@@ -103,6 +103,9 @@ const briefViewHints = (ctx: HintsContext): readonly HintItem[] => [
 const commentsViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "↑↓", label: "move", disabled: ctx.commentsViewCount <= 1 },
 	{ key: "enter", label: ctx.commentsViewOnRealComment ? "reply" : "new" },
+	{ key: "space", label: "fold", disabled: !ctx.commentsViewOnRealComment },
+	{ key: "t", label: "details", disabled: !ctx.commentsViewOnRealComment },
+	{ key: "1-9", label: "link", disabled: !ctx.commentsViewOnRealComment },
 	{ key: "a", label: "new" },
 	{ key: "e", label: "edit", disabled: !ctx.commentsViewCanEditSelected },
 	{ key: "x", label: "delete", disabled: !ctx.commentsViewCanEditSelected },

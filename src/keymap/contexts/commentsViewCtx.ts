@@ -1,3 +1,4 @@
+import type { CommentCardActions } from "../../ui/comments/useCommentCardActions.ts"
 import type { CommentsViewCtx } from "../commentsView.ts"
 
 export interface BuildCommentsViewCtxInput {
@@ -11,6 +12,7 @@ export interface BuildCommentsViewCtxInput {
 	readonly refreshSelectedComments: () => void
 	readonly confirmCommentSelection: () => void
 	readonly runCommandById: (id: string) => void
+	readonly cards: CommentCardActions
 }
 
 export const buildCommentsViewCtx = ({
@@ -24,6 +26,7 @@ export const buildCommentsViewCtx = ({
 	refreshSelectedComments,
 	confirmCommentSelection,
 	runCommandById,
+	cards,
 }: BuildCommentsViewCtxInput): CommentsViewCtx => ({
 	halfPage,
 	scrollBy: moveCommentsSelection,
@@ -37,4 +40,7 @@ export const buildCommentsViewCtx = ({
 	confirmSelection: confirmCommentSelection,
 	editSelected: () => runCommandById("comments.edit"),
 	deleteSelected: () => runCommandById("comments.delete"),
+	toggleCard: cards.toggleSelectedCard,
+	toggleDetails: cards.toggleSelectedDetails,
+	openLink: cards.openSelectedLink,
 })
