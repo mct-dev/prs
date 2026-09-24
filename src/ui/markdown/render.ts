@@ -1,5 +1,5 @@
-import { Lexer, type Token, type Tokens } from "marked"
-import { decodeEntities, hasControls, htmlToMarkdown, stripControls, replaceEmojiShortcodes, splitBody, attribute, type BodyChunk } from "./html.js"
+import { Lexer, type Links, type Token, type Tokens } from "marked"
+import { decodeEntities, hasControls, htmlToMarkdown, stripControls, replaceEmojiShortcodes, scriptText, splitBody, attribute, type BodyChunk } from "./html.js"
 import { issueReferenceUrl } from "../inlineSegments.js"
 import type { MarkdownLine, MarkdownLink, MarkdownOptions, MarkdownRender, MarkdownRole, MarkdownSpan } from "./types.js"
 import { breakByWidth, mergeSpans, spansWidth, textWidth, wrapSpans } from "./wrap.js"
@@ -19,6 +19,7 @@ const MAX_MARKERS_PER_PARAGRAPH = 400
 // paragraphs, so many near-budget paragraphs cannot add up to a stall.
 const INLINE_TIME_BUDGET_MS = 60
 export const PLAIN_TEXT_NOTE = "(large comment, shown as plain text)"
+export const EMPTY_COMMENT_NOTE = "(empty comment)"
 const BULLETS = ["•", "◦", "▪"] as const
 
 interface RenderContext {
@@ -32,6 +33,10 @@ interface RenderContext {
 	readonly tableMode: "auto" | "wrap" | "truncate"
 	readonly issueReferenceRepository: string | null
 	readonly linkIndexes: boolean
+	readonly boldHeadings: boolean
+	// Reference definitions (`[x]: url`) seen so far, shared by every nested
+	// lex so `[label][x]` resolves inside alerts and HTML blocks too.
+	readonly refLinks: Links
 }
 
 interface InlineStyle {
@@ -87,13 +92,14 @@ const textContent = (text: string) => replaceEmojiShortcodes(decodeEntities(text
 const ISSUE_REFERENCE = /(?<![\w#&/])#(\d+)(?!\w)/g
 
 const textSpans = (text: string, style: InlineStyle, context: RenderContext): MarkdownSpan[] => {
-	if (style.role === "code" || style.url !== undefined || !text.includes("#")) return [span(text, style)]
+	// Without a repository a reference could not be clicked, so it is not styled as one.
+	const repository = context.issueReferenceRepository
+	if (repository === null || style.role === "code" || style.url !== undefined || !text.includes("#")) return [span(text, style)]
 	const out: MarkdownSpan[] = []
 	let cursor = 0
 	for (const match of text.matchAll(ISSUE_REFERENCE)) {
 		if (match.index > cursor) out.push(span(text.slice(cursor, match.index), style))
-		const repository = context.issueReferenceRepository
-		out.push(span(match[0], { ...style, role: "issueRef", ...(repository ? { url: issueReferenceUrl(repository, Number(match[1])) } : {}) }))
+		out.push(span(match[0], { ...style, role: "issueRef", url: issueReferenceUrl(repository, Number(match[1])) }))
 		cursor = match.index + match[0].length
 	}
 	if (cursor < text.length) out.push(span(text.slice(cursor), style))
@@ -110,13 +116,15 @@ interface HtmlInlineState {
 	strike: number
 	code: number
 	url: string | null
+	// Open `<sup>`/`<sub>`: where its text starts in `out`.
+	script: { readonly kind: "sup" | "sub"; readonly start: number; readonly out: MarkdownSpan[]; readonly glued: boolean } | null
 }
 
 const inlineSpans = (
 	tokens: readonly Token[] | undefined,
 	style: InlineStyle,
 	context: RenderContext,
-	html: HtmlInlineState = { bold: 0, italic: 0, strike: 0, code: 0, url: null },
+	html: HtmlInlineState = { bold: 0, italic: 0, strike: 0, code: 0, url: null, script: null },
 ): MarkdownSpan[] => {
 	const out: MarkdownSpan[] = []
 	const current = (): InlineStyle => ({
@@ -209,7 +217,22 @@ const inlineSpans = (
 				else if (name === "s" || name === "del" || name === "strike") html.strike = Math.max(0, html.strike + delta)
 				else if (name === "code" || name === "kbd") html.code = Math.max(0, html.code + delta)
 				else if (name === "br") out.push(span("\n", current()))
-				else if (name === "a") {
+				else if (name === "sup" || name === "sub") {
+					if (!closing) {
+						const previous = out.at(-1)?.text ?? ""
+						html.script = { kind: name, start: out.length, out, glued: previous.length > 0 && !/\s$/.test(previous) }
+					} else if (html.script !== null && html.script.out === out) {
+						const { kind, start, glued } = html.script
+						const parts = out.splice(start)
+						const joined = parts.map((part) => part.text).join("")
+						const text = scriptText(kind, joined, glued)
+						if (parts.length === 0 || text === joined) out.push(...parts)
+						// A `^`/`_` prefix keeps the inner spans' own styling.
+						else if (text.endsWith(joined)) out.push(span(text.slice(0, text.length - joined.length), parts[0]!), ...parts)
+						else out.push({ ...parts[0]!, text })
+						html.script = null
+					}
+				} else if (name === "a") {
 					if (closing) {
 						if (html.url !== null) out.push(...linkIndex(context, registerLink(context, html.url, html.url, "link")))
 						html.url = null
@@ -228,6 +251,11 @@ const inlineSpans = (
 }
 
 const blank: MarkdownLine = { spans: [] }
+// The blank before a heading, rule or table. Same shape as `blank`, but
+// compact previews keep it while dropping other block separators.
+const sectionBlank: MarkdownLine = { spans: [] }
+export const isSectionBreak = (line: MarkdownLine) => line === sectionBlank
+const SECTION_TOKENS = new Set(["heading", "hr", "table"])
 
 const prefixLines = (lines: readonly MarkdownLine[], first: readonly MarkdownSpan[], rest: readonly MarkdownSpan[]): MarkdownLine[] =>
 	lines.map((line, index) => ({ spans: mergeSpans([...(index === 0 ? first : rest), ...line.spans]) }))
@@ -363,8 +391,8 @@ const ALERTS = {
 
 // A paragraph that is only `**Text**` (optionally with a trailing colon) is
 // used as a section heading in many PR templates.
-const boldHeading = (token: Token): readonly Token[] | null => {
-	if (token.type !== "paragraph") return null
+const boldHeading = (token: Token, context: RenderContext): readonly Token[] | null => {
+	if (!context.boldHeadings || token.type !== "paragraph") return null
 	const tokens = (token as Tokens.Paragraph).tokens
 	const [first, second] = tokens
 	if (first?.type !== "strong") return null
@@ -374,8 +402,9 @@ const boldHeading = (token: Token): readonly Token[] | null => {
 }
 
 // Tool attribution footers ("🤖 Generated with ...", git-style trailers and
-// the bare session URL that follows) render dimmed.
-const GENERATED_LINE = /^\s*(?:\p{Extended_Pictographic}\uFE0F?\s*)?Generated (?:with|by)\b/iu
+// the bare session URL that follows) render dimmed. The emoji is required so
+// ordinary prose that starts "Generated by ..." is left alone.
+const GENERATED_LINE = /^(?:\p{Extended_Pictographic}\uFE0F?\s*)+Generated (?:with|by)\b[^\n]*$/iu
 const TRAILER_LINE = /^\s*(?:[A-Za-z]+(?:-[A-Za-z]+)+:\s+\S.*|<?https?:\/\/\S+>?)\s*$/
 const GIT_TRAILER_LINE = /^\s*(?:Co-Authored-By|Signed-off-by|Reviewed-by|Generated-by):\s+\S/i
 
@@ -384,6 +413,7 @@ type TrailerKind = "start" | "continue" | null
 const trailerKind = (token: Token, afterTrailer: boolean): TrailerKind => {
 	if (token.type !== "paragraph") return null
 	const raw = (token as Tokens.Paragraph).raw.trim()
+	// A one-line paragraph only, so a footer cannot swallow real text.
 	if (GENERATED_LINE.test(raw)) return "start"
 	const lines = raw.split("\n")
 	if (lines.every((line) => GIT_TRAILER_LINE.test(line))) return "start"
@@ -433,7 +463,7 @@ const renderDetails = (chunk: Extract<BodyChunk, { kind: "details" }>, width: nu
 	const body = renderChunks(chunk.body, Math.max(1, width - 2), context, depth)
 	const open = context.detailsOpen ?? (chunk.open || body.length <= DETAILS_AUTO_OPEN_MAX_LINES)
 	const summary = inlineSpans(
-		lex(chunk.summary, context.deadline).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
+		lex(chunk.summary, context).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
 		{ role: "summary", bold: true },
 		context,
 	)
@@ -453,7 +483,7 @@ const renderBlock = (token: Token, width: number, context: RenderContext, depth:
 			return []
 		case "paragraph":
 		case "text": {
-			const heading = depth === 0 && context.quoteDepth === 0 ? boldHeading(token) : null
+			const heading = depth === 0 && context.quoteDepth === 0 ? boldHeading(token, context) : null
 			if (heading) return wrapSpans(inlineSpans(heading, { role: "heading", bold: true }, context), width)
 			const text = token as Tokens.Paragraph | Tokens.Text
 			return wrapSpans(text.tokens && text.tokens.length > 0 ? inlineSpans(text.tokens, { role: "text" }, context) : [span(textContent(text.text), { role: "text" })], width)
@@ -471,7 +501,7 @@ const renderBlock = (token: Token, width: number, context: RenderContext, depth:
 				const alert = ALERTS[alertMatch[1]!.toLowerCase() as keyof typeof ALERTS]
 				context.quoteDepth++
 				const rest = (token as Tokens.Blockquote).text.slice(alertMatch[0].length)
-				const inner = rest.trim().length > 0 ? renderBlocks(lex(rest, context.deadline), Math.max(1, width - 2), context, depth, true) : []
+				const inner = rest.trim().length > 0 ? renderBlocks(lex(rest, context), Math.max(1, width - 2), context, depth, true) : []
 				context.quoteDepth--
 				const bar: MarkdownSpan = { text: "│ ", role: "frame" }
 				const label: MarkdownLine = { spans: [{ text: `${alert.icon} ${alert.label}`, role: alert.role, bold: true }] }
@@ -512,7 +542,7 @@ const renderBlocks = (tokens: readonly Token[], width: number, context: RenderCo
 		if (rendered.length === 0) continue
 		afterTrailer = trailer !== null
 		const lines = trailer !== null ? dimLines(rendered) : rendered
-		if (out.length > 0 && spaced) out.push(blank)
+		if (out.length > 0 && spaced) out.push(SECTION_TOKENS.has(token.type) || rendered[0]!.spans[0]?.role === "heading" ? sectionBlank : blank)
 		out.push(...lines)
 	}
 	return out
@@ -521,9 +551,9 @@ const renderBlocks = (tokens: readonly Token[], width: number, context: RenderCo
 const renderChunks = (chunks: readonly BodyChunk[], width: number, context: RenderContext, depth: number): MarkdownLine[] => {
 	const out: MarkdownLine[] = []
 	for (const chunk of chunks) {
-		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text, context.deadline), width, context, depth, true)
+		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text, context), width, context, depth, true)
 		if (lines.length === 0) continue
-		if (out.length > 0) out.push(blank)
+		if (out.length > 0) out.push(lines[0]!.spans[0]?.role === "heading" || (lines[0]!.spans[0]?.role === "frame" && lines[0]!.spans.length === 1) ? sectionBlank : blank)
 		out.push(...lines)
 	}
 	return out
@@ -544,8 +574,10 @@ const INLINE_MARKERS = /[*_<[`~(]/g
 // quadratic-prone inline pass. Measuring marked's own inline runs avoids
 // re-implementing CommonMark's paragraph rules, and fences or HTML blocks
 // (never inline-lexed) do not count.
-const lex = (source: string, deadline: number): Token[] => {
+const lex = (source: string, context: Pick<RenderContext, "deadline" | "refLinks">): Token[] => {
+	const { deadline } = context
 	const lexer = new Lexer({ gfm: true })
+	lexer.tokens.links = context.refLinks
 	lexer.blockTokens(source.replace(/\r\n?/g, "\n"), lexer.tokens)
 	for (const entry of lexer.inlineQueue) {
 		if ((entry.src.match(INLINE_MARKERS)?.length ?? 0) > MAX_MARKERS_PER_PARAGRAPH) throw new MarkdownBudgetError()
@@ -569,14 +601,14 @@ const renderPlain = (body: string, width: number): MarkdownLine[] => [
 
 // Last line of defence: a body that still trips the parser renders as text
 // rather than taking the UI down with it.
-const renderChunksOrPlain = (body: string, width: number, context: RenderContext): MarkdownLine[] => {
+const renderChunksOrPlain = (body: string, width: number, context: RenderContext): { readonly lines: MarkdownLine[]; readonly plain: boolean } => {
 	try {
-		return renderChunks(splitBody(body), width, context, 0)
+		return { lines: renderChunks(splitBody(body), width, context, 0), plain: false }
 	} catch {
 		context.links.length = 0
 		context.detailsCount = 0
 		context.collapsedDetails = 0
-		return renderPlain(body.trim(), width)
+		return { lines: renderPlain(body.trim(), width), plain: true }
 	}
 }
 
@@ -594,18 +626,22 @@ export const renderMarkdownUncached = (rawBody: string, options: MarkdownOptions
 		tableMode: options.tableMode ?? "auto",
 		issueReferenceRepository: options.issueReferenceRepository ?? null,
 		linkIndexes: options.linkIndexes ?? true,
+		boldHeadings: options.boldHeadings ?? false,
+		refLinks: Object.create(null) as Links,
 	}
-	const lines =
+	const result =
 		body.trim().length === 0
-			? [{ spans: [{ text: "(empty comment)", role: "muted" as const }] }]
+			? { lines: [], plain: false }
 			: exceedsMarkdownBudget(body)
-				? renderPlain(body.trim(), width)
+				? { lines: renderPlain(body.trim(), width), plain: true }
 				: renderChunksOrPlain(body, width, context)
+	const empty = result.lines.length === 0
 	return {
-		lines: lines.length > 0 ? lines : [{ spans: [{ text: "(empty comment)", role: "muted" }] }],
+		lines: empty ? [{ spans: [{ text: EMPTY_COMMENT_NOTE, role: "muted" }] }] : result.lines,
 		links: context.links,
 		detailsCount: context.detailsCount,
 		collapsedDetails: context.collapsedDetails,
+		...(empty ? { fallback: "empty" as const } : result.plain ? { fallback: "plain" as const } : {}),
 	}
 }
 
@@ -621,6 +657,7 @@ export const renderMarkdown = (body: string, options: MarkdownOptions): Markdown
 		options.tableMode ?? "auto",
 		options.issueReferenceRepository ?? "",
 		options.linkIndexes ?? true,
+		options.boldHeadings ?? false,
 		body,
 	].join("\u0001")
 	const hit = cache.get(key)

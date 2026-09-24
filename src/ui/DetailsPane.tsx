@@ -15,7 +15,7 @@ import { centerCell, Divider, Filler, fitCell, PaddedRow, PlainLine, TextLine, t
 import { type ReviewerRow, reviewerRows as computeReviewerRows } from "./reviewerRows.js"
 import { SubjectMetaLine } from "./SubjectMetaLine.js"
 import { stripControls } from "./markdown/html.js"
-import { markdownLineSegments, renderMarkdown } from "./markdown/index.js"
+import { isSectionBreak, MARKDOWN_MAX_CHARS, markdownLineSegments, renderMarkdown, type MarkdownLine } from "./markdown/index.js"
 
 // Pixel-column conversion accounts for the body box's paddingLeft={1}.
 const BODY_PADDING_LEFT = 1
@@ -58,6 +58,34 @@ type TableRenderMode = "wrap" | "truncate"
 const BLANK_LINE: PreviewLine = { segments: [{ text: "", fg: colors.muted }] }
 const NO_DESCRIPTION: PreviewLine = { segments: [{ text: "No description.", fg: colors.muted }] }
 
+// Previews up to this many rows drop the blank lines between blocks (except
+// before headings, rules and tables) so the collapsed pane shows content.
+export const COMPACT_PREVIEW_MAX_LINES = 12
+export const DESCRIPTION_TRUNCATED_NOTE = "… description truncated"
+export const DESCRIPTION_PLAIN_TEXT_NOTE = "(description too complex to format, shown as plain text)"
+const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/
+
+// Past the renderer's size budget a body would fall back to raw text. The
+// pane never shows that much, so render the head instead: cut at the last
+// blank line under the budget and close a code fence the cut left open.
+export const clipDescription = (body: string, max = MARKDOWN_MAX_CHARS): string => {
+	if (body.length <= max) return body
+	const note = `\n\n*${DESCRIPTION_TRUNCATED_NOTE}*`
+	const head = body.slice(0, max - note.length - 8)
+	const cut = head.lastIndexOf("\n\n")
+	const clipped = cut > 0 ? head.slice(0, cut) : head
+	let open: string | null = null
+	for (const line of clipped.split("\n")) {
+		const marker = FENCE.exec(line)?.[1]
+		if (marker === undefined) continue
+		if (open === null) open = marker
+		else if (marker[0] === open[0] && marker.length >= open.length && line.trim() === marker) open = null
+	}
+	return `${clipped}${open !== null ? `\n${open}` : ""}${note}`
+}
+
+const isEmptyLine = (line: MarkdownLine) => line.spans.length === 0 || (line.spans.length === 1 && line.spans[0]!.role === "frame" && /^─+$/.test(line.spans[0]!.text))
+
 // PR and issue bodies go through the same markdown renderer as comments (and
 // its safety guards). The pane has no footnote list or details toggle, so
 // link indexes are hidden and `<details>` blocks are always expanded.
@@ -68,17 +96,20 @@ export const bodyPreview = (
 	options: { readonly tableMode?: TableRenderMode; readonly issueReferenceRepository?: string | null } = {},
 ): Array<PreviewLine> => {
 	if (stripControls(body).trim().length === 0) return [NO_DESCRIPTION]
-	const rendered = renderMarkdown(body, {
+	const rendered = renderMarkdown(clipDescription(body), {
 		width: Math.max(16, width),
 		detailsOpen: true,
 		tableMode: options.tableMode ?? "wrap",
 		issueReferenceRepository: options.issueReferenceRepository ?? null,
 		linkIndexes: false,
+		boldHeadings: true,
 	})
-	const lines = rendered.lines.slice(0, Math.max(1, limit))
+	// Bodies that are only HTML comments, rules or whitespace-like markup.
+	if (rendered.fallback === "empty" || rendered.lines.every(isEmptyLine)) return [NO_DESCRIPTION]
+	const all = rendered.fallback === "plain" ? [{ spans: [{ text: DESCRIPTION_PLAIN_TEXT_NOTE, role: "muted" as const }] }, ...rendered.lines.slice(1)] : rendered.lines
+	const compact = limit <= COMPACT_PREVIEW_MAX_LINES ? all.filter((line) => line.spans.length > 0 || isSectionBreak(line)) : all
+	const lines = compact.slice(0, Math.max(1, limit))
 	while (lines.length > 1 && lines.at(-1)!.spans.length === 0) lines.pop()
-	// Bodies that are only HTML comments or whitespace-like markup.
-	if (lines.length === 1 && lines[0]!.spans.length === 1 && lines[0]!.spans[0]!.role === "muted" && lines[0]!.spans[0]!.text === "(empty comment)") return [NO_DESCRIPTION]
 	return lines.map((line) => (line.spans.length === 0 ? BLANK_LINE : { segments: markdownLineSegments(line) }))
 }
 

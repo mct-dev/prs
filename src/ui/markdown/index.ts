@@ -2,7 +2,7 @@ import { colors } from "../colors.js"
 import type { CommentSegment } from "../comments.js"
 import type { MarkdownLine, MarkdownRole, MarkdownSpan } from "./types.js"
 
-export { renderMarkdown, renderMarkdownUncached, markdownPlainText, shortenUrl, DETAILS_AUTO_OPEN_MAX_LINES } from "./render.js"
+export { renderMarkdown, renderMarkdownUncached, markdownPlainText, shortenUrl, isSectionBreak, DETAILS_AUTO_OPEN_MAX_LINES, MARKDOWN_MAX_CHARS } from "./render.js"
 export { textWidth, wrapSpans, breakByWidth } from "./wrap.js"
 export type { MarkdownLine, MarkdownLink, MarkdownOptions, MarkdownRender, MarkdownRole, MarkdownSpan } from "./types.js"
 

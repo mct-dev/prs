@@ -53,6 +53,9 @@ export interface MarkdownRender {
 	// Number of `<details>` blocks and how many are currently folded.
 	readonly detailsCount: number
 	readonly collapsedDetails: number
+	// Set when the renderer did not render markdown: "empty" for a body with
+	// no visible content, "plain" when a budget guard fell back to raw text.
+	readonly fallback?: "empty" | "plain"
 }
 
 export interface MarkdownOptions {
@@ -67,4 +70,6 @@ export interface MarkdownOptions {
 	readonly issueReferenceRepository?: string | null | undefined
 	// Inline `[n]` markers pointing at the link list. Off where no list is shown.
 	readonly linkIndexes?: boolean | undefined
+	// Treat a paragraph that is only `**Bold**` as a heading (PR templates).
+	readonly boldHeadings?: boolean | undefined
 }

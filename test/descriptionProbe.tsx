@@ -1,6 +1,6 @@
 // Renders a PR detail pane with a synthetic description and returns the
 // character frame. Run directly to print it:
-//   bun test/descriptionProbe.tsx [width] [body-file]
+//   bun test/descriptionProbe.tsx [width] [body-lines] [body-file]
 import { createTestRenderer } from "@opentui/core/testing"
 import { createRoot } from "@opentui/react"
 import { act } from "react"
@@ -35,12 +35,12 @@ const pullRequest = (body: string): PullRequestItem => ({
 	url: "https://example.com/my-org/widgets/pull/42",
 })
 
-export const probeDescription = async (width = 72, body = prDescriptionBody) => {
+export const probeDescription = async (width = 72, body = prDescriptionBody, bodyLines = DETAIL_BODY_SCROLL_LIMIT) => {
 	// @ts-expect-error -- React's act environment flag is intentionally global.
 	globalThis.IS_REACT_ACT_ENVIRONMENT = true
 	const item = pullRequest(body)
 	const contentWidth = width - 2
-	const height = getDetailsPaneHeight({ pullRequest: item, contentWidth, bodyLines: DETAIL_BODY_SCROLL_LIMIT, paneWidth: width })
+	const height = getDetailsPaneHeight({ pullRequest: item, contentWidth, bodyLines, paneWidth: width })
 	const setup = await createTestRenderer({ width, height })
 	const root = createRoot(setup.renderer)
 	act(() => {
@@ -48,7 +48,7 @@ export const probeDescription = async (width = 72, body = prDescriptionBody) => 
 			<DetailsPane
 				pullRequest={item}
 				contentWidth={contentWidth}
-				bodyLines={DETAIL_BODY_SCROLL_LIMIT}
+				bodyLines={bodyLines}
 				paneWidth={width}
 				placeholderContent={{ title: "", hint: "" }}
 				loadingIndicator=""
@@ -66,7 +66,8 @@ export const probeDescription = async (width = 72, body = prDescriptionBody) => 
 
 if (import.meta.main) {
 	const width = Number(process.argv[2] ?? 72)
-	const body = process.argv[3] ? await Bun.file(process.argv[3]).text() : prDescriptionBody
-	console.log(await probeDescription(width, body))
+	const bodyLines = Number(process.argv[3] ?? DETAIL_BODY_SCROLL_LIMIT)
+	const body = process.argv[4] ? await Bun.file(process.argv[4]).text() : prDescriptionBody
+	console.log(await probeDescription(width, body, bodyLines))
 	process.exit(0)
 }
