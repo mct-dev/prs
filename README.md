@@ -173,13 +173,68 @@ or pushes:
   private `refs/prs/...` refs, which are deleted afterwards.
 - prs only reads the agent's JSON output. Nothing is sent to GitHub.
 
+## Sections & filters
+
+When you launch prs outside a git repository, it opens the **sections** view. This view groups every open PR that needs you into sections. The queue modes are still one `tab` away. Inside a repo, the palette command `Show sections view` switches to sections.
+
+Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SECTIONS_PATH`). If the file is missing, the built-in defaults below apply. If it fails to parse or validate, prs shows the defaults with the error above them. Set `PRS_DEFAULT_VIEW=queue` to start on the authored queue instead.
+
+```yaml
+vars:
+  # Optional. If unset, my_teams = every team from `gh api user/teams`.
+  my_teams: [my-org/backend]
+  bots: ["app/dependabot", "app/renovate", "app/github-actions"]
+
+sections:
+  - id: needs-me
+    title: Needs my review
+    query: "review-requested:{me} -author:{me} draft:false"
+    exclude: "author:{bots}"          # negated onto every branch
+  - id: rereview
+    title: New commits since my review
+    query: "reviewed-by:{me} -author:{me}"
+    where: "me.reviewed and not me.reviewed_since_push"
+  - id: team
+    title: My team's work
+    query: "team-authors:{my_teams} -author:{me}"
+  - id: mine
+    title: My PRs
+    query: "author:{me}"
+  - id: bots
+    title: Bots
+    any: ["review-requested:{me} author:{bots}"]
+    collapsed: true
+```
+
+- Every query gets `is:pr is:open archived:false`. `{me}` is your login. A list var expands to repeated qualifiers, and `-author:{bots}` expands to repeated negated ones.
+- `any:` runs one search per branch and merges the results. `exclude:` is negated onto every branch.
+- `team-authors:org/team` expands to the team's members, which are cached for a day. Long author lists are split across several searches.
+- A PR appears only in the first section it matches, unless that section sets `exclusive: false`.
+- Optional keys per section: `where`, `sort` (`updated`, `size`, `age`, `risk`; a leading `-` means descending; default `-updated`), `limit` (default 50), `collapsed`, `exclusive`.
+- Sections load four at a time and render from cache first. A section that fails shows its error and keeps the PRs it had last.
+- `[` / `]` jump between sections, `z` collapses or expands the current section, and `Z` toggles all of them. You can also click a header.
+
+The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `field>N` / `<` / `>=` / `<=`. Anything else is free text, which is still ranked by match score. Tokens AND together. `where:` also accepts `and`, `or`, `not` and parentheses.
+
+| Field | Meaning |
+|---|---|
+| `author`, `repo`, `draft`, `review:approved\|changes\|none` | PR metadata (`author:@me` works) |
+| `label`, `size`, `files`, `file:glob`, `ci:pass\|fail\|pending\|none` | Need PR details; unknown until loaded |
+| `age`, `idle` | Since created / updated, e.g. `idle>3d`, `age<2h`, `1w` |
+| `risk`, `brief` | From agent briefs (unknown until those exist) |
+| `me.reviewed`, `me.reviewed_since_push` | Whether you reviewed, and whether that review is on the current head |
+
+A predicate on data that hasn't loaded yet counts as unknown, and unknown never hides a PR. For example, `author:alice size>400 fix` keeps alice's PRs that match "fix", including ones whose size isn't known yet.
+
 ## Keybindings
 
 - `up` / `down`: move selection
 - `k` / `j`: move selection
 - `gg` / `G`: jump to first or last pull request
 - `ctrl-u` / `ctrl-d`: page up or down
-- `tab` / `shift-tab`: switch PR queue
+- `tab` / `shift-tab`: switch PR queue (outside a repo the cycle starts at sections; in a repo, at the repository view)
+- `[` / `]`: jump between sections (or repository groups)
+- `z` / `Z`: collapse or expand the current section / all sections
 - `ctrl-p` / `cmd-k`: open the command palette
 - `/`: filter
 - `enter`: expand details; normal PR actions still work while details are expanded

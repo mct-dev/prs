@@ -149,3 +149,12 @@ Read-only is a hard rule. The review must never post, approve, or push.
 ## Status
 
 In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, cache, commands, minimal brief block) → 4 brief UI.
+
+- **Phases 1 and 2 (sections and filters): implemented** on `feat/sections`.
+  - Code: `src/sections/` (config, compile, merge, load) and `src/filter/` (parse, evaluate).
+  - The sections view is the home view outside a git repo. `risk:` and `brief:` go through an injectable lookup, which returns unknown until phase 4.
+  - Differences from the spec above:
+    - Section headers are not selectable. `z` (current section), `Z` (all sections) or a click on the header collapses them, instead of Enter.
+    - `me.reviewed` and `me.reviewed_since_push` also work in the `/` filter.
+    - A `sections.yaml` error shows as a persistent row above the default sections, not as a toast.
+    - Free-text limits (256 chars, at most 5 AND/OR/NOT) are checked when the config is compiled. Author lists larger than the limit are split into several searches.
