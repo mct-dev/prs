@@ -16,7 +16,7 @@ import { selectedIssueAtom } from "../ui/issues/atoms.js"
 import { activeModalAtom } from "../ui/modals/atoms.js"
 import { submitReviewOptions } from "../ui/modals/shared.js"
 import { reviewPresetOptions } from "../ui/modals/ReviewPresetModal.js"
-import { initialCommandPaletteState, initialCommentModalState, initialOpenRepositoryModalState, Modal } from "../ui/modals/types.js"
+import { initialCommandPaletteState, initialCommentModalState, initialOpenRepositoryModalState, initialReviewPresetModalState, Modal } from "../ui/modals/types.js"
 import { noticeAtom } from "../ui/notice/atoms.js"
 import { currentReturnView, diffReturnViewAtom, restoreReturnView, runsReturnViewAtom } from "../ui/viewReturn.js"
 import { briefStatusFor } from "../ui/review/atoms.js"
@@ -676,6 +676,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 			yield* Atom.set(
 				activeModalAtom,
 				Modal.ReviewPreset({
+					...initialReviewPresetModalState,
 					presets,
 					selectedIndex: Math.max(
 						0,

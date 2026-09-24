@@ -60,6 +60,12 @@ const parsePreset = (id: string, raw: unknown, base: ReviewPreset | undefined): 
 	}
 }
 
+const fallbackDefault = (presets: Readonly<Record<string, ReviewPreset>>): string =>
+	presets[defaultReviewConfig.defaultPreset] ? defaultReviewConfig.defaultPreset : (Object.keys(presets).sort()[0] ?? defaultReviewConfig.defaultPreset)
+
+/** True for the presets that exist without any config (`claude`, `codex`). */
+export const isBuiltinPreset = (id: string): boolean => Object.hasOwn(defaultPresets, id)
+
 /**
  * Parse the `review` block of config.json. User presets merge over the built-in
  * `claude` and `codex` presets; invalid values fall back to defaults.
@@ -70,10 +76,17 @@ export const parseReviewConfig = (raw: unknown, agentCommandOverride: string | n
 	const presets: Record<string, ReviewPreset> = { ...defaultPresets }
 	if (isRecord(input.presets)) {
 		for (const [id, value] of Object.entries(input.presets)) {
+			// `null` removes a preset, built-ins included (the modal's delete).
+			if (value === null) {
+				delete presets[id]
+				continue
+			}
 			const preset = parsePreset(id, value, defaultPresets[id])
 			if (preset) presets[id] = preset
 		}
 	}
+	// Deleting every preset would leave `b` with nothing to run.
+	if (Object.keys(presets).length === 0) Object.assign(presets, defaultPresets)
 	const override = nonEmptyString(agentCommandOverride)
 	if (override) {
 		for (const [id, preset] of Object.entries(presets)) presets[id] = { ...preset, command: override }
@@ -82,7 +95,7 @@ export const parseReviewConfig = (raw: unknown, agentCommandOverride: string | n
 	const concurrency = positiveNumber(input.concurrency)
 	const timeoutMinutes = positiveNumber(input.timeoutMinutes)
 	return {
-		defaultPreset: requestedDefault && presets[requestedDefault] ? requestedDefault : defaultReviewConfig.defaultPreset,
+		defaultPreset: requestedDefault && presets[requestedDefault] ? requestedDefault : fallbackDefault(presets),
 		concurrency: concurrency ? Math.max(1, Math.floor(concurrency)) : DEFAULT_REVIEW_CONCURRENCY,
 		timeoutMs: (timeoutMinutes ?? DEFAULT_REVIEW_TIMEOUT_MINUTES) * 60_000,
 		presets,

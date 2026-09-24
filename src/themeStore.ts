@@ -146,3 +146,16 @@ export const saveStoredDiffWhitespaceMode = (diffWhitespaceMode: DiffWhitespaceM
 
 		await writeStoredConfig({ ...config, diffWhitespaceMode })
 	})
+
+/**
+ * Rewrites the `review` block of config.json through `update`, keeping every
+ * other key. Used by the review preset modal (edit, new, default, delete).
+ */
+export const updateStoredReviewConfig = (update: (review: unknown) => Record<string, unknown>): Effect.Effect<void, unknown> =>
+	Effect.tryPromise({
+		try: async () => {
+			const config = await readStoredConfig()
+			await writeStoredConfig({ ...config, review: update(config.review) })
+		},
+		catch: (error) => error,
+	})
