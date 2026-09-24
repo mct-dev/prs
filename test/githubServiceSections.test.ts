@@ -106,4 +106,28 @@ describe("GitHubService sections methods", () => {
 		)
 		expect(teams).toEqual(["my-org/backend"])
 	})
+
+	test("listViewerTeamsDetailed carries names and member counts, sharing one request", async () => {
+		const calls: string[][] = []
+		const response = [
+			[
+				{ slug: "backend", name: "Backend", members_count: 12, organization: { login: "my-org" } },
+				{ slug: "everyone", organization: { login: "my-org" } },
+			],
+		]
+		const layer = GitHubService.layerNoDeps.pipe(Layer.provide(fakeCommandRunner(() => response, calls)))
+		const result = await run(
+			Effect.gen(function* () {
+				const github = yield* GitHubService
+				return { detailed: yield* github.listViewerTeamsDetailed(), slugs: yield* github.listViewerTeams() }
+			}),
+			layer,
+		)
+		expect(result.detailed).toEqual([
+			{ slug: "my-org/backend", name: "Backend", members: 12 },
+			{ slug: "my-org/everyone", name: "everyone", members: null },
+		])
+		expect(result.slugs).toEqual(["my-org/backend", "my-org/everyone"])
+		expect(calls).toHaveLength(1)
+	})
 })

@@ -13,6 +13,7 @@ import type {
 } from "../domain.js"
 import type { ItemListInput } from "../item.js"
 import { mergeInfoFromPullRequest } from "../mergeActions.js"
+import type { ViewerTeam } from "../sections/teams.js"
 import { mockAuthor, mockBody, mockIssueTitle, mockLabels, mockPullRequestBranch, mockPullRequestTitle } from "./mockData.js"
 import { mockWorkflowRunDetails, mockWorkflowRuns } from "./mockRuns.js"
 import { GitHubService } from "./GitHubService.js"
@@ -166,6 +167,12 @@ const uniqueLabels = (items: readonly { readonly labels: readonly { readonly nam
 }
 
 const mockTeamMembers = Array.from({ length: 6 }, (_, index) => mockAuthor(index * 2 + 1))
+// mock-team is the strictly smallest, so the default {my_teams} picks it.
+const mockViewerTeams: readonly ViewerTeam[] = [
+	{ slug: "mock-org/mock-team", name: "Mock team", members: mockTeamMembers.length },
+	{ slug: "mock-org/platform", name: "Platform", members: 14 },
+	{ slug: "mock-org/engineering", name: "Engineering", members: 40 },
+]
 
 // Tiny interpreter for the qualifiers sections use, so mock mode shows
 // plausible sections. Positive `author:` terms OR together like on GitHub.
@@ -455,6 +462,7 @@ export const MockGitHubService = {
 				},
 				listTeamMembers: () => Effect.succeed(mockTeamMembers),
 				listViewerTeams: () => Effect.succeed(["mock-org/mock-team"]),
+				listViewerTeamsDetailed: () => Effect.succeed(mockViewerTeams),
 				listPullRequestPage: (input: ItemListInput<"pullRequest">) => {
 					const queueMode = queueModeForListMode(input.mode)
 					const filtered = filterByView(queueMode, input.repository, pullRequestSource(queueMode, input.repository), username, strictUserScope)

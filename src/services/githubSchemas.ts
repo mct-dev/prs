@@ -137,7 +137,16 @@ export const ViewerSchema = Schema.Struct({ login: Schema.String })
 
 // `gh api --paginate --slurp` wraps each REST page in an outer array.
 export const TeamMembersResponseSchema = Schema.Array(Schema.Array(Schema.Struct({ login: Schema.String })))
-export const ViewerTeamsResponseSchema = Schema.Array(Schema.Array(Schema.Struct({ slug: Schema.String, organization: Schema.Struct({ login: Schema.String }) })))
+export const ViewerTeamsResponseSchema = Schema.Array(
+	Schema.Array(
+		Schema.Struct({
+			slug: Schema.String,
+			name: Schema.optionalKey(Schema.String),
+			members_count: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+			organization: Schema.Struct({ login: Schema.String }),
+		}),
+	),
+)
 
 export const RepositoryMergeMethodsResponseSchema = Schema.Struct({
 	squashMergeAllowed: Schema.Boolean,

@@ -200,7 +200,8 @@ Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SE
 
 ```yaml
 vars:
-  # Optional. If unset, my_teams = every team from `gh api user/teams`.
+  # Optional. If unset, my_teams = your smallest team from `gh api user/teams`
+  # (ties included; every team if you have one, or GitHub hides counts).
   my_teams: [my-org/backend]
   bots: ["app/dependabot", "app/renovate", "app/github-actions"]
 

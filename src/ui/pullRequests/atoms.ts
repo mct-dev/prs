@@ -19,6 +19,7 @@ import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
 import type { SectionCursor } from "../../sections/cursor.js"
 import { assignSections, sectionLookup, sectionMembershipByUrl } from "../../sections/merge.js"
+import { defaultMyTeams } from "../../sections/teams.js"
 import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
 import { githubRuntime, homePullRequestView, pullRequestPageSize } from "../../services/runtime.js"
@@ -105,7 +106,7 @@ const loadSectionsView = Effect.gen(function* () {
 	yield* Atom.set(sectionsConfigErrorAtom, loaded.error)
 	const snapshot = yield* loadSections(loaded.config, {
 		viewer: github.getAuthenticatedUser(),
-		viewerTeams: github.listViewerTeams(),
+		viewerTeams: github.listViewerTeamsDetailed().pipe(Effect.map(defaultMyTeams)),
 		teamMembers: (org, team) => github.listTeamMembers(org, team),
 		search: (query, limit) => github.searchPullRequests(query, limit),
 		readCached: (viewer, key) => cacheService.readSectionSnapshot(viewer, key).pipe(Effect.map((load) => load?.data ?? null)),
