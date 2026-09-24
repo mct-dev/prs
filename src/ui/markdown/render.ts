@@ -14,6 +14,9 @@ export const MAX_NEST_DEPTH = 6
 // budgets a body renders as plain wrapped text instead.
 export const MARKDOWN_MAX_CHARS = 20_000
 const MAX_MARKERS_PER_PARAGRAPH = 400
+// Whole-body wall-clock budget for the inline pass, checked between
+// paragraphs, so many near-budget paragraphs cannot add up to a stall.
+const INLINE_TIME_BUDGET_MS = 60
 export const PLAIN_TEXT_NOTE = "(large comment, shown as plain text)"
 const BULLETS = ["•", "◦", "▪"] as const
 
@@ -24,6 +27,7 @@ interface RenderContext {
 	collapsedDetails: number
 	htmlDepth: number
 	quoteDepth: number
+	readonly deadline: number
 }
 
 interface InlineStyle {
@@ -289,7 +293,7 @@ const renderDetails = (chunk: Extract<BodyChunk, { kind: "details" }>, width: nu
 	const body = renderChunks(chunk.body, Math.max(1, width - 2), context, depth)
 	const open = context.detailsOpen ?? (chunk.open || body.length <= DETAILS_AUTO_OPEN_MAX_LINES)
 	const summary = inlineSpans(
-		lex(chunk.summary).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
+		lex(chunk.summary, context.deadline).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
 		{ role: "summary", bold: true },
 		context,
 	)
@@ -359,7 +363,7 @@ const renderBlocks = (tokens: readonly Token[], width: number, context: RenderCo
 const renderChunks = (chunks: readonly BodyChunk[], width: number, context: RenderContext, depth: number): MarkdownLine[] => {
 	const out: MarkdownLine[] = []
 	for (const chunk of chunks) {
-		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text), width, context, depth, true)
+		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text, context.deadline), width, context, depth, true)
 		if (lines.length === 0) continue
 		if (out.length > 0) out.push(blank)
 		out.push(...lines)
@@ -374,20 +378,24 @@ export const exceedsMarkdownBudget = (body: string) => body.length > MARKDOWN_MA
 
 class MarkdownBudgetError extends Error {}
 
-const INLINE_MARKERS = /[*_<[`~]/g
+// `(` counts too: runs of `[a](` / `![a](` are super-quadratic in marked.
+const INLINE_MARKERS = /[*_<[`~(]/g
 
 // marked.lexer, split in two: run the (linear) block pass, check every inline
 // source it queued against the marker budget, and only then run the
 // quadratic-prone inline pass. Measuring marked's own inline runs avoids
 // re-implementing CommonMark's paragraph rules, and fences or HTML blocks
 // (never inline-lexed) do not count.
-const lex = (source: string): Token[] => {
+const lex = (source: string, deadline: number): Token[] => {
 	const lexer = new Lexer({ gfm: true })
 	lexer.blockTokens(source.replace(/\r\n?/g, "\n"), lexer.tokens)
 	for (const entry of lexer.inlineQueue) {
 		if ((entry.src.match(INLINE_MARKERS)?.length ?? 0) > MAX_MARKERS_PER_PARAGRAPH) throw new MarkdownBudgetError()
 	}
-	for (const entry of lexer.inlineQueue) lexer.inlineTokens(entry.src, entry.tokens)
+	for (const entry of lexer.inlineQueue) {
+		if (performance.now() > deadline) throw new MarkdownBudgetError()
+		lexer.inlineTokens(entry.src, entry.tokens)
+	}
 	lexer.inlineQueue = []
 	return lexer.tokens
 }
@@ -417,7 +425,15 @@ const renderChunksOrPlain = (body: string, width: number, context: RenderContext
 export const renderMarkdownUncached = (rawBody: string, options: MarkdownOptions): MarkdownRender => {
 	const body = stripControls(rawBody)
 	const width = Math.max(4, Math.floor(options.width))
-	const context: RenderContext = { links: [], detailsOpen: options.detailsOpen, detailsCount: 0, collapsedDetails: 0, htmlDepth: 0, quoteDepth: 0 }
+	const context: RenderContext = {
+		links: [],
+		detailsOpen: options.detailsOpen,
+		detailsCount: 0,
+		collapsedDetails: 0,
+		htmlDepth: 0,
+		quoteDepth: 0,
+		deadline: performance.now() + INLINE_TIME_BUDGET_MS,
+	}
 	const lines =
 		body.trim().length === 0
 			? [{ spans: [{ text: "(empty comment)", role: "muted" as const }] }]

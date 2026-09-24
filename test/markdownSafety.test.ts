@@ -110,3 +110,31 @@ describe("markdown renderer: pathological input", () => {
 		expect(quoteLine.indexOf("deep")).toBeLessThanOrEqual(MAX_NEST_DEPTH * 2)
 	})
 })
+
+describe("markdown renderer: whole-body inline budget", () => {
+	const manyParagraphs = (unit: string, perParagraph: number) => {
+		const paragraph = unit.repeat(perParagraph)
+		let body = ""
+		while (body.length + paragraph.length + 2 < 20_000) body += `${paragraph}\n\n`
+		return body
+	}
+
+	for (const [unit, perParagraph] of [
+		["[a](", 399],
+		["![a](", 199],
+		["*a", 399],
+		["_a", 399],
+	] as const) {
+		test(`many near-budget ${JSON.stringify(unit)} paragraphs stay under 200ms`, () => {
+			const started = performance.now()
+			renderMarkdownUncached(manyParagraphs(unit, perParagraph), { width: 80 })
+			expect(performance.now() - started).toBeLessThan(200)
+		})
+	}
+
+	test("a long ordinary comment still renders as markdown", () => {
+		const paragraph = "Updates the **parser** so `run()` handles [the docs](https://example.com/docs) and _edge cases_ (see notes). ".repeat(4)
+		const render = renderMarkdownUncached(manyParagraphs(`${paragraph}\n\n`, 1), { width: 80 })
+		expect(render.lines.map(markdownPlainText).join("\n")).not.toContain(PLAIN_TEXT_NOTE)
+	})
+})
