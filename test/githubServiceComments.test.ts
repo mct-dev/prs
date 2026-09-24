@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
-import { CommandRunner, type CommandResult } from "../src/services/CommandRunner.ts"
+import { CommandError, CommandRunner, type CommandResult } from "../src/services/CommandRunner.ts"
 import { GitHubService } from "../src/services/GitHubService.ts"
 import { classifyGitHubRateLimit, isGitHubRateLimitError } from "../src/services/githubRateLimit.ts"
 
@@ -193,5 +193,66 @@ describe("GitHubService comment edit/delete", () => {
 		)
 
 		expect(operationCall(recorder).args).toEqual(["api", "--method", "DELETE", "repos/owner/repo/pulls/comments/7777"])
+	})
+})
+
+const detailPullRequest = {
+	...JSON.parse(repositoryPullRequestListResponse).data.repository.pullRequests.nodes[0],
+	body: "Details body",
+	additions: 3,
+	deletions: 1,
+	changedFiles: 2,
+	labels: { nodes: [{ name: "bug", color: "d73a4a" }] },
+	statusCheckRollup: null,
+}
+
+// The full detail query fails (as it can for tokens without `read:org`); the lite one succeeds.
+const reviewersFailingRunner = (recorder: RecordedCall[], failure: string) =>
+	Layer.succeed(
+		CommandRunner,
+		CommandRunner.of({
+			run: () => Effect.succeed({ stdout: "", stderr: "", exitCode: 0 } satisfies CommandResult),
+			runSchema: <S extends Schema.Top>(schema: S, command: string, args: readonly string[]) => {
+				if (args[1] === "graphql") recorder.push({ command, args: [...args] })
+				const query = args.find((arg) => arg.startsWith("query=")) ?? ""
+				if (args[1] !== "graphql") return Schema.decodeUnknownEffect(schema)({ login: "kit" }) as Effect.Effect<S["Type"], never, S["DecodingServices"]>
+				if (query.includes("reviewRequests")) {
+					return Effect.fail(new CommandError({ command, args: [...args], detail: failure, cause: failure })) as unknown as Effect.Effect<S["Type"], never, S["DecodingServices"]>
+				}
+				return Schema.decodeUnknownEffect(schema)({ data: { repository: { pullRequest: detailPullRequest } } }) as Effect.Effect<S["Type"], never, S["DecodingServices"]>
+			},
+		}),
+	)
+
+describe("GitHubService pull request details", () => {
+	test("still loads details when the reviewers part of the query fails", async () => {
+		const recorder: RecordedCall[] = []
+		const layer = GitHubService.layerNoDeps.pipe(
+			Layer.provide(reviewersFailingRunner(recorder, "GraphQL: Resource not accessible by integration (repository.pullRequest.reviewRequests)")),
+		)
+		const pullRequest = await runWith(
+			GitHubService.use((github) => github.getPullRequestDetails("owner/repo", 42)),
+			layer,
+		)
+
+		expect(pullRequest.body).toBe("Details body")
+		expect(pullRequest.labels.map((label) => label.name)).toEqual(["bug"])
+		expect(pullRequest.reviewers).toBeUndefined()
+		const queries = recorder.map((call) => call.args.find((arg) => arg.startsWith("query=")) ?? "")
+		expect(queries).toHaveLength(2)
+		expect(queries[0]).toContain("reviewRequests")
+		expect(queries[1]).not.toContain("reviewRequests")
+		expect(queries[1]).toContain("statusCheckRollup")
+	})
+
+	test("does not retry a rate-limited detail query", async () => {
+		const recorder: RecordedCall[] = []
+		const layer = GitHubService.layerNoDeps.pipe(Layer.provide(reviewersFailingRunner(recorder, "API rate limit exceeded for user")))
+		const result = await Effect.runPromise(
+			GitHubService.use((github) => github.getPullRequestDetails("owner/repo", 42)).pipe(Effect.provide(layer), Effect.result) as Effect.Effect<{ readonly _tag: string }>,
+		)
+
+		expect(result._tag).toBe("Failure")
+		expect(recorder).toHaveLength(1)
 	})
 })

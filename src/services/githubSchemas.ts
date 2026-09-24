@@ -378,16 +378,24 @@ const DETAIL_FIELDS_FRAGMENT = `${SUMMARY_FIELDS_FRAGMENT}
 		additions
 		deletions
 		changedFiles
-		labels(first: 20) { nodes { name color } }${STATUS_CHECK_FRAGMENT}${REVIEWERS_FRAGMENT}`
+		labels(first: 20) { nodes { name color } }${STATUS_CHECK_FRAGMENT}`
 
-export const pullRequestDetailQuery = `
+const detailQuery = (fields: string) => `
 query PullRequest($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {${DETAIL_FIELDS_FRAGMENT}
+    pullRequest(number: $number) {${fields}
     }
   }
 }
 `
+
+export const pullRequestDetailQuery = detailQuery(`${DETAIL_FIELDS_FRAGMENT}${REVIEWERS_FRAGMENT}`)
+
+/**
+ * The detail query without reviewers. Team reviewers need `read:org`, so tokens
+ * without it can fail the full query; the service retries with this one.
+ */
+export const pullRequestDetailQueryWithoutReviewers = detailQuery(DETAIL_FIELDS_FRAGMENT)
 
 export const pullRequestSummarySearchQuery = `
 query PullRequests($searchQuery: String!, $first: Int!, $after: String) {

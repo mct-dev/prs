@@ -47,6 +47,7 @@ import {
 	PullRequestAdminMergeResponseSchema,
 	PullRequestCommentSchema,
 	pullRequestDetailQuery,
+	pullRequestDetailQueryWithoutReviewers,
 	PullRequestDetailResponseSchema,
 	PullRequestFilesResponseSchema,
 	pullRequestSummarySearchQuery,
@@ -66,6 +67,7 @@ import {
 	WorkflowRunDetailsSchema,
 	WorkflowRunListSchema,
 } from "./githubSchemas.js"
+import { isGitHubRateLimitError } from "./githubRateLimit.js"
 export { isGitHubRateLimitError } from "./githubRateLimit.js"
 
 const repositoryParts = (repository: string) => {
@@ -298,18 +300,25 @@ export class GitHubService extends Context.Service<
 					return yield* new CommandError({ command: "gh", args: [], detail: `Invalid repository: ${repository}`, cause: repository })
 				}
 
-				const response = yield* command.runSchema(PullRequestDetailResponseSchema, "gh", [
-					"api",
-					"graphql",
-					"-f",
-					`query=${pullRequestDetailQuery}`,
-					"-F",
-					`owner=${repo.owner}`,
-					"-F",
-					`name=${repo.name}`,
-					"-F",
-					`number=${number}`,
-				])
+				const fetchDetail = (query: string) =>
+					command.runSchema(PullRequestDetailResponseSchema, "gh", [
+						"api",
+						"graphql",
+						"-f",
+						`query=${query}`,
+						"-F",
+						`owner=${repo.owner}`,
+						"-F",
+						`name=${repo.name}`,
+						"-F",
+						`number=${number}`,
+					])
+				// Reviewers are best-effort: if the full query fails (e.g. a token without
+				// `read:org` for team reviewers), retry once without them. `reviewers` then
+				// stays undefined and the details pane hides the row. Rate limits are not retried.
+				const response = yield* fetchDetail(pullRequestDetailQuery).pipe(
+					Effect.catch((error) => (isGitHubRateLimitError(error) ? Effect.fail(error) : fetchDetail(pullRequestDetailQueryWithoutReviewers))),
+				)
 				const pullRequest = response.data.repository?.pullRequest
 				if (!pullRequest) {
 					return yield* new CommandError({ command: "gh", args: [], detail: `Pull request not found: ${repository}#${number}`, cause: `${repository}#${number}` })
