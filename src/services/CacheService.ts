@@ -21,6 +21,7 @@ import { type IssueView, issueViewCacheKey } from "../issueViews.js"
 import { mergeCachedDetails } from "../pullRequestCache.js"
 import type { PullRequestLoad } from "../pullRequestLoad.js"
 import { type PullRequestView, viewCacheKey } from "../pullRequestViews.js"
+import type { AgentReviewRecord, AgentReviewStatus } from "../review/types.js"
 import { makeWorkspacePreferences, WorkspacePreferences, type ViewerId, type WorkspacePreferencesInput } from "../workspacePreferences.js"
 
 export interface PullRequestCacheKey {
@@ -434,7 +435,88 @@ const cacheMigrations = {
 		)`
 		yield* sql`CREATE INDEX IF NOT EXISTS issues_repository_number_idx ON issues (repository, number)`
 	}),
+	// Agent review runs (read-only risk briefs). The id is gapped on purpose so
+	// it cannot collide with migrations added in parallel branches.
+	"010_agent_reviews": Effect.gen(function* () {
+		const sql = yield* SqlClient.SqlClient
+		yield* sql`CREATE TABLE IF NOT EXISTS agent_reviews (
+			id TEXT PRIMARY KEY,
+			repository TEXT NOT NULL,
+			number INTEGER NOT NULL,
+			head_sha TEXT NOT NULL,
+			preset TEXT NOT NULL,
+			agent TEXT NOT NULL,
+			status TEXT NOT NULL,
+			mode TEXT,
+			brief_json TEXT,
+			error TEXT,
+			log_path TEXT,
+			cost_usd REAL,
+			started_at TEXT NOT NULL,
+			finished_at TEXT
+		)`
+		yield* sql`CREATE INDEX IF NOT EXISTS agent_reviews_repository_number_idx ON agent_reviews (repository, number, started_at)`
+	}),
 } satisfies Record<string, Effect.Effect<void, unknown, SqlClient.SqlClient>>
+
+interface AgentReviewRow {
+	readonly id: string
+	readonly repository: string
+	readonly number: number
+	readonly head_sha: string
+	readonly preset: string
+	readonly agent: string
+	readonly status: string
+	readonly mode: string | null
+	readonly brief_json: string | null
+	readonly error: string | null
+	readonly log_path: string | null
+	readonly cost_usd: number | null
+	readonly started_at: string
+	readonly finished_at: string | null
+}
+
+const agentReviewStatuses: readonly AgentReviewStatus[] = ["running", "done", "error", "cancelled"]
+
+const agentReviewToRow = (record: AgentReviewRecord): AgentReviewRow => ({
+	id: record.id,
+	repository: record.repository,
+	number: record.number,
+	head_sha: record.headSha,
+	preset: record.preset,
+	agent: record.agent,
+	status: record.status,
+	mode: record.mode,
+	brief_json: record.briefJson,
+	error: record.error,
+	log_path: record.logPath,
+	cost_usd: record.costUsd,
+	started_at: record.startedAt.toISOString(),
+	finished_at: record.finishedAt?.toISOString() ?? null,
+})
+
+const agentReviewFromRow = (row: AgentReviewRow): AgentReviewRecord | null => {
+	const startedAt = parseDate(row.started_at)
+	const status = agentReviewStatuses.find((value) => value === row.status)
+	const agent = row.agent === "claude" || row.agent === "codex" ? row.agent : null
+	if (!startedAt || !status || !agent) return null
+	return {
+		id: row.id,
+		repository: row.repository,
+		number: Number(row.number),
+		headSha: row.head_sha,
+		preset: row.preset,
+		agent,
+		status,
+		mode: row.mode === "worktree" || row.mode === "diff-only" ? row.mode : null,
+		briefJson: row.brief_json,
+		error: row.error,
+		logPath: row.log_path,
+		costUsd: row.cost_usd === null ? null : Number(row.cost_usd),
+		startedAt,
+		finishedAt: row.finished_at ? parseDate(row.finished_at) : null,
+	}
+}
 
 const pullRequestRow = (pullRequest: PullRequestItem, updatedAt = new Date().toISOString()) => ({
 	pr_key: pullRequestCacheKey(pullRequest),
@@ -807,6 +889,47 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 				updated_at = excluded.updated_at`.pipe(Effect.catch(() => Effect.void))
 	})
 
+	const writeAgentReview = Effect.fn("CacheService.writeAgentReview")(function* (record: AgentReviewRecord) {
+		yield* sql`INSERT INTO agent_reviews ${sql.insert({ ...agentReviewToRow(record) })}
+			ON CONFLICT(id) DO UPDATE SET
+				head_sha = excluded.head_sha,
+				status = excluded.status,
+				mode = excluded.mode,
+				brief_json = excluded.brief_json,
+				error = excluded.error,
+				log_path = excluded.log_path,
+				cost_usd = excluded.cost_usd,
+				finished_at = excluded.finished_at`.pipe(Effect.catch(() => Effect.void))
+	})
+
+	const readLatestAgentReview = (key: PullRequestCacheKey): Effect.Effect<AgentReviewRecord | null, CacheError> =>
+		Effect.gen(function* () {
+			const rows = yield* sql<AgentReviewRow>`SELECT * FROM agent_reviews
+				WHERE repository = ${key.repository} AND number = ${key.number}
+				ORDER BY started_at DESC LIMIT 1`
+			const row = rows[0]
+			return row ? agentReviewFromRow(row) : null
+		}).pipe(Effect.mapError((cause) => toCacheError("readLatestAgentReview", cause)))
+
+	const readLatestAgentReviews = (limit = 1000): Effect.Effect<readonly AgentReviewRecord[], CacheError> =>
+		Effect.gen(function* () {
+			const rows = yield* sql<AgentReviewRow>`SELECT a.* FROM agent_reviews a
+				WHERE a.started_at = (
+					SELECT MAX(b.started_at) FROM agent_reviews b WHERE b.repository = a.repository AND b.number = a.number
+				)
+				ORDER BY a.started_at DESC LIMIT ${limit}`
+			return rows.flatMap((row) => {
+				const record = agentReviewFromRow(row)
+				return record ? [record] : []
+			})
+		}).pipe(Effect.mapError((cause) => toCacheError("readLatestAgentReviews", cause)))
+
+	const markInterruptedAgentReviews = Effect.fn("CacheService.markInterruptedAgentReviews")(function* () {
+		const now = new Date().toISOString()
+		yield* sql`UPDATE agent_reviews SET status = 'error', error = 'Interrupted (prs exited while the review was running)', finished_at = ${now}
+			WHERE status = 'running'`.pipe(Effect.catch(() => Effect.void))
+	})
+
 	const prune = Effect.fn("CacheService.prune")(function* () {
 		yield* pruneSql(sql)
 	})
@@ -826,6 +949,10 @@ const liveCacheService = (sql: SqlClient.SqlClient) => {
 		writeRepositoryDetails,
 		readWorkspacePreferences,
 		writeWorkspacePreferences,
+		writeAgentReview,
+		readLatestAgentReview,
+		readLatestAgentReviews,
+		markInterruptedAgentReviews,
 		prune,
 	}
 }
@@ -847,6 +974,10 @@ export class CacheService extends Context.Service<
 		readonly writeRepositoryDetails: (details: RepositoryDetails) => Effect.Effect<void>
 		readonly readWorkspacePreferences: (viewer: ViewerId) => Effect.Effect<WorkspacePreferences | null, CacheError>
 		readonly writeWorkspacePreferences: (preferences: WorkspacePreferencesInput | WorkspacePreferences) => Effect.Effect<void, CacheError>
+		readonly writeAgentReview: (record: AgentReviewRecord) => Effect.Effect<void>
+		readonly readLatestAgentReview: (key: PullRequestCacheKey) => Effect.Effect<AgentReviewRecord | null, CacheError>
+		readonly readLatestAgentReviews: (limit?: number) => Effect.Effect<readonly AgentReviewRecord[], CacheError>
+		readonly markInterruptedAgentReviews: () => Effect.Effect<void>
 		readonly prune: () => Effect.Effect<void>
 	}
 >()("ghui/CacheService") {
@@ -867,6 +998,10 @@ export class CacheService extends Context.Service<
 			writeRepositoryDetails: () => Effect.void,
 			readWorkspacePreferences: () => Effect.succeed(null),
 			writeWorkspacePreferences: () => Effect.void,
+			writeAgentReview: () => Effect.void,
+			readLatestAgentReview: () => Effect.succeed(null),
+			readLatestAgentReviews: () => Effect.succeed([]),
+			markInterruptedAgentReviews: () => Effect.void,
 			prune: () => Effect.void,
 		}),
 	)
