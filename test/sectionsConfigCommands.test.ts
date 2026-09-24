@@ -118,9 +118,33 @@ describe("sections config commands", () => {
 	})
 
 	test("an unwritable path is reported, not thrown", async () => {
-		const frames = framesOf(await runIsolatedProbe(probe, env("/nonexistent/prs-test/sections.yaml")))
-		expect(frames.afterEdit).toContain("Can't create /nonexistent/prs-test/sections.yaml")
-		expect(frames.saved).toContain("Can't write /nonexistent/prs-test/sections.yaml: EROFS")
+		// A path under a regular file fails on every OS, even as root.
+		const dir = await mkdtemp(join(tmpdir(), "prs-sections-cmd-"))
+		dirs.push(dir)
+		await Bun.write(join(dir, "blocker"), "")
+		const path = join(dir, "blocker", "prs", "sections.yaml")
+		const frames = framesOf(await runIsolatedProbe(probe, env(path)))
+		expect(frames.afterEdit).toContain("Can't create")
+		expect(frames.saved).toContain("Can't write")
 		expect(frames.saved).toContain("My Teams")
+		expect(await Bun.file(join(dir, "blocker")).text()).toBe("")
+	})
+
+	test("editor argv prefers $VISUAL, then $EDITOR, then vi", async () => {
+		const source = `
+			const { editorArgv } = await import("./src/services/EditorOpener.ts")
+			console.log(JSON.stringify([
+				editorArgv({ VISUAL: "code --wait", EDITOR: "nano" }, "/f.yaml"),
+				editorArgv({ VISUAL: "  ", EDITOR: "nano" }, "/f.yaml"),
+				editorArgv({}, "/f.yaml"),
+			]))
+			process.exit(0)
+		`
+		const stdout = await runIsolatedProbe(source, {})
+		expect(JSON.parse(stdout.trim().split("\n").at(-1)!)).toEqual([
+			["code", "--wait", "/f.yaml"],
+			["nano", "/f.yaml"],
+			["vi", "/f.yaml"],
+		])
 	})
 })
