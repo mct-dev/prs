@@ -157,7 +157,7 @@ In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, 
   - The details brief block's hint rows mention `b`, `B` and `v`, and its row count stays fixed.
   - Deferred:
     - Cancel has no list key (it is in the palette, and `x` in the brief view), because `x` in the list already closes the PR.
-    - There is no live tail of the agent log; `o` pages it as it is.
+    - There is no live tail of the agent log; `L` pages it as it is.
     - Mock mode (`GHUI_MOCK_PR_COUNT`) seeds no briefs, so the brief UI there shows only the idle state until a real review runs.
     - A focus area whose file is not in the loaded diff shows a notice and does not jump.
 

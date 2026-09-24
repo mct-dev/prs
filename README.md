@@ -149,7 +149,8 @@ duration, reviewed head, stale state, log path). In the brief view:
 
 - `up` / `down` (`k` / `j`): select a focus area; the view scrolls past the ends
 - `enter`: open the diff at the focused file, on the nearest changed line
-- `o`: open the run log in `$PAGER` (or `less`), or show its path if that fails
+- `L`: open the run log in `$PAGER` (or `less`), or show its path if that fails
+- `o`: open the pull request in the browser
 - `x`: cancel a running review; `b` / `B`: run again
 - `ctrl-u` / `ctrl-d`, `gg` / `G`: page, or jump to the top or bottom
 - `esc`: go back to where you opened it from

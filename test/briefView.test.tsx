@@ -129,6 +129,7 @@ describe("brief view", () => {
 		expect(running).toContain("⠋ running")
 		expect(running).toContain("Agent review running · 2m elapsed")
 		expect(running).toContain("cancel the review")
+		expect(running).toMatch(/L +open the log/)
 		expect(running).toContain("/tmp/prs-reviews/run-1.log")
 
 		const failed = await renderPane(reviewEntryFromRecord(record({ status: "error", briefJson: null, error: "agent exited with code 1" })))

@@ -101,6 +101,7 @@ export const useBriefView = ({
 		toBoundary,
 		openFocus: () => runCommandById("brief.open-focus"),
 		openLog: () => runCommandById("brief.open-log"),
+		openInBrowser: () => runCommandById("pull.open-browser"),
 		cancel: () => runCommandById("pull.agent-review-cancel"),
 		runReview: () => runCommandById("pull.agent-review"),
 		runReviewWithPreset: () => runCommandById("pull.agent-review-preset"),

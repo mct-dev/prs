@@ -2,7 +2,8 @@ import { context } from "@ghui/keymap"
 import { countedVerticalBindings } from "./helpers.ts"
 
 // The full brief view: ↑↓ walks focus areas (or scrolls when there are none),
-// `enter` opens the diff at the focused file/line, `o` pages the agent log.
+// `enter` opens the diff at the focused file/line, `L` pages the agent log and
+// `o` opens the PR in the browser, as it does everywhere else.
 
 export interface BriefViewCtx {
 	readonly halfPage: number
@@ -12,6 +13,7 @@ export interface BriefViewCtx {
 	readonly toBoundary: (boundary: "first" | "last") => void
 	readonly openFocus: () => void
 	readonly openLog: () => void
+	readonly openInBrowser: () => void
 	readonly cancel: () => void
 	readonly runReview: () => void
 	readonly runReviewWithPreset: () => void
@@ -34,7 +36,8 @@ export const briefViewKeymap = Brief(
 	{ id: "brief.first", title: "Top", keys: ["g g"], run: (s) => s.toBoundary("first") },
 	{ id: "brief.last", title: "Bottom", keys: ["shift+g"], run: (s) => s.toBoundary("last") },
 
-	{ id: "brief.open-log", title: "Open agent log", keys: ["o"], run: (s) => s.openLog() },
+	{ id: "brief.open-log", title: "Open agent log", keys: ["shift+l"], run: (s) => s.openLog() },
+	{ id: "brief.open-browser", title: "Open in browser", keys: ["o"], run: (s) => s.openInBrowser() },
 	{ id: "brief.cancel", title: "Cancel agent review", keys: ["x"], run: (s) => s.cancel() },
 	{ id: "brief.run", title: "Run agent review", keys: ["b"], run: (s) => s.runReview() },
 	{ id: "brief.run-preset", title: "Run agent review with preset", keys: ["shift+b"], run: (s) => s.runReviewWithPreset() },

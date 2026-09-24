@@ -107,7 +107,7 @@ const buildRows = (status: BriefStatus, entry: ReviewEntry | null, headRefOid: s
 				...(entry ? [field("Preset", `${entry.record.preset} · ${entry.record.agent}`, width), ...logRows(entry.record.logPath, width)] : []),
 				blank,
 				row(text("x".padEnd(LABEL_WIDTH), colors.accent), text("cancel the review")),
-				row(text("o".padEnd(LABEL_WIDTH), colors.accent), text("open the log")),
+				row(text("L".padEnd(LABEL_WIDTH), colors.accent), text("open the log")),
 			]
 		case "error":
 			return [
@@ -116,7 +116,7 @@ const buildRows = (status: BriefStatus, entry: ReviewEntry | null, headRefOid: s
 				blank,
 				...(entry ? runRows(entry, status, headRefOid, width, now) : []),
 				blank,
-				row(text("b".padEnd(LABEL_WIDTH), colors.accent), text("retry · o open the log")),
+				row(text("b".padEnd(LABEL_WIDTH), colors.accent), text("retry · L open the log")),
 			]
 		case "done": {
 			const brief = status.brief

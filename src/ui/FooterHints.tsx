@@ -94,7 +94,8 @@ const briefViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "esc", label: "back" },
 	{ key: "↑↓", label: "focus" },
 	{ key: "enter", label: "diff" },
-	{ key: "o", label: "log" },
+	{ key: "L", label: "log" },
+	{ key: "o", label: "browser" },
 	{ key: "x", label: "cancel", when: ctx.briefRunning },
 	{ key: "b/B", label: "review", when: !ctx.briefRunning },
 ]
