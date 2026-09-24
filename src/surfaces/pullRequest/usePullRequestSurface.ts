@@ -231,6 +231,7 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 							title: group.title,
 							status: group.status,
 							error: group.error,
+							note: group.note,
 							collapsed: group.collapsed,
 							count: group.pullRequests.length,
 							focused: group.id === focusedSectionId,

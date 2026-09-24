@@ -71,6 +71,14 @@ describe("parseWhereExpression", () => {
 		expect(() => parseWhereExpression("or repo:web")).toThrow(FilterParseError)
 		expect(() => parseWhereExpression("repo:web)")).toThrow(FilterParseError)
 	})
+
+	test("unknown fields are errors in where: but free text in /", () => {
+		expect(() => parseWhereExpression("me.reviewd")).toThrow('Unknown field "me.reviewd"')
+		expect(() => parseWhereExpression("author:bob and foo:bar")).toThrow('Unknown field "foo"')
+		expect(() => parseWhereExpression("size>")).toThrow(FilterParseError)
+		expect(parseWhereExpression("WIP")).toEqual({ _tag: "Text", text: "WIP" })
+		expect(parseFilterQuery("me.reviewd foo:bar").text).toBe("me.reviewd foo:bar")
+	})
 })
 
 describe("evaluatePredicate", () => {

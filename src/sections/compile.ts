@@ -3,16 +3,20 @@ import { DEFAULT_SECTION_LIMIT, MAX_SECTION_LIMIT, type SectionConfig, type Sect
 
 // Pure compilation of `sections.yaml` into GitHub search strings.
 //
-// - Every query gets `is:pr is:open archived:false`.
+// - Every query gets `is:pr is:open archived:false sort:updated-desc` (the
+//   sort is skipped when the section's query brings its own `sort:`), so a
+//   section's `limit` keeps the most recently updated PRs.
 // - `{me}` is the viewer login; list vars expand to repeated qualifiers (the
 //   leading `-` repeats too, so `-author:{bots}` negates every bot).
 // - `exclude:` is negated onto EVERY `any:` branch.
 // - `team-authors:org/team` expands to `author:` terms from the member list,
-//   chunked across several queries when the list is long.
+//   chunked across several queries when the list is long. A branch whose
+//   `team-authors:{var}` list is empty is skipped rather than failing.
 // - GitHub silently returns nothing for over-limit queries, so the limits
 //   (256 chars of free text, 5 AND/OR/NOT operators) are checked here.
 
 export const BASE_QUALIFIERS = ["is:pr", "is:open", "archived:false"] as const
+export const DEFAULT_SORT_QUALIFIER = "sort:updated-desc"
 export const MAX_FREE_TEXT_LENGTH = 256
 export const MAX_BOOLEAN_OPERATORS = 5
 export const AUTHOR_CHUNK_SIZE = 40
@@ -36,11 +40,20 @@ export interface CompiledSection {
 	readonly exclusive: boolean
 	/** Compile-time problem; the section renders with this error and no fetch. */
 	readonly error: string | null
+	/** Non-error hint shown dimmed under the header (e.g. no teams to expand). */
+	readonly note: string | null
 	/** Stable cache key: id plus a hash of the compiled queries. */
 	readonly key: string
 }
 
 class CompileError extends Error {}
+
+/** A `team-authors:{var}` branch whose list var is empty; the branch is dropped. */
+class EmptyTeamList extends Error {
+	constructor(readonly variable: string) {
+		super(`variable {${variable}} is empty`)
+	}
+}
 
 const varPattern = /\{([a-z_][a-z0-9_]*)\}/gi
 
@@ -57,6 +70,7 @@ export const expandToken = (token: string, vars: Readonly<Record<string, Section
 		const values = typeof value === "string" ? [value] : value
 		if (values.length === 0) {
 			if (token.startsWith("-")) return []
+			if (teamAuthorsPattern.test(token)) throw new EmptyTeamList(name)
 			throw new CompileError(`variable {${name}} is empty`)
 		}
 		results = results.flatMap((current) => values.map((item) => current.replaceAll(`{${name}}`, item)))
@@ -143,7 +157,8 @@ const compileBranch = (branch: string, exclude: readonly string[], context: Comp
 			teamAuthors.push(...members)
 		}
 	}
-	const base = uniqueCaseInsensitive([...BASE_QUALIFIERS, ...plain])
+	const sort = plain.some((token) => /^sort:/i.test(token)) ? [] : [DEFAULT_SORT_QUALIFIER]
+	const base = uniqueCaseInsensitive([...BASE_QUALIFIERS, ...sort, ...plain])
 	const authors = [...new Map(teamAuthors.map((author) => [author.toLowerCase(), author])).values()]
 	const queries = authors.length === 0 ? [base.join(" ")] : chunk(authors, AUTHOR_CHUNK_SIZE).map((group) => [...base, ...group.map((author) => `author:${author}`)].join(" "))
 	for (const query of queries) {
@@ -177,15 +192,26 @@ export const compileSection = (section: SectionConfig, context: CompileContext):
 		collapsed: section.collapsed ?? false,
 		exclusive: section.exclusive ?? true,
 	} as const
-	const failed = (message: string): CompiledSection => ({ ...common, queries: [], where: null, error: message, key: `${section.id}:error` })
+	const failed = (message: string): CompiledSection => ({ ...common, queries: [], where: null, error: message, note: null, key: `${section.id}:error` })
 	try {
 		const vars = { ...context.vars, me: context.viewer }
 		const scoped = { ...context, vars }
 		const where = section.where === undefined || section.where.trim().length === 0 ? null : parseWhereExpression(section.where)
 		const exclude = section.exclude === undefined ? [] : expandQuery(section.exclude, vars).map(negate)
 		const branches = section.any && section.any.length > 0 ? section.any.map((branch) => (section.query ? `${section.query} ${branch}` : branch)) : [section.query ?? ""]
-		const queries = [...new Set(branches.flatMap((branch) => compileBranch(branch, exclude, scoped)))]
-		return { ...common, queries, where, error: null, key: `${section.id}:${hashString(queries.join("\n"))}` }
+		const emptyTeamVars = new Set<string>()
+		const compileOrSkip = (branch: string) => {
+			try {
+				return compileBranch(branch, exclude, scoped)
+			} catch (error) {
+				if (!(error instanceof EmptyTeamList)) throw error
+				emptyTeamVars.add(error.variable)
+				return []
+			}
+		}
+		const queries = [...new Set(branches.flatMap(compileOrSkip))]
+		const note = queries.length === 0 && emptyTeamVars.size > 0 ? `no teams found; set ${[...emptyTeamVars].map((name) => `vars.${name}`).join(", ")}` : null
+		return { ...common, queries, where, error: null, note, key: `${section.id}:${hashString(queries.join("\n"))}` }
 	} catch (error) {
 		return failed(error instanceof Error ? error.message : String(error))
 	}

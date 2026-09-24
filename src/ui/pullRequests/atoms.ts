@@ -13,6 +13,7 @@ export { nextLoadAfterPage } from "../../pullRequestCache.js"
 import type { PullRequestLoad } from "../../pullRequestLoad.js"
 import { activePullRequestViews, type PullRequestView, SECTIONS_VIEW_CACHE_KEY, sectionsView, viewCacheKey, viewRepository, viewToListInput } from "../../pullRequestViews.js"
 import { filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
+import { parseFilterQuery } from "../../filter/parse.js"
 import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
 import type { SectionCursor } from "../../sections/cursor.js"
@@ -389,6 +390,7 @@ export interface SectionGroupView {
 	readonly title: string
 	readonly status: SectionStatus
 	readonly error: string | null
+	readonly note: string | null
 	readonly collapsed: boolean
 	readonly pullRequests: readonly PullRequestItem[]
 }
@@ -402,13 +404,19 @@ export const sectionGroupsAtom = Atom.make((get): readonly SectionGroupView[] =>
 	const byUrl = new Map(pullRequests.map((pullRequest) => [pullRequest.url, pullRequest]))
 	const membership = new Map(states.map((state) => [state.id, state.urls]))
 	const groups = assignSections(states, membership, byUrl, filterContext(get))
+	// With `/` free text, rank PRs inside each section by match score (the
+	// order of filteredPullRequestsAtom) instead of the section's sort.
+	const ranked = parseFilterQuery(get(effectiveFilterQueryAtom)).text.trim().length > 0
+	const rank = ranked ? new Map(pullRequests.map((pullRequest, index) => [pullRequest.url, index])) : null
+	const byRank = (items: readonly PullRequestItem[]) => (rank ? [...items].sort((left, right) => rank.get(left.url)! - rank.get(right.url)!) : items)
 	return states.map((state, index) => ({
 		id: state.id,
 		title: state.title,
 		status: state.status,
 		error: state.error,
+		note: state.note,
 		collapsed: collapsed[state.id] ?? state.collapsed,
-		pullRequests: groups[index]!.pullRequests,
+		pullRequests: byRank(groups[index]!.pullRequests),
 	}))
 })
 

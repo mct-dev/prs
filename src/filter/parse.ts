@@ -2,8 +2,10 @@
 //
 // A token is `field:value`, `-field:value`, or `field<op>value` with op one of
 // `>`, `<`, `>=`, `<=`. Only known field names form predicates; everything
-// else (including unknown `foo:bar` and bare `-word`) is free text. `where:`
-// rules additionally allow `and`, `or`, `not`, and parentheses.
+// else (including unknown `foo:bar` and bare `-word`) is free text in `/`.
+// `where:` rules additionally allow `and`, `or`, `not`, and parentheses, and
+// are strict: an unknown field (`me.reviewd`, `foo:bar`) is a parse error so a
+// typo in `sections.yaml` is reported instead of silently matching as text.
 
 export const filterFields = [
 	"author",
@@ -52,6 +54,9 @@ const isFilterField = (value: string): value is FilterField => (filterFields as 
 const booleanFields: ReadonlySet<FilterField> = new Set(["me.reviewed", "me.reviewed_since_push"])
 
 const predicatePattern = /^(-?)([a-z][a-z._]*)(>=|<=|:|>|<)(.+)$/i
+
+// A token that names a field: `field<op>...` or a bare dotted `me.something`.
+const fieldLikePattern = /^(-?)([a-z][a-z_]*(?:\.[a-z_]+)+|[a-z][a-z._]*(?=>=|<=|:|>|<))/i
 
 const stripQuotes = (value: string) => (value.length >= 2 && value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value)
 
@@ -158,7 +163,14 @@ export const parseWhereExpression = (input: string): FilterExpr => {
 		}
 		if (token === ")" || word === "and" || word === "or") throw new FilterParseError(`Unexpected "${token}" in: ${input}`)
 		position++
-		return parseFilterToken(token) ?? { _tag: "Text", text: token }
+		const predicate = parseFilterToken(token)
+		if (predicate) return predicate
+		const field = fieldLikePattern.exec(token)?.[2]
+		if (field !== undefined) {
+			const known = isFilterField(field.toLowerCase())
+			throw new FilterParseError(known ? `Invalid value in "${token}" in: ${input}` : `Unknown field "${field}" in: ${input}`)
+		}
+		return { _tag: "Text", text: token }
 	}
 
 	if (tokens.length === 0) return { _tag: "And", items: [] }

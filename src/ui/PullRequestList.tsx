@@ -14,6 +14,8 @@ export interface PullRequestSectionHeader {
 	readonly title: string
 	readonly status: "loading" | "ready" | "error"
 	readonly error: string | null
+	/** Dimmed, non-error hint (e.g. no teams to expand). */
+	readonly note?: string | null
 	readonly collapsed: boolean
 	readonly count: number
 	/** Keyboard cursor rests on this header (collapsed or empty section). */
@@ -116,6 +118,7 @@ const buildSectionRows = (
 	for (const section of sections.headers) {
 		rows.push({ _tag: "section", section })
 		if (section.error) rows.push({ _tag: "message", text: `  ! ${section.error}`, color: colors.error })
+		else if (section.note && !section.collapsed) rows.push({ _tag: "message", text: `  ${section.note}`, color: colors.muted })
 		if (section.collapsed) continue
 		const pullRequests = bySection.get(section.id) ?? []
 		const numberWidth = groupNumberWidth(pullRequests)

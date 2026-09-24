@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import type { PullRequestItem } from "../src/domain.js"
 import type { SectionsConfig } from "../src/sections/config.js"
-import { loadSections, type SectionLoadAdapter, type SectionsSnapshot } from "../src/sections/load.js"
+import { AUTHOR_CHUNK_SIZE } from "../src/sections/compile.js"
+import { loadSections, SECTION_CONCURRENCY, type SectionLoadAdapter, type SectionsSnapshot } from "../src/sections/load.js"
 import { makePullRequest } from "./fixtures/pullRequest.js"
 
 const pr = (number: number, author = "bob") => makePullRequest({ number, author, updatedAt: new Date(Date.UTC(2026, 2, number)) })
@@ -12,6 +13,9 @@ interface FakeOptions {
 	readonly failing?: readonly string[]
 	readonly cached?: Record<string, readonly PullRequestItem[]>
 	readonly teams?: Record<string, readonly string[]>
+	readonly viewerTeams?: readonly string[]
+	/** Delay every search so concurrent requests overlap. */
+	readonly searchDelayMs?: number
 }
 
 const fakeAdapter = (options: FakeOptions = {}) => {
@@ -19,11 +23,13 @@ const fakeAdapter = (options: FakeOptions = {}) => {
 	const published: SectionsSnapshot[] = []
 	const written: string[] = []
 	let viewerTeamCalls = 0
+	let inFlight = 0
+	let maxInFlight = 0
 	const adapter: SectionLoadAdapter<never, never> = {
 		viewer: Effect.succeed("alice"),
 		viewerTeams: Effect.sync(() => {
 			viewerTeamCalls++
-			return ["my-org/backend"]
+			return options.viewerTeams ?? ["my-org/backend"]
 		}),
 		teamMembers: (org, team) => {
 			const members = options.teams?.[`${org}/${team}`]
@@ -34,13 +40,22 @@ const fakeAdapter = (options: FakeOptions = {}) => {
 				searches.push(query)
 				const key = Object.keys(options.results ?? {}).find((fragment) => query.includes(fragment))
 				if (options.failing?.some((fragment) => query.includes(fragment))) return Effect.fail(new Error("rate limited"))
-				return Effect.succeed(key ? options.results![key]! : [])
+				const result = Effect.succeed(key ? options.results![key]! : [])
+				if (options.searchDelayMs === undefined) return result
+				return Effect.acquireUseRelease(
+					Effect.sync(() => {
+						inFlight++
+						maxInFlight = Math.max(maxInFlight, inFlight)
+					}),
+					() => Effect.andThen(Effect.sleep(options.searchDelayMs!), result),
+					() => Effect.sync(() => void inFlight--),
+				)
 			}),
 		readCached: (_viewer, key) => Effect.succeed(Object.entries(options.cached ?? {}).find(([id]) => key.startsWith(`${id}:`))?.[1] ?? null),
 		writeCached: (_viewer, key) => Effect.sync(() => void written.push(key)),
 		publish: (snapshot) => Effect.sync(() => void published.push(snapshot)),
 	}
-	return { adapter, searches, published, written, viewerTeamCalls: () => viewerTeamCalls }
+	return { adapter, searches, published, written, viewerTeamCalls: () => viewerTeamCalls, maxInFlight: () => maxInFlight }
 }
 
 const config = (sections: SectionsConfig["sections"], vars?: SectionsConfig["vars"]): SectionsConfig => ({ ...(vars ? { vars } : {}), sections })
@@ -81,7 +96,7 @@ describe("loadSections", () => {
 		const fake = fakeAdapter({ teams: { "my-org/backend": ["bob", "carol"] }, results: { "author:bob": [pr(4)] } })
 		const snapshot = await Effect.runPromise(loadSections(config([{ id: "team", title: "Team", query: "team-authors:{my_teams}" }]), fake.adapter))
 		expect(fake.viewerTeamCalls()).toBe(1)
-		expect(fake.searches).toEqual(["is:pr is:open archived:false author:bob author:carol"])
+		expect(fake.searches).toEqual(["is:pr is:open archived:false sort:updated-desc author:bob author:carol"])
 		expect(snapshot.sections[0]!.status).toBe("ready")
 	})
 
@@ -93,5 +108,21 @@ describe("loadSections", () => {
 		expect(fake.viewerTeamCalls()).toBe(0)
 		expect(fake.searches).toHaveLength(0)
 		expect(snapshot.sections[0]).toMatchObject({ status: "error", error: "team my-org/unknown could not be loaded" })
+	})
+
+	test("a viewer with no teams gets an empty team section with a note, not an error", async () => {
+		const fake = fakeAdapter({ viewerTeams: [] })
+		const snapshot = await Effect.runPromise(loadSections(config([{ id: "team", title: "Team", query: "team-authors:{my_teams}" }]), fake.adapter))
+		expect(fake.searches).toHaveLength(0)
+		expect(snapshot.sections[0]).toMatchObject({ status: "ready", error: null, note: "no teams found; set vars.my_teams", urls: [] })
+	})
+
+	test("at most SECTION_CONCURRENCY searches run at once across all sections and chunks", async () => {
+		const members = Array.from({ length: AUTHOR_CHUNK_SIZE * 3 }, (_, index) => `dev${index}`)
+		const sections = Array.from({ length: 6 }, (_, index) => ({ id: `s${index}`, title: `S${index}`, query: `team-authors:my-org/big label:l${index}` }))
+		const fake = fakeAdapter({ teams: { "my-org/big": members }, searchDelayMs: 5 })
+		await Effect.runPromise(loadSections(config(sections), fake.adapter))
+		expect(fake.searches).toHaveLength(18)
+		expect(fake.maxInFlight()).toBe(SECTION_CONCURRENCY)
 	})
 })

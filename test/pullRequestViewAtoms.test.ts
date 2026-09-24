@@ -293,4 +293,42 @@ describe("item view atoms", () => {
 			filtered: 0,
 		})
 	})
+
+	test("sections rank PRs by free-text score inside each section", async () => {
+		const probe = `
+			import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"
+			import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"
+			import { filteredPullRequestsAtom, pullRequestsAtom, sectionGroupsAtom } from "./src/ui/pullRequests/atoms.ts"
+			import { filterQueryAtom } from "./src/ui/filter/atoms.ts"
+			const registry = AtomRegistry.make()
+			const unmount = registry.mount(sectionGroupsAtom)
+			await new Promise((resolve, reject) => {
+				const settle = (result) => {
+					if (result.waiting) return false
+					if (AsyncResult.isFailure(result)) reject(result.cause)
+					else if (AsyncResult.isSuccess(result)) resolve(result.value)
+					else return false
+					return true
+				}
+				if (settle(registry.get(pullRequestsAtom))) return
+				let unsubscribe = () => {}
+				unsubscribe = registry.subscribe(pullRequestsAtom, (result) => {
+					if (settle(result)) unsubscribe()
+				})
+			})
+			registry.set(filterQueryAtom, "fix")
+			const ranked = registry.get(filteredPullRequestsAtom).map((pr) => pr.url)
+			const groups = registry.get(sectionGroupsAtom).map((group) => group.pullRequests.map((pr) => pr.url))
+			const inScoreOrder = groups.every((urls) => urls.every((url, index) => index === 0 || ranked.indexOf(urls[index - 1]) < ranked.indexOf(url)))
+			console.log(JSON.stringify({ inScoreOrder, grouped: groups.flat().length > 1 }))
+			unmount()
+		`
+		const stdout = await runIsolatedProbe(probe, {
+			GHUI_MOCK_PR_COUNT: "40",
+			GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off",
+			PRS_DEFAULT_VIEW: "sections",
+			PRS_SECTIONS_PATH: "/nonexistent/prs-test/sections.yaml",
+		})
+		expect(JSON.parse(stdout)).toEqual({ inScoreOrder: true, grouped: true })
+	})
 })

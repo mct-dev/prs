@@ -28,44 +28,55 @@ describe("compileSection", () => {
 	test("adds base qualifiers and substitutes {me}", () => {
 		const section = compile({ query: "review-requested:{me} -author:{me} draft:false" })
 		expect(section.error).toBeNull()
-		expect(section.queries).toEqual(["is:pr is:open archived:false review-requested:alice -author:alice draft:false"])
+		expect(section.queries).toEqual(["is:pr is:open archived:false sort:updated-desc review-requested:alice -author:alice draft:false"])
 	})
 
 	test("does not duplicate base qualifiers already in the query", () => {
-		expect(compile({ query: "is:open author:{me}" }).queries).toEqual(["is:pr is:open archived:false author:alice"])
+		expect(compile({ query: "is:open author:{me}" }).queries).toEqual(["is:pr is:open archived:false sort:updated-desc author:alice"])
 	})
 
 	test("exclude is negated onto every any: branch", () => {
 		const section = compile({ any: ["review-requested:{me}", "assignee:{me}"], exclude: "author:{bots}" })
 		expect(section.queries).toEqual([
-			"is:pr is:open archived:false review-requested:alice -author:app/dependabot -author:app/renovate",
-			"is:pr is:open archived:false assignee:alice -author:app/dependabot -author:app/renovate",
+			"is:pr is:open archived:false sort:updated-desc review-requested:alice -author:app/dependabot -author:app/renovate",
+			"is:pr is:open archived:false sort:updated-desc assignee:alice -author:app/dependabot -author:app/renovate",
 		])
 	})
 
 	test("query with any: is shared by every branch", () => {
 		expect(compile({ query: "repo:my-org/web", any: ["author:{me}", "assignee:{me}"] }).queries).toEqual([
-			"is:pr is:open archived:false repo:my-org/web author:alice",
-			"is:pr is:open archived:false repo:my-org/web assignee:alice",
+			"is:pr is:open archived:false sort:updated-desc repo:my-org/web author:alice",
+			"is:pr is:open archived:false sort:updated-desc repo:my-org/web assignee:alice",
 		])
 	})
 
 	test("team-authors expands to an author list", () => {
-		expect(compile({ query: "team-authors:{my_teams} -author:{me}" }).queries).toEqual(["is:pr is:open archived:false -author:alice author:bob author:carol"])
-		expect(compile({ query: "-team-authors:my-org/backend" }).queries).toEqual(["is:pr is:open archived:false -author:bob -author:carol"])
+		expect(compile({ query: "team-authors:{my_teams} -author:{me}" }).queries).toEqual(["is:pr is:open archived:false sort:updated-desc -author:alice author:bob author:carol"])
+		expect(compile({ query: "-team-authors:my-org/backend" }).queries).toEqual(["is:pr is:open archived:false sort:updated-desc -author:bob -author:carol"])
 	})
 
 	test("large author lists are chunked across queries", () => {
 		const members = Array.from({ length: AUTHOR_CHUNK_SIZE * 2 + 5 }, (_, index) => `user${index}`)
 		const section = compile({ query: "team-authors:my-org/big draft:false" }, { teamMembers: new Map([["my-org/big", members]]) })
 		expect(section.queries).toHaveLength(3)
-		for (const query of section.queries) expect(query.startsWith("is:pr is:open archived:false draft:false author:")).toBe(true)
+		for (const query of section.queries) expect(query.startsWith("is:pr is:open archived:false sort:updated-desc draft:false author:")).toBe(true)
 		expect(section.queries.flatMap((query) => query.match(/author:\S+/g) ?? [])).toHaveLength(members.length)
 	})
 
-	test("missing or empty teams are section errors", () => {
+	test("missing teams are section errors", () => {
 		expect(compile({ query: "team-authors:my-org/unknown" }).error).toBe("team my-org/unknown could not be loaded")
-		expect(compile({ query: "team-authors:{my_teams}" }, { vars: { my_teams: [] } }).error).toBe("variable {my_teams} is empty")
+		expect(compile({ query: "author:{empty}" }, { vars: { empty: [] } }).error).toBe("variable {empty} is empty")
+	})
+
+	test("an empty team list skips its branch silently", () => {
+		const alone = compile({ query: "team-authors:{my_teams}" }, { vars: { my_teams: [] } })
+		expect(alone).toMatchObject({ error: null, queries: [], note: "no teams found; set vars.my_teams" })
+		const mixed = compile({ any: ["team-authors:{my_teams}", "author:{me}"] }, { vars: { my_teams: [] } })
+		expect(mixed).toMatchObject({ error: null, note: null, queries: ["is:pr is:open archived:false sort:updated-desc author:alice"] })
+	})
+
+	test("a query's own sort: replaces the default sort", () => {
+		expect(compile({ query: "author:{me} sort:created-asc" }).queries).toEqual(["is:pr is:open archived:false author:alice sort:created-asc"])
 	})
 
 	test("search limits mark the section errored", () => {
@@ -136,5 +147,12 @@ sections:
 		expect(parseSectionsConfig("sections:\n  - id: a\n    title: A\n")).toEqual({ error: 'sections.yaml: section "a" needs a query or any:' })
 		expect(parseSectionsConfig("sections:\n  - {id: a, title: A, query: x}\n  - {id: a, title: B, query: y}\n")).toEqual({ error: 'sections.yaml: duplicate section id "a"' })
 		expect(parseSectionsConfig("sections: []")).toEqual({ error: "sections.yaml: sections.yaml defines no sections" })
+		expect(parseSectionsConfig("sections:\n  - {id: a, title: A, query: x, where: me.reviewd}\n")).toEqual({
+			error: 'sections.yaml: section "a" where: Unknown field "me.reviewd" in: me.reviewd',
+		})
+		expect(parseSectionsConfig("sections:\n  - {id: a, title: A, query: x, where: 'foo:bar or author:bob'}\n")).toMatchObject({
+			error: expect.stringContaining('Unknown field "foo"'),
+		})
+		expect(parseSectionsConfig("sections:\n  - {id: a, title: A, query: x, where: 'me.reviewed and WIP'}\n")).toHaveProperty("config")
 	})
 })

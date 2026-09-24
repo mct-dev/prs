@@ -1,6 +1,7 @@
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { Schema } from "effect"
+import { parseWhereExpression } from "../filter/parse.js"
 
 export const sectionSorts = ["updated", "-updated", "size", "-size", "age", "-age", "-risk", "risk"] as const
 export type SectionSort = (typeof sectionSorts)[number]
@@ -94,6 +95,13 @@ const validateSections = (config: SectionsConfig): string | null => {
 		if (seen.has(section.id)) return `duplicate section id "${section.id}"`
 		seen.add(section.id)
 		if (section.query === undefined && (section.any === undefined || section.any.length === 0)) return `section "${section.id}" needs a query or any:`
+		if (section.where !== undefined && section.where.trim().length > 0) {
+			try {
+				parseWhereExpression(section.where)
+			} catch (error) {
+				return `section "${section.id}" where: ${formatError(error)}`
+			}
+		}
 	}
 	return null
 }
