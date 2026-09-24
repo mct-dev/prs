@@ -66,10 +66,14 @@ export const useBriefDiffTarget = ({
 		}
 		const stale = selectedHeadSha !== null && selectedHeadSha.length > 0 && pending.headSha !== selectedHeadSha
 		if (stale) flashNotice(STALE_BRIEF_NOTICE)
-		const anchorIndex = stale ? -1 : (resolved.anchorIndex ?? diffCommentAnchors.findIndex((anchor) => anchor.fileIndex === resolved.fileIndex))
+		// A stale brief's line numbers may point anywhere, so it only picks the
+		// file: the cursor starts at the file's first anchor and the view stays
+		// at the top of the file.
+		const firstInFile = diffCommentAnchors.findIndex((anchor) => anchor.fileIndex === resolved.fileIndex)
+		const anchorIndex = stale ? firstInFile : (resolved.anchorIndex ?? firstInFile)
 		setDiffFileIndex(resolved.fileIndex)
 		if (anchorIndex >= 0) setDiffCommentAnchorIndex(anchorIndex)
-		const line = anchorIndex >= 0 ? diffCommentAnchors[anchorIndex]!.renderLine : null
+		const line = !stale && anchorIndex >= 0 ? diffCommentAnchors[anchorIndex]!.renderLine : null
 		let attempts = 0
 		const settle = () => {
 			attempts++

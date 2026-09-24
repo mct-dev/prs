@@ -96,11 +96,11 @@ describe("brief focus → diff", () => {
 		expect(calls.fileTop).toEqual([1, 1, 1, 1, 1, 1])
 	})
 
-	test("a brief for an older head jumps to the file, skips the line and says so", async () => {
+	test("a brief for an older head jumps to the top of the file on its first anchor and says so", async () => {
 		const { calls, remaining } = await mount({ url: URL_A, headSha: "old-head", file: "src/cache.ts", lines: "40-58" }, URL_A)
 		expect(remaining).toBeNull()
 		expect(calls.fileIndex).toEqual([1])
-		expect(calls.anchorIndex).toEqual([])
+		expect(calls.anchorIndex).toEqual([1])
 		expect(calls.visible).toEqual([])
 		expect(calls.fileTop).toEqual([1, 1, 1, 1, 1, 1])
 		expect(calls.notices).toEqual(["brief is stale; line numbers may be off"])
