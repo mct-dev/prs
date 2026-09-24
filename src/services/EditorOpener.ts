@@ -25,7 +25,24 @@ const fallbackCommand = (repoPath: string | null): string | null => {
 
 const editorError = (detail: string, cause?: unknown) => new CommandError({ command: "editor", args: [], detail, cause: cause ?? detail })
 
-const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`
+/**
+ * argv for paging `path`: `$PAGER` split on whitespace (so `less -R` works),
+ * or `less` when it is unset or blank. It is spawned directly, never through a
+ * shell, so neither the pager value nor the path is interpreted.
+ */
+export const pagerArgv = (pager: string | undefined, path: string): readonly string[] => {
+	const words = (pager ?? "")
+		.trim()
+		.split(/\s+/)
+		.filter((word) => word.length > 0)
+	return [...(words.length > 0 ? words : ["less"]), path]
+}
+
+const runArgv = async (cmd: readonly string[]): Promise<void> => {
+	const proc = Bun.spawn({ cmd: [...cmd], stdin: "inherit", stdout: "inherit", stderr: "inherit" })
+	const exitCode = await proc.exited
+	if (exitCode !== 0) throw new Error(`${cmd[0]} exited with code ${exitCode}`)
+}
 
 const runInShell = async (command: string): Promise<void> => {
 	const shell = process.env.SHELL || "/bin/sh"
@@ -72,9 +89,9 @@ export class EditorOpener extends Context.Service<
 			})
 
 			const pageFile = Effect.fn("EditorOpener.pageFile")(function* (path: string) {
-				const pager = (process.env.PAGER || "less").trim()
+				const argv = pagerArgv(process.env.PAGER, path)
 				yield* Effect.tryPromise({
-					try: () => withTuiSuspended(() => runInShell(`${pager} ${shellQuote(path)}`)),
+					try: () => withTuiSuspended(() => runArgv(argv)),
 					catch: (cause) => editorError(cause instanceof Error ? cause.message : "Failed to launch pager", cause),
 				})
 			})
