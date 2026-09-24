@@ -110,6 +110,18 @@ export interface FilterModalState {
 	readonly selectedIndex: number
 }
 
+export interface ReviewPresetOption {
+	readonly id: string
+	/** One-line summary: agent, skill, model, budget. */
+	readonly detail: string
+	readonly isDefault: boolean
+}
+
+export interface ReviewPresetModalState {
+	readonly presets: readonly ReviewPresetOption[]
+	readonly selectedIndex: number
+}
+
 export interface SubmitReviewModalState {
 	readonly repository: string | null
 	readonly number: number | null
@@ -216,6 +228,11 @@ export const initialFilterModalState: FilterModalState = {
 	selectedIndex: 0,
 }
 
+export const initialReviewPresetModalState: ReviewPresetModalState = {
+	presets: [],
+	selectedIndex: 0,
+}
+
 export const initialSubmitReviewModalState: SubmitReviewModalState = {
 	repository: null,
 	number: null,
@@ -259,6 +276,7 @@ export type Modal = Data.TaggedEnum<{
 	CommentThread: CommentThreadModalState
 	ChangedFiles: ChangedFilesModalState
 	Filter: FilterModalState
+	ReviewPreset: ReviewPresetModalState
 	SubmitReview: SubmitReviewModalState
 	Theme: ThemeModalState
 	CommandPalette: CommandPaletteState
@@ -281,6 +299,7 @@ export const modalInitialStates = {
 	CommentThread: initialCommentThreadModalState,
 	ChangedFiles: initialChangedFilesModalState,
 	Filter: initialFilterModalState,
+	ReviewPreset: initialReviewPresetModalState,
 	SubmitReview: initialSubmitReviewModalState,
 	Theme: initialThemeModalState,
 	CommandPalette: initialCommandPaletteState,

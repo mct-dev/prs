@@ -13,6 +13,7 @@ import {
 	initialModal,
 	initialOpenRepositoryModalState,
 	initialPullRequestStateModalState,
+	initialReviewPresetModalState,
 	initialSubmitReviewModalState,
 	initialThemeModalState,
 	type ChangedFilesModalState,
@@ -25,6 +26,7 @@ import {
 	type MergeModalState,
 	type OpenRepositoryModalState,
 	type PullRequestStateModalState,
+	type ReviewPresetModalState,
 	type SubmitReviewModalState,
 	type ThemeModalState,
 } from "../ui/modals/types.js"
@@ -41,6 +43,7 @@ export interface ModalStack {
 	readonly commentThreadModalActive: boolean
 	readonly changedFilesModalActive: boolean
 	readonly filterModalActive: boolean
+	readonly reviewPresetModalActive: boolean
 	readonly submitReviewModalActive: boolean
 	readonly themeModalActive: boolean
 	readonly commandPaletteActive: boolean
@@ -53,6 +56,7 @@ export interface ModalStack {
 	readonly deleteCommentModal: DeleteCommentModalState
 	readonly changedFilesModal: ChangedFilesModalState
 	readonly filterModal: FilterModalState
+	readonly reviewPresetModal: ReviewPresetModalState
 	readonly submitReviewModal: SubmitReviewModalState
 	readonly themeModal: ThemeModalState
 	readonly commandPalette: CommandPaletteState
@@ -65,6 +69,7 @@ export interface ModalStack {
 	readonly setCommentThreadModal: ReturnType<typeof makeModalSetter<"CommentThread">>
 	readonly setChangedFilesModal: ReturnType<typeof makeModalSetter<"ChangedFiles">>
 	readonly setFilterModal: ReturnType<typeof makeModalSetter<"Filter">>
+	readonly setReviewPresetModal: ReturnType<typeof makeModalSetter<"ReviewPreset">>
 	readonly setSubmitReviewModal: ReturnType<typeof makeModalSetter<"SubmitReview">>
 	readonly setThemeModal: ReturnType<typeof makeModalSetter<"Theme">>
 	readonly setCommandPalette: ReturnType<typeof makeModalSetter<"CommandPalette">>
@@ -104,6 +109,7 @@ export const useModalStack = (): ModalStack => {
 	const commentThreadModalActive = Modal.$is("CommentThread")(activeModal)
 	const changedFilesModalActive = Modal.$is("ChangedFiles")(activeModal)
 	const filterModalActive = Modal.$is("Filter")(activeModal)
+	const reviewPresetModalActive = Modal.$is("ReviewPreset")(activeModal)
 	const submitReviewModalActive = Modal.$is("SubmitReview")(activeModal)
 	const themeModalActive = Modal.$is("Theme")(activeModal)
 	const commandPaletteActive = Modal.$is("CommandPalette")(activeModal)
@@ -120,6 +126,7 @@ export const useModalStack = (): ModalStack => {
 		commentThreadModalActive,
 		changedFilesModalActive,
 		filterModalActive,
+		reviewPresetModalActive,
 		submitReviewModalActive,
 		themeModalActive,
 		commandPaletteActive,
@@ -132,6 +139,7 @@ export const useModalStack = (): ModalStack => {
 		deleteCommentModal: deleteCommentModalActive ? activeModal : initialDeleteCommentModalState,
 		changedFilesModal: changedFilesModalActive ? activeModal : initialChangedFilesModalState,
 		filterModal: filterModalActive ? activeModal : initialFilterModalState,
+		reviewPresetModal: reviewPresetModalActive ? activeModal : initialReviewPresetModalState,
 		submitReviewModal: submitReviewModalActive ? activeModal : initialSubmitReviewModalState,
 		themeModal: themeModalActive ? activeModal : initialThemeModalState,
 		commandPalette: commandPaletteActive ? activeModal : initialCommandPaletteState,
@@ -144,6 +152,7 @@ export const useModalStack = (): ModalStack => {
 		setCommentThreadModal: makeModalSetter(setActiveModal, "CommentThread"),
 		setChangedFilesModal: makeModalSetter(setActiveModal, "ChangedFiles"),
 		setFilterModal: makeModalSetter(setActiveModal, "Filter"),
+		setReviewPresetModal: makeModalSetter(setActiveModal, "ReviewPreset"),
 		setSubmitReviewModal: makeModalSetter(setActiveModal, "SubmitReview"),
 		setThemeModal: makeModalSetter(setActiveModal, "Theme"),
 		setCommandPalette: makeModalSetter(setActiveModal, "CommandPalette"),

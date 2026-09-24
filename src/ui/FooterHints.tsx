@@ -84,6 +84,7 @@ const detailFullViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "↑↓", label: "scroll" },
 	{ key: "r", label: ctx.hasError ? "retry" : "refresh" },
 	{ key: "d", label: "diff", when: ctx.canOpenDiff },
+	{ key: "b/B", label: "agent review", when: ctx.canOpenDiff },
 ]
 
 const commentsViewHints = (ctx: HintsContext): readonly HintItem[] => [
@@ -135,6 +136,7 @@ const defaultHints = (ctx: HintsContext): readonly HintItem[] => {
 		{ key: "enter", label: "details", when: ctx.canOpenDetails },
 		{ key: "c", label: "comments", when: ctx.canOpenComments },
 		{ key: "d", label: "diff", when: ctx.canOpenDiff },
+		{ key: "b", label: "review", when: ctx.canOpenDiff },
 		{ key: "ctrl-p", label: "commands" },
 	]
 }

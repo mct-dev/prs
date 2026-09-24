@@ -26,6 +26,7 @@ export interface UseAppKeymapInput {
 	readonly commentThreadModalActive: boolean
 	readonly changedFilesModalActive: boolean
 	readonly filterModalActive: boolean
+	readonly reviewPresetModalActive: boolean
 	readonly submitReviewModalActive: boolean
 	readonly labelModalActive: boolean
 	readonly themeModalActive: boolean
@@ -65,6 +66,7 @@ export interface UseAppKeymapInput {
 	readonly moveChangedFileSelection: (delta: -1 | 1) => void
 	readonly applySelectedFilter: () => void
 	readonly moveFilterSelection: (delta: -1 | 1) => void
+	readonly moveReviewPresetSelection: (delta: -1 | 1) => void
 	readonly setSubmitReviewModal: (next: SubmitReviewModalState | ((prev: SubmitReviewModalState) => SubmitReviewModalState)) => void
 	readonly confirmSubmitReview: () => void
 	readonly editSubmitReview: (transform: (value: CommentEditorValue) => CommentEditorValue) => void
@@ -183,6 +185,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				commentThreadModalActive: i.commentThreadModalActive,
 				changedFilesModalActive: i.changedFilesModalActive,
 				filterModalActive: i.filterModalActive,
+				reviewPresetModalActive: i.reviewPresetModalActive,
 				submitReviewModalActive: i.submitReviewModalActive,
 				labelModalActive: i.labelModalActive,
 				themeModalActive: i.themeModalActive,
@@ -226,6 +229,11 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				moveChangedFileSelection: i.moveChangedFileSelection,
 			},
 			filterModal: { closeActiveModal: i.closeActiveModal, applySelected: i.applySelectedFilter, moveSelection: i.moveFilterSelection },
+			reviewPresetModal: {
+				closeModal: i.closeActiveModal,
+				runSelected: () => i.runCommandById("pull.agent-review-preset-run"),
+				moveSelection: i.moveReviewPresetSelection,
+			},
 			submitReviewModal: {
 				submitReviewModal: i.submitReviewModal,
 				closeActiveModal: i.closeActiveModal,

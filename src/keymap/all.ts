@@ -15,6 +15,7 @@ import { listNavKeymap, type ListNavCtx } from "./listNav.ts"
 import { mergeModalKeymap, type MergeModalCtx } from "./mergeModal.ts"
 import { openRepositoryModalKeymap, type OpenRepositoryModalCtx } from "./openRepositoryModal.ts"
 import { pullRequestStateModalKeymap, type PullRequestStateModalCtx } from "./pullRequestStateModal.ts"
+import { reviewPresetModalKeymap, type ReviewPresetModalCtx } from "./reviewPresetModal.ts"
 import { runsViewKeymap, type RunsViewCtx } from "./runsView.ts"
 import { submitReviewModalKeymap, type SubmitReviewModalCtx } from "./submitReviewModal.ts"
 import { themeModalKeymap, type ThemeModalCtx } from "./themeModal.ts"
@@ -27,6 +28,7 @@ export interface AppCtx {
 	readonly commentThreadModalActive: boolean
 	readonly changedFilesModalActive: boolean
 	readonly filterModalActive: boolean
+	readonly reviewPresetModalActive: boolean
 	readonly submitReviewModalActive: boolean
 	readonly labelModalActive: boolean
 	readonly themeModalActive: boolean
@@ -51,6 +53,7 @@ export interface AppCtx {
 	readonly commentThreadModal: CommentThreadModalCtx
 	readonly changedFilesModal: ChangedFilesModalCtx
 	readonly filterModal: FilterModalCtx
+	readonly reviewPresetModal: ReviewPresetModalCtx
 	readonly submitReviewModal: SubmitReviewModalCtx
 	readonly labelModal: LabelModalCtx
 	readonly themeModal: ThemeModalCtx
@@ -79,6 +82,7 @@ const modalActive = (a: AppCtx): boolean =>
 	a.commentThreadModalActive ||
 	a.changedFilesModalActive ||
 	a.filterModalActive ||
+	a.reviewPresetModalActive ||
 	a.submitReviewModalActive ||
 	a.labelModalActive ||
 	a.themeModalActive ||
@@ -116,6 +120,7 @@ export const appKeymap = App(
 	commentThreadModalKeymap.scope((a) => a.commentThreadModalActive && a.commentThreadModal),
 	changedFilesModalKeymap.scope((a) => a.changedFilesModalActive && a.changedFilesModal),
 	filterModalKeymap.scope((a) => a.filterModalActive && a.filterModal),
+	reviewPresetModalKeymap.scope((a) => a.reviewPresetModalActive && a.reviewPresetModal),
 	submitReviewModalKeymap.scope((a) => a.submitReviewModalActive && a.submitReviewModal),
 	labelModalKeymap.scope((a) => a.labelModalActive && a.labelModal),
 	themeModalKeymap.scope((a) => a.themeModalActive && a.themeModal),

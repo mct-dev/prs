@@ -15,10 +15,11 @@ import { filterDraftAtom, filterModeAtom, filterQueryAtom } from "../ui/filter/a
 import { selectedIssueAtom } from "../ui/issues/atoms.js"
 import { activeModalAtom } from "../ui/modals/atoms.js"
 import { submitReviewOptions } from "../ui/modals/shared.js"
+import { reviewPresetOptions } from "../ui/modals/ReviewPresetModal.js"
 import { initialCommandPaletteState, initialCommentModalState, initialOpenRepositoryModalState, Modal } from "../ui/modals/types.js"
 import { noticeAtom } from "../ui/notice/atoms.js"
 import { briefStatusFor } from "../ui/review/atoms.js"
-import type { PullRequestUserQueueMode } from "../domain.js"
+import type { PullRequestItem, PullRequestUserQueueMode } from "../domain.js"
 import { pullRequestQueueModes } from "../domain.js"
 import { issueMetadataText, pullRequestMetadataText } from "../ui/pullRequests.js"
 import { labelCacheAtom, selectedPullRequestAtom } from "../ui/pullRequests/atoms.js"
@@ -144,6 +145,26 @@ const agentReviewCancelReasonAtom = Atom.make((get): string | null => {
 	if (!pr) return "Select a pull request first."
 	return get(briefStatusFor(pr))._tag === "running" ? null : "No agent review is running."
 })
+
+/**
+ * Start a read-only agent review for `pr`, unless one is already running for
+ * it. The runner only dedupes identical (head, preset) runs, so a different
+ * preset would otherwise start a second concurrent agent on the same PR.
+ */
+const startAgentReviewEffect = (pr: PullRequestItem, presetId: string | null) =>
+	Effect.gen(function* () {
+		const status = yield* Atom.get(briefStatusFor(pr))
+		if (status._tag === "running") {
+			yield* Atom.set(noticeAtom, `Agent review already running for #${pr.number}`)
+			return
+		}
+		yield* AgentRunner.use((runner) => runner.startReview(pr, presetId)).pipe(
+			Effect.flatMap(() => Atom.set(noticeAtom, presetId ? `Agent review (${presetId}) started for #${pr.number}` : `Agent review started for #${pr.number}`)),
+			Effect.catch(flashErrorEffect),
+		)
+	})
+
+const reviewPresetModalActiveAtom = Atom.make((get) => Modal.$is("ReviewPreset")(get(activeModalAtom)))
 
 export const globalCommands: readonly CommandDefinition[] = [
 	defineCommand({
@@ -533,14 +554,55 @@ export const globalCommands: readonly CommandDefinition[] = [
 		scope: "Pull request",
 		subtitle: selectedPullRequestLabelAtom,
 		keywords: ["agent", "ai", "claude", "codex", "brief", "risk", "review"],
+		shortcut: "b",
 		disabledReason: noPullRequestReasonAtom,
 		run: Effect.gen(function* () {
 			const pr = yield* Atom.get(selectedPullRequestAtom)
 			if (!pr) return
-			yield* AgentRunner.use((runner) => runner.startReview(pr)).pipe(
-				Effect.flatMap(() => Atom.set(noticeAtom, `Agent review started for #${pr.number}`)),
-				Effect.catch(flashErrorEffect),
+			yield* startAgentReviewEffect(pr, null)
+		}),
+	}),
+	defineCommand({
+		id: "pull.agent-review-preset",
+		title: "Run agent review with preset…",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		shortcut: "B",
+		keywords: ["agent", "ai", "claude", "codex", "brief", "risk", "review", "preset", "picker"],
+		disabledReason: noPullRequestReasonAtom,
+		run: Effect.gen(function* () {
+			const pr = yield* Atom.get(selectedPullRequestAtom)
+			if (!pr) return
+			const config = yield* AgentRunner.use((runner) => runner.config)
+			const presets = reviewPresetOptions(config)
+			yield* Atom.set(
+				activeModalAtom,
+				Modal.ReviewPreset({
+					presets,
+					selectedIndex: Math.max(
+						0,
+						presets.findIndex((preset) => preset.isDefault),
+					),
+				}),
 			)
+		}),
+	}),
+	defineCommand({
+		id: "pull.agent-review-preset-run",
+		title: "Run selected review preset",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		keywords: ["agent", "preset"],
+		when: reviewPresetModalActiveAtom,
+		disabledReason: noPullRequestReasonAtom,
+		run: Effect.gen(function* () {
+			const modal = yield* Atom.get(activeModalAtom)
+			if (!Modal.$is("ReviewPreset")(modal)) return
+			const preset = modal.presets[modal.selectedIndex]
+			yield* Atom.set(activeModalAtom, Modal.None())
+			const pr = yield* Atom.get(selectedPullRequestAtom)
+			if (!pr || !preset) return
+			yield* startAgentReviewEffect(pr, preset.id)
 		}),
 	}),
 	defineCommand({

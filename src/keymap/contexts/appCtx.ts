@@ -6,6 +6,7 @@ import { buildCommentsViewCtx, type BuildCommentsViewCtxInput } from "./comments
 import { buildCommentThreadModalCtx, type BuildCommentThreadModalCtxInput } from "./commentThreadModalCtx.ts"
 import { buildDetailViewCtx, type BuildDetailViewCtxInput } from "./detailViewCtx.ts"
 import { buildDiffViewCtx, type BuildDiffViewCtxInput } from "./diffViewCtx.ts"
+import type { ReviewPresetModalCtx } from "../reviewPresetModal.ts"
 import type { RunsViewCtx } from "../runsView.ts"
 import { buildFilterModeCtx, type BuildFilterModeCtxInput } from "./filterModeCtx.ts"
 import { buildListNavCtx, type BuildListNavCtxInput } from "./listNavCtx.ts"
@@ -53,6 +54,7 @@ export interface BuildAppCtxFlags {
 	readonly commentThreadModalActive: boolean
 	readonly changedFilesModalActive: boolean
 	readonly filterModalActive: boolean
+	readonly reviewPresetModalActive: boolean
 	readonly submitReviewModalActive: boolean
 	readonly labelModalActive: boolean
 	readonly themeModalActive: boolean
@@ -76,6 +78,7 @@ export interface BuildAppCtxInput {
 	readonly commentThreadModal: BuildCommentThreadModalCtxInput
 	readonly changedFilesModal: BuildChangedFilesModalCtxInput
 	readonly filterModal: BuildFilterModalCtxInput
+	readonly reviewPresetModal: ReviewPresetModalCtx
 	readonly submitReviewModal: BuildSubmitReviewModalCtxInput
 	readonly labelModal: BuildLabelModalCtxInput
 	readonly themeModal: BuildThemeModalCtxInput
@@ -105,6 +108,7 @@ export const buildAppCtx = (input: BuildAppCtxInput): AppCtx => ({
 		applySelected: input.filterModal.applySelected,
 		moveSelection: input.filterModal.moveSelection,
 	},
+	reviewPresetModal: input.reviewPresetModal,
 	submitReviewModal: buildSubmitReviewModalCtx(input.submitReviewModal),
 	labelModal: {
 		closeModal: input.labelModal.closeActiveModal,

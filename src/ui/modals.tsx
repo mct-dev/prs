@@ -12,6 +12,7 @@ export { LabelModal } from "./modals/LabelModal.js"
 export { MergeModal } from "./modals/MergeModal.js"
 export { OpenRepositoryModal } from "./modals/OpenRepositoryModal.js"
 export { PullRequestStateModal } from "./modals/PullRequestStateModal.js"
+export { ReviewPresetModal, reviewPresetOptions } from "./modals/ReviewPresetModal.js"
 export { SubmitReviewModal } from "./modals/SubmitReviewModal.js"
 export { ThemeModal } from "./modals/ThemeModal.js"
 
@@ -34,6 +35,8 @@ export type {
 	ModalTag,
 	OpenRepositoryModalState,
 	PullRequestStateModalState,
+	ReviewPresetModalState,
+	ReviewPresetOption,
 	SubmitReviewModalState,
 	ThemeModalState,
 } from "./modals/types.js"

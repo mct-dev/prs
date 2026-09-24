@@ -137,6 +137,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		commentThreadModalActive,
 		changedFilesModalActive,
 		filterModalActive,
+		reviewPresetModalActive,
 		submitReviewModalActive,
 		themeModalActive,
 		commandPaletteActive,
@@ -161,6 +162,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		setCommentThreadModal,
 		setChangedFilesModal,
 		setFilterModal,
+		setReviewPresetModal,
 		setSubmitReviewModal,
 		setThemeModal,
 		setCommandPalette,
@@ -469,6 +471,11 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		if (!selectedRepositoryItem) return
 		switchViewTo({ _tag: "Repository", repository: selectedRepositoryItem.repository })
 	}
+	const moveReviewPresetSelection = (delta: -1 | 1) =>
+		setReviewPresetModal((current) => ({
+			...current,
+			selectedIndex: current.presets.length === 0 ? 0 : (((current.selectedIndex + delta) % current.presets.length) + current.presets.length) % current.presets.length,
+		}))
 	const { openFilterModal, moveFilterSelection, applySelectedFilter } = useFilterModal({
 		activeWorkspaceSurface,
 		activeView,
@@ -976,6 +983,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		commentThreadModalActive,
 		changedFilesModalActive,
 		filterModalActive,
+		reviewPresetModalActive,
 		submitReviewModalActive,
 		labelModalActive,
 		themeModalActive,
@@ -1010,6 +1018,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		moveChangedFileSelection,
 		applySelectedFilter,
 		moveFilterSelection,
+		moveReviewPresetSelection,
 		setSubmitReviewModal,
 		confirmSubmitReview,
 		editSubmitReview,

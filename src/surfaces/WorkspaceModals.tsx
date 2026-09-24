@@ -13,6 +13,7 @@ import {
 	MergeModal,
 	OpenRepositoryModal,
 	PullRequestStateModal,
+	ReviewPresetModal,
 	SubmitReviewModal,
 	ThemeModal,
 } from "../ui/modals.js"
@@ -81,6 +82,7 @@ export const WorkspaceModals = (props: WorkspaceModalsProps) =>
 				<ChangedFilesModal state={state} results={props.changedFileResults} totalCount={props.readyDiffFileCount} {...layoutToProps(props.layouts.ChangedFiles)} />
 			),
 		Filter: (state) => <FilterModal state={state} {...layoutToProps(props.layouts.Filter)} />,
+		ReviewPreset: (state) => <ReviewPresetModal state={state} {...layoutToProps(props.layouts.ReviewPreset)} />,
 		SubmitReview: (state) => <SubmitReviewModal state={state} {...layoutToProps(props.layouts.SubmitReview)} />,
 		Theme: (state) => <ThemeModal state={state} {...layoutToProps(props.layouts.Theme)} />,
 		OpenRepository: (state) => <OpenRepositoryModal state={state} {...layoutToProps(props.layouts.OpenRepository)} />,
