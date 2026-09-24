@@ -35,7 +35,7 @@ export const TeamsModal = ({
 			headerRight={{ text: state.loading ? "" : `${state.chosen.length} chosen`, pending: state.loading }}
 			subtitle={
 				<TextLine>
-					<span fg={colors.muted}>{fitCell("Used for {my_teams} in sections; saved to sections.yaml.", rowWidth)}</span>
+					<span fg={colors.muted}>{fitCell("Sets {my_teams} in sections.yaml.", rowWidth)}</span>
 				</TextLine>
 			}
 			footer={
