@@ -54,14 +54,14 @@ const done: BriefStatus = {
 	headSha: "old",
 }
 
-const renderHeader = async (brief: BriefStatus | null, width = 60) => {
-	const height = getDetailHeaderHeight(pullRequest, width, true, [], "idle", brief)
+const renderHeader = async (brief: BriefStatus | null, width = 60, showChecks = true) => {
+	const height = getDetailHeaderHeight(pullRequest, width, showChecks, [], "idle", brief)
 	const setup = await createTestRenderer({ width, height: height + 2 })
 	const root = createRoot(setup.renderer)
 	act(() => {
 		root.render(
 			<box flexDirection="column" width={width}>
-				<DetailHeader pullRequest={pullRequest} contentWidth={width - 2} paneWidth={width} loadingIndicator="" showChecks brief={brief} />
+				<DetailHeader pullRequest={pullRequest} contentWidth={width - 2} paneWidth={width} loadingIndicator="" showChecks={showChecks} brief={brief} />
 			</box>,
 		)
 	})
@@ -76,11 +76,13 @@ const dividerRows = (lines: readonly string[]) => lines.flatMap((line, index) =>
 
 describe("risk brief rendering", () => {
 	test("divider rows match the computed junction rows", async () => {
-		for (const brief of [null, { _tag: "idle" } as const, done]) {
-			const { lines, height } = await renderHeader(brief)
-			expect(dividerRows(lines)).toEqual([...getDetailJunctionRows({ pullRequest, paneWidth: 60, showChecks: true, brief })])
-			// Nothing is rendered below the computed header height.
-			expect(lines.slice(height).every((line) => line.trim() === "")).toBe(true)
+		for (const showChecks of [true, false]) {
+			for (const brief of [null, { _tag: "idle" } as const, done]) {
+				const { lines, height } = await renderHeader(brief, 60, showChecks)
+				expect(dividerRows(lines)).toEqual([...getDetailJunctionRows({ pullRequest, paneWidth: 60, showChecks, brief })])
+				// Nothing is rendered below the computed header height.
+				expect(lines.slice(height).every((line) => line.trim() === "")).toBe(true)
+			}
 		}
 	})
 
@@ -90,6 +92,11 @@ describe("risk brief rendering", () => {
 		expect(frame).toContain("Risk brief · MEDIUM · stale · $0.10")
 		expect(frame).toContain("src/config.ts:10-40 — new fallback path")
 		expect(frame).toContain("src/app.ts — wiring")
+	})
+
+	test("the brief shows even when checks are hidden", async () => {
+		const { lines } = await renderHeader(done, 60, false)
+		expect(lines.join("\n")).toContain("Risk brief · MEDIUM")
 	})
 
 	test("idle state shows the run hint", async () => {

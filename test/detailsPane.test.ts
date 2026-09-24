@@ -177,7 +177,7 @@ describe("risk brief block", () => {
 		for (const row of rows.slice(1)) expect(row.length).toBeLessThanOrEqual(30)
 	})
 
-	test("adds rows and a closing divider only where checks are shown", () => {
+	test("adds rows and a closing divider with or without checks", () => {
 		const pr = pullRequest("Line A")
 		const status = brief(5)
 		const briefRowCount = riskBriefRows(status, 58).length
@@ -185,13 +185,16 @@ describe("risk brief block", () => {
 		const baseJunctions = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: true })
 
 		expect(getDetailHeaderHeight(pr, 60, true, [], "idle", status)).toBe(base + briefRowCount + 1)
-		expect(getDetailHeaderHeight(pr, 60, false, [], "idle", status)).toBe(getDetailHeaderHeight(pr, 60, false))
+		expect(getDetailHeaderHeight(pr, 60, false, [], "idle", status)).toBe(getDetailHeaderHeight(pr, 60, false) + briefRowCount + 1)
 		expect(getDetailHeaderHeight(pr, 60, true, [], "idle", null)).toBe(base)
 
 		const junctions = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: true, brief: status })
 		expect(junctions.slice(0, baseJunctions.length)).toEqual(baseJunctions)
 		// Last divider closes the header, so it is the final header row.
 		expect(junctions[junctions.length - 1]).toBe(base + briefRowCount)
-		expect(getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: false, brief: status })).toEqual(getDetailJunctionRows({ pullRequest: pr, paneWidth: 60 }))
+		const hidden = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: false, brief: status })
+		const hiddenBase = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60 })
+		expect(hidden.slice(0, hiddenBase.length)).toEqual(hiddenBase)
+		expect(hidden[hidden.length - 1]).toBe(getDetailHeaderHeight(pr, 60, false) + briefRowCount)
 	})
 })

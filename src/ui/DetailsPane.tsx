@@ -530,9 +530,9 @@ const computeDetailHeaderLayout = (pullRequest: PullRequestItem, paneWidth: numb
 	const bottomDividerHeight = hasChecks ? 1 : 0
 	const headerDividerRow = titleLines + 2 + labelRows.length
 	const bottomDividerRow = bottomDividerHeight === 1 ? headerDividerRow + checksHeight + 1 : -1
-	// The brief block sits below checks (only where checks are shown) and
-	// closes with its own divider.
-	const briefRows = showChecks && brief ? riskBriefRows(brief, Math.max(1, paneWidth - 2)) : []
+	// The brief block sits below checks (or directly under the header divider
+	// when checks are hidden) and closes with its own divider.
+	const briefRows = brief ? riskBriefRows(brief, Math.max(1, paneWidth - 2)) : []
 	const briefDividerRow = briefRows.length > 0 ? headerDividerRow + checksHeight + bottomDividerHeight + briefRows.length + 1 : -1
 	const briefHeight = briefRows.length > 0 ? briefRows.length + 1 : 0
 	const headerHeight = titleLines + 3 + labelRows.length + checksHeight + bottomDividerHeight + briefHeight
