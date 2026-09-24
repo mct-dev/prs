@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { PullRequestComment, PullRequestItem } from "../src/domain.ts"
-import { bodyPreview, getDetailHeaderHeight, getDetailJunctionRows, getScrollableDetailBodyHeight, truncateConversationPath } from "../src/ui/DetailsPane.tsx"
+import type { BriefStatus } from "../src/review/briefStatus.ts"
+import { bodyPreview, getDetailHeaderHeight, getDetailJunctionRows, getScrollableDetailBodyHeight, riskBriefRows, truncateConversationPath } from "../src/ui/DetailsPane.tsx"
 import { diffStatText } from "../src/ui/diff.ts"
 
 const pullRequest = (body: string): PullRequestItem => ({
@@ -122,5 +123,78 @@ describe("detail pane junction rows", () => {
 
 		expect(getDetailHeaderHeight(pr, 60, true, comments, "ready")).toBe(baseHeaderHeight)
 		expect(getScrollableDetailBodyHeight(pr, 58)).toBe(baseBodyHeight)
+	})
+})
+
+describe("risk brief block", () => {
+	const brief = (focusCount: number, summary = "Adds a cache layer for PR details."): BriefStatus => ({
+		_tag: "done",
+		brief: {
+			risk: "high",
+			summary,
+			focus_areas: Array.from({ length: focusCount }, (_, index) => ({
+				file: `src/file${index}.ts`,
+				lines: `${index + 1}-${index + 9}`,
+				why: "touches invalidation",
+				severity: "high" as const,
+			})),
+			safe_to_skip: [],
+			questions: [],
+			confidence: "medium",
+		},
+		stale: false,
+		costUsd: 0.42,
+		headSha: "abc123",
+	})
+	const rowText = (row: ReturnType<typeof riskBriefRows>[number]) => row.map((segment) => segment.text).join("")
+
+	test("idle, running and error states take a heading plus one row", () => {
+		expect(riskBriefRows({ _tag: "idle" }, 58).map(rowText)[1]?.trim()).toBe("b: run agent review")
+		expect(rowText(riskBriefRows({ _tag: "running", startedAt: new Date(), runId: "r1" }, 58)[0]!)).toContain("running…")
+		const error = riskBriefRows({ _tag: "error", message: "agent exited\nwith 1", stale: true }, 58)
+		expect(error).toHaveLength(2)
+		expect(rowText(error[0]!)).toContain("stale")
+		expect(rowText(error[1]!).trim()).toBe("agent exited with 1")
+	})
+
+	test("done shows risk, summary, up to three focus areas and a +N more row", () => {
+		const rows = riskBriefRows(brief(5), 58).map(rowText)
+		expect(rows[0]).toBe("Risk brief · HIGH · $0.42")
+		expect(rows[1]).toBe("Adds a cache layer for PR details.")
+		expect(rows[2]?.trim()).toBe("src/file0.ts:1-9 — touches invalidation")
+		expect(rows.slice(2, 5)).toHaveLength(3)
+		expect(rows[5]).toBe("+2 more")
+		expect(rows).toHaveLength(6)
+		expect(riskBriefRows(brief(2), 58)).toHaveLength(4)
+	})
+
+	test("stale flag and long summaries are clamped to two lines", () => {
+		const status = { ...brief(0, "word ".repeat(60)), stale: true } as BriefStatus
+		const rows = riskBriefRows(status, 30).map(rowText)
+		expect(rows[0]).toContain("stale")
+		expect(rows).toHaveLength(3)
+		expect(rows[2]?.endsWith("…")).toBe(true)
+		for (const row of rows.slice(1)) expect(row.length).toBeLessThanOrEqual(30)
+	})
+
+	test("adds rows and a closing divider with or without checks", () => {
+		const pr = pullRequest("Line A")
+		const status = brief(5)
+		const briefRowCount = riskBriefRows(status, 58).length
+		const base = getDetailHeaderHeight(pr, 60, true)
+		const baseJunctions = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: true })
+
+		expect(getDetailHeaderHeight(pr, 60, true, [], "idle", status)).toBe(base + briefRowCount + 1)
+		expect(getDetailHeaderHeight(pr, 60, false, [], "idle", status)).toBe(getDetailHeaderHeight(pr, 60, false) + briefRowCount + 1)
+		expect(getDetailHeaderHeight(pr, 60, true, [], "idle", null)).toBe(base)
+
+		const junctions = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: true, brief: status })
+		expect(junctions.slice(0, baseJunctions.length)).toEqual(baseJunctions)
+		// Last divider closes the header, so it is the final header row.
+		expect(junctions[junctions.length - 1]).toBe(base + briefRowCount)
+		const hidden = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60, showChecks: false, brief: status })
+		const hiddenBase = getDetailJunctionRows({ pullRequest: pr, paneWidth: 60 })
+		expect(hidden.slice(0, hiddenBase.length)).toEqual(hiddenBase)
+		expect(hidden[hidden.length - 1]).toBe(getDetailHeaderHeight(pr, 60, false) + briefRowCount)
 	})
 })

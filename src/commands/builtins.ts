@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import * as Atom from "effect/unstable/reactivity/Atom"
 import { errorMessage } from "../errors.js"
+import { AgentRunner } from "../services/AgentRunner.js"
 import { BrowserOpener } from "../services/BrowserOpener.js"
 import { Clipboard } from "../services/Clipboard.js"
 import { EditorOpener } from "../services/EditorOpener.js"
@@ -16,6 +17,7 @@ import { activeModalAtom } from "../ui/modals/atoms.js"
 import { submitReviewOptions } from "../ui/modals/shared.js"
 import { initialCommandPaletteState, initialCommentModalState, initialOpenRepositoryModalState, Modal } from "../ui/modals/types.js"
 import { noticeAtom } from "../ui/notice/atoms.js"
+import { briefStatusFor } from "../ui/review/atoms.js"
 import type { PullRequestUserQueueMode } from "../domain.js"
 import { pullRequestQueueModes } from "../domain.js"
 import { issueMetadataText, pullRequestMetadataText } from "../ui/pullRequests.js"
@@ -131,6 +133,14 @@ const flashErrorEffect = (error: unknown) =>
 	Effect.gen(function* () {
 		yield* Atom.set(noticeAtom, errorMessage(error))
 	})
+
+const agentReviewCancelReasonAtom = Atom.make((get): string | null => {
+	const reason = get(noPullRequestReasonAtom)
+	if (reason !== null) return reason
+	const pr = get(selectedPullRequestAtom)
+	if (!pr) return "Select a pull request first."
+	return get(briefStatusFor(pr))._tag === "running" ? null : "No agent review is running."
+})
 
 export const globalCommands: readonly CommandDefinition[] = [
 	defineCommand({
@@ -512,6 +522,36 @@ export const globalCommands: readonly CommandDefinition[] = [
 			const pr = yield* Atom.get(selectedPullRequestAtom)
 			if (!pr) return
 			yield* EditorOpener.use((opener) => opener.openPullRequest(pr)).pipe(Effect.catch(flashErrorEffect))
+		}),
+	}),
+	defineCommand({
+		id: "pull.agent-review",
+		title: "Run agent review",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		keywords: ["agent", "ai", "claude", "codex", "brief", "risk", "review"],
+		disabledReason: noPullRequestReasonAtom,
+		run: Effect.gen(function* () {
+			const pr = yield* Atom.get(selectedPullRequestAtom)
+			if (!pr) return
+			yield* AgentRunner.use((runner) => runner.startReview(pr)).pipe(
+				Effect.flatMap(() => Atom.set(noticeAtom, `Agent review started for #${pr.number}`)),
+				Effect.catch(flashErrorEffect),
+			)
+		}),
+	}),
+	defineCommand({
+		id: "pull.agent-review-cancel",
+		title: "Cancel agent review",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		keywords: ["agent", "ai", "stop", "kill", "brief"],
+		disabledReason: agentReviewCancelReasonAtom,
+		run: Effect.gen(function* () {
+			const pr = yield* Atom.get(selectedPullRequestAtom)
+			if (!pr) return
+			const cancelled = yield* AgentRunner.use((runner) => runner.cancelReviewFor(pr.repository, pr.number))
+			yield* Atom.set(noticeAtom, cancelled ? `Agent review cancelled for #${pr.number}` : "No agent review is running.")
 		}),
 	}),
 	defineCommand({

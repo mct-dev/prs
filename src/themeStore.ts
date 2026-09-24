@@ -5,6 +5,7 @@ import { Effect, Schema } from "effect"
 import { isThemeId, type ThemeId } from "./ui/colors.js"
 import { normalizeThemeConfig, type ThemeConfig } from "./themeConfig.js"
 import { DiffWhitespaceMode } from "./ui/diff.js"
+import { parseReviewConfig, type ReviewConfig } from "./review/config.js"
 
 interface StoredConfig {
 	readonly theme?: unknown
@@ -16,6 +17,7 @@ interface StoredConfig {
 	readonly showScrollbars?: unknown
 	readonly editorCommand?: unknown
 	readonly repoPaths?: unknown
+	readonly review?: unknown
 }
 
 const configDirectory = () => {
@@ -98,6 +100,19 @@ export const loadStoredEditorConfig: Effect.Effect<StoredEditorConfig> = Effect.
 		return { editorCommand, repoPaths: parseRepoPaths(config.repoPaths) }
 	}),
 	() => Effect.succeed({ editorCommand: null, repoPaths: {} } satisfies StoredEditorConfig),
+)
+
+export interface StoredReviewConfig {
+	readonly review: ReviewConfig
+	readonly repoPaths: Readonly<Record<string, string>>
+}
+
+export const loadStoredReviewConfig: Effect.Effect<StoredReviewConfig> = Effect.catchCause(
+	Effect.tryPromise(async () => {
+		const config = await readStoredConfig()
+		return { review: parseReviewConfig(config.review, process.env.PRS_REVIEW_AGENT_BIN ?? null), repoPaths: parseRepoPaths(config.repoPaths) }
+	}),
+	() => Effect.succeed({ review: parseReviewConfig(undefined, process.env.PRS_REVIEW_AGENT_BIN ?? null), repoPaths: {} } satisfies StoredReviewConfig),
 )
 
 export const saveStoredThemeId = (theme: ThemeId): Effect.Effect<void> =>

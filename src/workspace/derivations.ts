@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react"
 import type { IssueItem, LoadStatus, PullRequestComment, PullRequestItem } from "../domain.js"
 import { ACTIVE_FILTER_BAR_HEIGHT } from "../ui/ActiveFilterBar.js"
+import type { BriefStatus } from "../review/briefStatus.js"
 import type { DetailCommentsStatus } from "../ui/DetailsPane.js"
 import { getDetailHeaderHeight, getDetailJunctionRows, getScrollableDetailBodyHeight } from "../ui/DetailsPane.js"
 import { getIssueDetailJunctionRows, issueListVisualLineCount } from "../ui/IssueList.js"
@@ -28,6 +29,8 @@ export interface WorkspaceDerivationsInput {
 	readonly activeWorkspaceSurface: WorkspaceSurface
 	readonly workspaceTabSurfaces: readonly WorkspaceSurface[]
 	readonly selectedPullRequest: PullRequestItem | null
+	/** Agent review brief for the selected PR; shown wherever checks are shown. */
+	readonly selectedBrief?: BriefStatus | null
 	readonly selectedIssue: IssueItem | null
 	readonly selectedRepository: string | null
 	readonly selectedComments: readonly PullRequestComment[]
@@ -169,14 +172,15 @@ export const computeWorkspaceDerivations = (input: WorkspaceDerivationsInput): W
 		loadMoreIssueRowSelected,
 		onSelectLoadMoreIssues,
 		diffFilePanelDividerColumn,
+		selectedBrief = null,
 	} = input
 	void _leftPaneWidth
 
-	const fullscreenDetailHeaderHeight = getDetailHeaderHeight(selectedPullRequest, contentWidth, isWideLayout, selectedComments, selectedCommentsStatus)
+	const fullscreenDetailHeaderHeight = getDetailHeaderHeight(selectedPullRequest, contentWidth, isWideLayout, selectedComments, selectedCommentsStatus, selectedBrief)
 	const fullscreenDetailBodyViewportHeight = Math.max(1, wideBodyHeight - fullscreenDetailHeaderHeight)
 	const fullscreenDetailBodyHeight = getScrollableDetailBodyHeight(selectedPullRequest, fullscreenContentWidth)
 	const fullscreenDetailBodyScrollable = fullscreenDetailBodyHeight > fullscreenDetailBodyViewportHeight
-	const wideDetailHeaderHeight = getDetailHeaderHeight(selectedPullRequest, rightPaneWidth, true, selectedComments, selectedCommentsStatus)
+	const wideDetailHeaderHeight = getDetailHeaderHeight(selectedPullRequest, rightPaneWidth, true, selectedComments, selectedCommentsStatus, selectedBrief)
 	const wideDetailBodyViewportHeight = Math.max(1, wideBodyHeight - wideDetailHeaderHeight)
 	const wideDetailBodyHeight = getScrollableDetailBodyHeight(selectedPullRequest, rightContentWidth)
 	const wideDetailBodyScrollable = wideDetailBodyHeight > wideDetailBodyViewportHeight
@@ -186,7 +190,7 @@ export const computeWorkspaceDerivations = (input: WorkspaceDerivationsInput): W
 	const narrowRepoDetailHeight = narrowDetailsPaneHeight
 	const narrowIssueListHeight = narrowPullRequestListHeight
 	const narrowIssueDetailHeight = narrowDetailsPaneHeight
-	const narrowPreviewHeaderHeight = getDetailHeaderHeight(selectedPullRequest, contentWidth, false, selectedComments, selectedCommentsStatus)
+	const narrowPreviewHeaderHeight = getDetailHeaderHeight(selectedPullRequest, contentWidth, false, selectedComments, selectedCommentsStatus, selectedBrief)
 	const narrowPreviewBodyHeight = Math.max(1, narrowDetailsPaneHeight - narrowPreviewHeaderHeight)
 	const narrowPreviewBodyScrollable = getScrollableDetailBodyHeight(selectedPullRequest, fullscreenContentWidth) > narrowPreviewBodyHeight
 	const pullRequestFilterBarHeight = pullRequestActiveFilterLabel ? ACTIVE_FILTER_BAR_HEIGHT : 0
@@ -203,6 +207,7 @@ export const computeWorkspaceDerivations = (input: WorkspaceDerivationsInput): W
 				showChecks: true,
 				comments: selectedComments,
 				commentsStatus: selectedCommentsStatus,
+				brief: selectedBrief,
 			})
 
 	const prListProps = {

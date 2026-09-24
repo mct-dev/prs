@@ -126,6 +126,53 @@ scoped to the PR's head commit:
 
 Requires the GitHub CLI (`gh`) the same as the rest of prs; nothing extra to configure.
 
+### Agent review
+
+prs can run a local coding agent (Claude Code or Codex) against a pull request
+and show a short **risk brief** at the top of the details pane: a risk level, a
+summary, and the files most worth your attention.
+
+Open a PR's details and press `b`, or run **Run agent review** from the
+command palette. **Cancel agent review** stops a running review. Briefs are
+cached per head commit and marked `stale` after a force-push.
+
+Configure it in `config.json` (all keys optional):
+
+```json
+{
+	"review": {
+		"default": "claude",
+		"concurrency": 2,
+		"timeoutMinutes": 20,
+		"presets": {
+			"claude": { "skill": "review", "model": null, "maxBudgetUsd": 3, "extraPrompt": "" },
+			"codex": { "agent": "codex", "model": null, "extraPrompt": "" }
+		}
+	},
+	"repoPaths": { ":owner/:repo": "~/src/github.com/:owner/:repo" }
+}
+```
+
+When a `repoPaths` entry points at a local clone, the agent reviews a detached
+git worktree at the PR head. prs removes that worktree when the run ends.
+Without a clone it gets only the diff. `PRS_REVIEW_AGENT_BIN` overrides the
+agent binary for every preset. Run logs are kept under the cache
+directory in `runs/`.
+
+Agent reviews are **read-only**. The agent never posts comments, approves
+or pushes:
+
+- Claude runs non-interactively with only Read, Grep and Glob. Bash, edit and
+  write tools, web tools and subagents are denied outright. Deny rules win
+  over any allow rules in your user settings. It loads your user skills but
+  no project settings or MCP servers.
+- The agent has no shell. prs pre-generates the diff, the commit log and
+  the file list into `.prs-context/` inside the worktree.
+- Codex runs in its `read-only` sandbox.
+- Worktrees are created with git hooks disabled. PR refs are fetched into
+  private `refs/prs/...` refs, which are deleted afterwards.
+- prs only reads the agent's JSON output. Nothing is sent to GitHub.
+
 ## Keybindings
 
 - `up` / `down`: move selection
@@ -140,6 +187,7 @@ Requires the GitHub CLI (`gh`) the same as the rest of prs; nothing extra to con
 - `r`: refresh
 - `d`: view stacked diff for all changed files
 - `a`: view this PR's GitHub Actions runs (jobs, steps, and failing logs)
+- `b`: run an agent review (in the details view)
 - `shift-r`: review or approve the selected pull request
 - `up` / `down` / `pageup` / `pagedown`: move comment target while viewing a diff
 - `enter`: open a commented diff line, or start a comment on an uncommented line

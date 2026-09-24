@@ -3,6 +3,8 @@ import { useRenderer } from "@opentui/react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { formatRelativeDate } from "../date.js"
 import type { CheckItem, PullRequestComment, PullRequestItem, PullRequestLabel } from "../domain.js"
+import type { RiskLevel } from "../review/briefSchema.js"
+import type { BriefStatus } from "../review/briefStatus.js"
 import { colors, type ThemeId } from "./colors.js"
 import { commentCountText, CommentSegmentsLine, type CommentSegment } from "./comments.js"
 import { diffStatText } from "./diff.js"
@@ -423,6 +425,86 @@ const ChecksSection = ({ checks, contentWidth }: { checks: readonly CheckItem[];
 	)
 }
 
+// === Risk brief ===
+
+export const RISK_BRIEF_SUMMARY_LINES = 2
+export const RISK_BRIEF_FOCUS_LIMIT = 3
+
+interface BriefSegment {
+	readonly text: string
+	readonly fg: string
+	readonly bold?: boolean
+}
+
+type BriefRow = readonly BriefSegment[]
+
+const riskColor = (risk: RiskLevel) => (risk === "high" ? colors.status.failing : risk === "medium" ? colors.status.pending : colors.status.passing)
+
+const briefHeading = (suffix: readonly BriefSegment[]): BriefRow => [{ text: "Risk brief", fg: colors.count, bold: true }, ...suffix]
+
+const clampLines = (lines: readonly string[], limit: number, width: number): string[] => {
+	if (lines.length <= limit) return [...lines]
+	const kept = lines.slice(0, limit)
+	const last = kept[limit - 1] ?? ""
+	kept[limit - 1] = trimCell(`${last} …`, width)
+	return kept
+}
+
+const focusText = (area: { readonly file: string; readonly lines?: string | null; readonly why: string }) =>
+	`${area.lines ? `${area.file}:${area.lines}` : area.file} — ${area.why}`
+
+/**
+ * Rows of the "Risk brief" block (heading included). Pure so the header
+ * layout math and the renderer agree on the exact row count.
+ */
+export const riskBriefRows = (brief: BriefStatus, contentWidth: number): readonly BriefRow[] => {
+	const width = Math.max(1, contentWidth)
+	switch (brief._tag) {
+		case "idle":
+			return [briefHeading([]), [{ text: fitCell("b: run agent review", width), fg: colors.muted }]]
+		case "running":
+			return [
+				briefHeading([{ text: " · running…", fg: colors.status.pending }]),
+				[{ text: fitCell(`Agent review started ${formatRelativeDate(brief.startedAt)}`, width), fg: colors.muted }],
+			]
+		case "error":
+			return [
+				briefHeading([{ text: " · error", fg: colors.status.failing }, ...(brief.stale ? [{ text: " · stale", fg: colors.muted }] : [])]),
+				[{ text: fitCell(brief.message.replace(/\s+/g, " ").trim(), width), fg: colors.status.failing }],
+			]
+		case "done": {
+			const { risk, summary, focus_areas: focusAreas } = brief.brief
+			const heading = briefHeading([
+				{ text: " · ", fg: colors.muted },
+				{ text: risk.toUpperCase(), fg: riskColor(risk), bold: true },
+				...(brief.stale ? [{ text: " · stale", fg: colors.status.pending }] : []),
+				...(brief.costUsd !== null ? [{ text: ` · $${brief.costUsd.toFixed(2)}`, fg: colors.muted }] : []),
+			])
+			const summaryRows = clampLines(wrapText(summary.replace(/\s+/g, " ").trim(), width), RISK_BRIEF_SUMMARY_LINES, width).map(
+				(line): BriefRow => [{ text: line, fg: colors.text }],
+			)
+			const focusRows = focusAreas.slice(0, RISK_BRIEF_FOCUS_LIMIT).map((area): BriefRow => [{ text: fitCell(focusText(area), width), fg: colors.text }])
+			const hidden = focusAreas.length - RISK_BRIEF_FOCUS_LIMIT
+			const moreRows: BriefRow[] = hidden > 0 ? [[{ text: `+${hidden} more`, fg: colors.muted }]] : []
+			return [heading, ...summaryRows, ...focusRows, ...moreRows]
+		}
+	}
+}
+
+const RiskBriefSection = ({ rows }: { rows: readonly BriefRow[] }) => (
+	<box flexDirection="column">
+		{rows.map((row, rowIndex) => (
+			<TextLine key={rowIndex}>
+				{row.map((segment, segmentIndex) => (
+					<span key={segmentIndex} fg={segment.fg} {...(segment.bold ? { attributes: TextAttributes.BOLD } : {})}>
+						{segment.text}
+					</span>
+				))}
+			</TextLine>
+		))}
+	</box>
+)
+
 interface DetailHeaderLayout {
 	readonly titleLines: number
 	readonly uniqueChecks: readonly CheckItem[]
@@ -433,10 +515,12 @@ interface DetailHeaderLayout {
 	readonly bottomDividerHeight: number
 	readonly headerDividerRow: number
 	readonly bottomDividerRow: number
+	readonly briefRows: readonly BriefRow[]
+	readonly briefDividerRow: number
 	readonly headerHeight: number
 }
 
-const computeDetailHeaderLayout = (pullRequest: PullRequestItem, paneWidth: number, showChecks: boolean): DetailHeaderLayout => {
+const computeDetailHeaderLayout = (pullRequest: PullRequestItem, paneWidth: number, showChecks: boolean, brief: BriefStatus | null = null): DetailHeaderLayout => {
 	const titleLines = wrapText(pullRequest.title, Math.max(1, paneWidth - 2)).length
 	const labelRows = pullRequest.detailLoaded ? labelChipRows(pullRequest.labels, Math.max(1, paneWidth - 2)) : []
 	const uniqueChecks = deduplicateChecks(pullRequest.checks)
@@ -446,7 +530,12 @@ const computeDetailHeaderLayout = (pullRequest: PullRequestItem, paneWidth: numb
 	const bottomDividerHeight = hasChecks ? 1 : 0
 	const headerDividerRow = titleLines + 2 + labelRows.length
 	const bottomDividerRow = bottomDividerHeight === 1 ? headerDividerRow + checksHeight + 1 : -1
-	const headerHeight = titleLines + 3 + labelRows.length + checksHeight + bottomDividerHeight
+	// The brief block sits below checks (or directly under the header divider
+	// when checks are hidden) and closes with its own divider.
+	const briefRows = brief ? riskBriefRows(brief, Math.max(1, paneWidth - 2)) : []
+	const briefDividerRow = briefRows.length > 0 ? headerDividerRow + checksHeight + bottomDividerHeight + briefRows.length + 1 : -1
+	const briefHeight = briefRows.length > 0 ? briefRows.length + 1 : 0
+	const headerHeight = titleLines + 3 + labelRows.length + checksHeight + bottomDividerHeight + briefHeight
 	return {
 		titleLines,
 		uniqueChecks,
@@ -457,6 +546,8 @@ const computeDetailHeaderLayout = (pullRequest: PullRequestItem, paneWidth: numb
 		bottomDividerHeight,
 		headerDividerRow,
 		bottomDividerRow,
+		briefRows,
+		briefDividerRow,
 		headerHeight,
 	}
 }
@@ -467,16 +558,18 @@ export const getDetailJunctionRows = ({
 	showChecks = false,
 	comments: _comments = [],
 	commentsStatus: _commentsStatus = "idle",
+	brief = null,
 }: {
 	readonly pullRequest: PullRequestItem | null
 	readonly paneWidth: number
 	readonly showChecks?: boolean
 	readonly comments?: readonly PullRequestComment[]
 	readonly commentsStatus?: DetailCommentsStatus
+	readonly brief?: BriefStatus | null
 }): readonly number[] => {
 	if (!pullRequest) return [DETAIL_PLACEHOLDER_ROWS]
-	const layout = computeDetailHeaderLayout(pullRequest, paneWidth, showChecks)
-	return [layout.headerDividerRow, layout.bottomDividerRow].filter((row) => row >= 0)
+	const layout = computeDetailHeaderLayout(pullRequest, paneWidth, showChecks, brief)
+	return [layout.headerDividerRow, layout.bottomDividerRow, layout.briefDividerRow].filter((row) => row >= 0)
 }
 
 export const getDetailHeaderHeight = (
@@ -485,9 +578,10 @@ export const getDetailHeaderHeight = (
 	showChecks = false,
 	_comments: readonly PullRequestComment[] = [],
 	_commentsStatus: DetailCommentsStatus = "idle",
+	brief: BriefStatus | null = null,
 ) => {
 	if (!pullRequest) return DETAIL_PLACEHOLDER_ROWS + 1
-	return computeDetailHeaderLayout(pullRequest, paneWidth, showChecks).headerHeight
+	return computeDetailHeaderLayout(pullRequest, paneWidth, showChecks, brief).headerHeight
 }
 
 export const getDetailBodyHeight = (pullRequest: PullRequestItem | null, contentWidth: number, bodyLines = DETAIL_BODY_LINES) => {
@@ -508,6 +602,7 @@ export const getDetailsPaneHeight = ({
 	showChecks = false,
 	comments = [],
 	commentsStatus = "idle",
+	brief = null,
 }: {
 	pullRequest: PullRequestItem | null
 	contentWidth: number
@@ -516,9 +611,10 @@ export const getDetailsPaneHeight = ({
 	showChecks?: boolean
 	comments?: readonly PullRequestComment[]
 	commentsStatus?: DetailCommentsStatus
+	brief?: BriefStatus | null
 }) =>
 	pullRequest
-		? getDetailHeaderHeight(pullRequest, paneWidth, showChecks, comments, commentsStatus) + getDetailBodyHeight(pullRequest, contentWidth, bodyLines)
+		? getDetailHeaderHeight(pullRequest, paneWidth, showChecks, comments, commentsStatus, brief) + getDetailBodyHeight(pullRequest, contentWidth, bodyLines)
 		: bodyLines + DETAIL_PLACEHOLDER_ROWS + 1
 
 export const DetailHeader = ({
@@ -529,6 +625,7 @@ export const DetailHeader = ({
 	showChecks = false,
 	comments = [],
 	commentsStatus = "idle",
+	brief = null,
 }: {
 	pullRequest: PullRequestItem
 	contentWidth: number
@@ -537,10 +634,11 @@ export const DetailHeader = ({
 	showChecks?: boolean
 	comments?: readonly PullRequestComment[]
 	commentsStatus?: DetailCommentsStatus
+	brief?: BriefStatus | null
 }) => {
 	const wrappedTitle = wrapText(pullRequest.title, Math.max(1, paneWidth - 2))
-	const layout = computeDetailHeaderLayout(pullRequest, paneWidth, showChecks)
-	const { hasChecks, checkRowsCount, bottomDividerHeight, labelRows } = layout
+	const layout = computeDetailHeaderLayout(pullRequest, paneWidth, showChecks, brief)
+	const { hasChecks, checkRowsCount, bottomDividerHeight, labelRows, briefRows } = layout
 	const statsText = diffStatText(pullRequest, loadingIndicator)
 	const commentsText = commentsStatus === "ready" && comments.length > 0 ? commentCountText(comments.length) : null
 	const opened = formatRelativeDate(pullRequest.createdAt)
@@ -582,6 +680,14 @@ export const DetailHeader = ({
 				</box>
 			) : null}
 			{bottomDividerHeight === 1 ? <Divider width={paneWidth} /> : null}
+			{briefRows.length > 0 ? (
+				<>
+					<box height={briefRows.length} paddingLeft={1} paddingRight={1}>
+						<RiskBriefSection rows={briefRows} />
+					</box>
+					<Divider width={paneWidth} />
+				</>
+			) : null}
 		</>
 	)
 }
@@ -724,6 +830,7 @@ export const DetailsPane = ({
 	showChecks = false,
 	comments = [],
 	commentsStatus = "idle",
+	brief = null,
 	placeholderContent,
 	loadingIndicator,
 	themeId,
@@ -738,13 +845,14 @@ export const DetailsPane = ({
 	showChecks?: boolean
 	comments?: readonly PullRequestComment[]
 	commentsStatus?: DetailCommentsStatus
+	brief?: BriefStatus | null
 	placeholderContent: DetailPlaceholderContent
 	loadingIndicator: string
 	themeId: ThemeId
 	themeGeneration: number
 	onLinkOpen?: (url: string) => void
 }) => {
-	const contentHeight = getDetailsPaneHeight({ pullRequest, contentWidth, bodyLines: bodyLineLimit, paneWidth, showChecks, comments, commentsStatus })
+	const contentHeight = getDetailsPaneHeight({ pullRequest, contentWidth, bodyLines: bodyLineLimit, paneWidth, showChecks, comments, commentsStatus, brief })
 
 	return (
 		<box flexDirection="column" height={contentHeight}>
@@ -758,6 +866,7 @@ export const DetailsPane = ({
 						showChecks={showChecks}
 						comments={comments}
 						commentsStatus={commentsStatus}
+						brief={brief}
 					/>
 					<DetailBody
 						pullRequest={pullRequest}

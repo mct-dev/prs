@@ -148,4 +148,4 @@ Read-only is a hard rule. The review must never post, approve, or push.
 
 ## Status
 
-In progress. Phases: 1 sections → 2 filters → 3 agent runner → 4 brief UI.
+In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, cache, commands, minimal brief block) → 4 brief UI.
