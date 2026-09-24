@@ -15,6 +15,8 @@ interface PullRequestResult {
 }
 
 export interface UseLoadingStatusInput {
+	/** An agent review is running somewhere; only ticks the spinner, not the surface loading state. */
+	readonly agentReviewRunning?: boolean
 	readonly selectedPullRequestDetailKey: string | null
 	readonly detailHydrationState: Readonly<Record<string, DetailHydrationState>>
 	readonly pullRequestResult: PullRequestResult
@@ -80,6 +82,7 @@ export const useLoadingStatus = ({
 	setStartupLoadComplete,
 	selectedPullRequest,
 	loadPullRequestComments,
+	agentReviewRunning = false,
 }: UseLoadingStatusInput): LoadingStatus => {
 	const selectedPullRequestDetailHydrationState = selectedPullRequestDetailKey ? (detailHydrationState[selectedPullRequestDetailKey] ?? null) : null
 	const selectedPullRequestDetailError = selectedPullRequestDetailHydrationState?._tag === "Error" ? (selectedPullRequestDetailHydrationState.message ?? null) : null
@@ -100,7 +103,8 @@ export const useLoadingStatus = ({
 		mergeModal.loading ||
 		mergeModal.running ||
 		submitReviewModal.running ||
-		selectedDiffState?._tag === "Loading"
+		selectedDiffState?._tag === "Loading" ||
+		agentReviewRunning
 	const loadingFrame = useSpinnerFrame({ active: hasActiveLoadingIndicator, reset: isInitialLoading })
 	const loadingIndicator = SPINNER_FRAMES[loadingFrame % SPINNER_FRAMES.length]!
 

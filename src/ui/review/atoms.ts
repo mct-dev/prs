@@ -33,6 +33,9 @@ export const selectedBriefStatusAtom = Atom.make((get): BriefStatus => {
 	return pullRequest ? get(briefStatusFor(pullRequest)) : idleBriefStatus
 })
 
+/** True while any agent review is running; keeps the list spinner ticking. */
+export const anyAgentReviewRunningAtom = Atom.make((get) => Object.values(get(agentReviewIndexAtom)).some((entry) => entry.record.status === "running"))
+
 /** Starts a read-only agent review for a PR with the given (or default) preset; resolves to the run id. */
 export const runAgentReviewAtom = githubRuntime.fn<{ readonly pullRequest: PullRequestItem; readonly presetId?: string | null }>()(({ pullRequest, presetId }) =>
 	AgentRunner.use((runner) => runner.startReview(pullRequest, presetId ?? null)),

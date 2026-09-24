@@ -3,7 +3,7 @@ import { useRenderer } from "@opentui/react"
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { formatRelativeDate } from "../date.js"
 import type { CheckItem, PullRequestComment, PullRequestItem, PullRequestLabel } from "../domain.js"
-import type { RiskLevel } from "../review/briefSchema.js"
+import { riskColor } from "./review/briefDisplay.js"
 import type { BriefStatus } from "../review/briefStatus.js"
 import { colors, type ThemeId } from "./colors.js"
 import { commentCountText, CommentSegmentsLine, type CommentSegment } from "./comments.js"
@@ -437,8 +437,6 @@ interface BriefSegment {
 }
 
 type BriefRow = readonly BriefSegment[]
-
-const riskColor = (risk: RiskLevel) => (risk === "high" ? colors.status.failing : risk === "medium" ? colors.status.pending : colors.status.passing)
 
 const briefHeading = (suffix: readonly BriefSegment[]): BriefRow => [{ text: "Risk brief", fg: colors.count, bold: true }, ...suffix]
 
