@@ -68,6 +68,7 @@ export const useCommandHandoffs = ({
 }: UseCommandHandoffsInput): void => {
 	useEffect(() => registerHandoff("quit", () => renderer.destroy()), [renderer])
 	useEffect(() => registerHandoff("refreshPullRequests", () => refreshPullRequests("Refreshed", { resetTransientState: true })), [refreshPullRequests])
+	useEffect(() => registerHandoff("reloadSections", () => refreshPullRequests(undefined, { resetTransientState: true })), [refreshPullRequests])
 	useEffect(() => registerHandoff("refreshIssues", refreshIssues), [refreshIssues])
 	useEffect(() => registerHandoff("loadMorePullRequests", () => void loadMorePullRequests()), [loadMorePullRequests])
 	useEffect(() => registerHandoff("openThemeModal", openThemeModal), [openThemeModal])

@@ -211,9 +211,12 @@ prs always opens on the **sections** view, including inside a git repository. Th
 
 Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SECTIONS_PATH`). If the file is missing, the built-in defaults below apply. If it fails to parse or validate, prs shows the defaults with the error above them. Set `PRS_DEFAULT_VIEW=queue` to start on the authored queue instead.
 
+From the command palette (`ctrl-p`), **Edit sections config** creates the file from a commented template if needed, opens it in `$VISUAL`/`$EDITOR`, and reloads sections when the editor exits. **Choose my teams** lists your teams by size; `space` toggles, `enter` writes `vars.my_teams` and leaves the rest of the file as it was.
+
 ```yaml
 vars:
-  # Optional. If unset, my_teams = every team from `gh api user/teams`.
+  # Optional. If unset, my_teams = your smallest team from `gh api user/teams`
+  # (ties included; every team if you have one, or GitHub hides counts).
   my_teams: [my-org/backend]
   bots: ["app/dependabot", "app/renovate", "app/github-actions"]
 
@@ -255,8 +258,15 @@ The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `fi
 | `age`, `idle` | Since created / updated, e.g. `idle>3d`, `age<2h`, `1w` |
 | `risk:low\|medium\|high` (also `risk>=medium`), `brief:none\|running\|done\|stale` | From the latest agent review; `risk` is unknown until a brief is done, and `stale` means the brief is for an older head |
 | `me.reviewed`, `me.reviewed_since_push` | Whether you reviewed, and whether that review is on the current head |
+| `section:<id>` | In that section (e.g. `section:needs-me`). Works from any view once sections have loaded |
 
 A predicate on data that hasn't loaded yet counts as unknown, and unknown never hides a PR. For example, `author:alice size>400 fix` keeps alice's PRs that match "fix", including ones whose size isn't known yet.
+
+Risk works the same way: `risk:high` keeps PRs that have no brief yet (the filter bar says how many, e.g. "12 PRs have no brief (shown as unknown)"). To see only reviewed PRs, add `brief:done`: `risk:high brief:done`.
+
+While typing after `/`, a popover suggests field names, then values (authors, repos and labels from the loaded PRs by frequency; the fixed values for `ci`, `review`, `risk`, `brief`, `draft`; examples like `>3d` for numbers). `tab` completes the first (or highlighted) suggestion, `up` / `down` highlight one and `enter` accepts it, and `esc` closes the popover before it cancels the filter. It also shows how many PRs match and warns about typos like `ci:passs`. With an empty prompt it lists your last 10 filters (kept in `recent-filters.json` next to `config.json`).
+
+- `section:needs-me ci:pass -review:approved`: PRs waiting on you with green CI that nobody has approved yet. In the sections view, `ci:pass -review:approved` alone does the same inside each section.
 
 ## Keybindings
 
@@ -268,6 +278,7 @@ A predicate on data that hasn't loaded yet counts as unknown, and unknown never 
 - `[` / `]`: jump between sections (or repository groups)
 - `z` / `Z`: collapse or expand the current section / all sections
 - `ctrl-p` / `cmd-k`: open the command palette
+- `?`: icon legend (what the review, check and brief glyphs mean)
 - `/`: filter
 - `enter`: expand details; normal PR actions still work while details are expanded
 - `esc`: return from expanded details, leave diff/comment mode, or close modal

@@ -21,6 +21,7 @@ export const filterFields = [
 	"review",
 	"risk",
 	"brief",
+	"section",
 	"me.reviewed",
 	"me.reviewed_since_push",
 ] as const
@@ -105,6 +106,13 @@ const tokenize = (input: string, splitParens: boolean): readonly string[] => {
 	return tokens
 }
 
+// `author:` / `-ci:` / `age>` mid-typing: a known field with no value yet. It
+// matches everything rather than searching for the literal text.
+const isIncompletePredicate = (token: string) => {
+	const match = /^-?([a-z][a-z._]*)(>=|<=|:|>|<)$/i.exec(token)
+	return match !== null && isFilterField(match[1]!.toLowerCase())
+}
+
 /** Parse a `/` filter: tokens AND together; the rest is free text. */
 export const parseFilterQuery = (input: string): ParsedFilterQuery => {
 	const predicates: FilterPredicate[] = []
@@ -112,7 +120,7 @@ export const parseFilterQuery = (input: string): ParsedFilterQuery => {
 	for (const token of tokenize(input, false)) {
 		const predicate = parseFilterToken(token)
 		if (predicate) predicates.push(predicate)
-		else text.push(token)
+		else if (!isIncompletePredicate(token)) text.push(token)
 	}
 	return { predicates, text: text.join(" ") }
 }
@@ -189,4 +197,4 @@ export const describeFilterQuery = (input: string): string => {
 	return parts.join(" ")
 }
 
-export const filterHelpText = "author: repo: label: draft: ci: review: size> files> age> idle> risk: brief: · -field:x negates"
+export const filterHelpText = "author: repo: label: draft: ci: review: size> files> age> idle> risk: brief: section: · -field:x negates"

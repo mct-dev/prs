@@ -6,6 +6,7 @@ import {
 	type SectionNavGroup,
 	type SectionNavResult,
 	type SectionSelection,
+	selectedRowSectionId,
 	stepSection,
 	toggleAllSectionsAt,
 	toggleSectionAt,
@@ -132,5 +133,24 @@ describe("section cursor", () => {
 			expect(result.selectUrl).toBe("x")
 			expect(result.selectIndex).toBe(0)
 		})
+	})
+})
+
+describe("selectedRowSectionId", () => {
+	// "dup" is listed in both sections (exclusive: false).
+	const dupGroups: readonly SectionNavGroup[] = [
+		{ id: "a", collapsed: false, urls: ["a1", "dup"] },
+		{ id: "b", collapsed: false, urls: ["dup", "b1"] },
+	]
+
+	test("a duplicate row resolves to the section its row index is in", () => {
+		expect(selectedRowSectionId(dupGroups, { url: "dup", index: 1 })).toBe("a")
+		expect(selectedRowSectionId(dupGroups, { url: "dup", index: 2 })).toBe("b")
+	})
+
+	test("ignores the header cursor", () => {
+		const cursor: SectionCursor = { id: "b", url: "a1", index: 0 }
+		expect(activeSectionId(dupGroups, cursor, { url: "a1", index: 0 })).toBe("b")
+		expect(selectedRowSectionId(dupGroups, { url: "a1", index: 0 })).toBe("a")
 	})
 })

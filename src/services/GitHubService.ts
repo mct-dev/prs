@@ -17,6 +17,7 @@ import {
 } from "../domain.js"
 import { type ItemListInput, type ItemPage, searchQualifier } from "../item.js"
 import { mergeActionCliArgs } from "../mergeActions.js"
+import type { ViewerTeam } from "../sections/teams.js"
 import { CommandError, CommandRunner, commandTelemetryAttributes, type JsonParseError } from "./CommandRunner.js"
 import {
 	fallbackCreatedComment,
@@ -99,6 +100,8 @@ export class GitHubService extends Context.Service<
 		readonly listTeamMembers: (org: string, team: string) => Effect.Effect<readonly string[], GitHubError>
 		/** The viewer's teams as `org/slug`. */
 		readonly listViewerTeams: () => Effect.Effect<readonly string[], GitHubError>
+		/** The viewer's teams with names and member counts. Shares one cached `user/teams` call with listViewerTeams. */
+		readonly listViewerTeamsDetailed: () => Effect.Effect<readonly ViewerTeam[], GitHubError>
 		readonly getPullRequestDiff: (repository: string, number: number) => Effect.Effect<string, GitHubError>
 		readonly listWorkflowRunsForCommit: (repository: string, headSha: string) => Effect.Effect<readonly WorkflowRun[], GitHubError>
 		readonly getWorkflowRunDetails: (repository: string, runId: number) => Effect.Effect<WorkflowRunDetails, GitHubError>
@@ -266,11 +269,11 @@ export class GitHubService extends Context.Service<
 			// Team membership changes rarely; keep successful lookups for a day.
 			// Failures are not cached so a transient error retries next load.
 			const TEAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000
-			const teamCache = new Map<string, { readonly value: readonly string[]; readonly at: number }>()
-			const cachedForADay = (key: string, effect: Effect.Effect<readonly string[], GitHubError>) =>
+			const teamCache = new Map<string, { readonly value: unknown; readonly at: number }>()
+			const cachedForADay = <A>(key: string, effect: Effect.Effect<A, GitHubError>) =>
 				Effect.suspend(() => {
 					const hit = teamCache.get(key)
-					if (hit && Date.now() - hit.at < TEAM_CACHE_TTL_MS) return Effect.succeed(hit.value)
+					if (hit && Date.now() - hit.at < TEAM_CACHE_TTL_MS) return Effect.succeed(hit.value as A)
 					return effect.pipe(Effect.tap((value) => Effect.sync(() => teamCache.set(key, { value, at: Date.now() }))))
 				})
 
@@ -282,13 +285,23 @@ export class GitHubService extends Context.Service<
 					),
 				)
 
-			const listViewerTeams = () =>
+			const listViewerTeamsDetailed = () =>
 				cachedForADay(
-					"viewer-teams",
+					"viewer-teams-detailed",
 					ghJson("listViewerTeams", ViewerTeamsResponseSchema, ["api", "--paginate", "--slurp", "user/teams"]).pipe(
-						Effect.map((pages) => pages.flat().map((team) => `${team.organization.login}/${team.slug}`)),
+						Effect.map((pages) =>
+							pages.flat().map(
+								(team): ViewerTeam => ({
+									slug: `${team.organization.login}/${team.slug}`,
+									name: team.name ?? team.slug,
+									members: team.members_count ?? null,
+								}),
+							),
+						),
 					),
 				)
+
+			const listViewerTeams = () => listViewerTeamsDetailed().pipe(Effect.map((teams) => teams.map((team) => team.slug)))
 
 			const listAllPullRequests = (input: Omit<ItemListInput<"pullRequest">, "cursor" | "pageSize">) =>
 				drainItemPages<"pullRequest", PullRequestItem>(input, listPullRequestPage, config.prFetchLimit)
@@ -567,6 +580,7 @@ export class GitHubService extends Context.Service<
 				searchPullRequests,
 				listTeamMembers,
 				listViewerTeams,
+				listViewerTeamsDetailed,
 				getPullRequestDiff,
 				listWorkflowRunsForCommit,
 				getWorkflowRunDetails,

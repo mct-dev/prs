@@ -1,6 +1,6 @@
 import type { PullRequestItem } from "../domain.js"
 import { filterByScore, pullRequestFilterScore } from "../ui/filter/scoring.js"
-import { type FilterExpr, type FilterPredicate, parseFilterQuery } from "./parse.js"
+import { type FilterExpr, type FilterField, type FilterPredicate, parseFilterQuery } from "./parse.js"
 
 // Three-valued evaluation: a predicate on data that has not loaded yet is
 // "unknown", and unknown never hides a PR. `not unknown` stays unknown.
@@ -13,6 +13,8 @@ export type BriefStatus = "none" | "stale" | "running" | "done"
 export interface FilterLookups {
 	readonly risk: (pullRequest: PullRequestItem) => RiskLevel | "unknown"
 	readonly brief: (pullRequest: PullRequestItem) => BriefStatus | "unknown"
+	/** Whether the PR is in section `id` (lowercased). Unknown until sections have loaded, or for an unknown id. */
+	readonly section: (pullRequest: PullRequestItem, id: string) => Tri
 }
 
 export interface FilterContext {
@@ -24,6 +26,7 @@ export interface FilterContext {
 export const unknownFilterLookups: FilterLookups = {
 	risk: () => "unknown",
 	brief: () => "unknown",
+	section: () => "unknown",
 }
 
 export const makeFilterContext = (options: Partial<FilterContext> = {}): FilterContext => ({
@@ -98,6 +101,35 @@ const reviewAliases: Record<string, PullRequestItem["reviewStatus"]> = {
 	draft: "draft",
 }
 
+const briefValues: ReadonlySet<string> = new Set<BriefStatus>(["none", "stale", "running", "done"])
+
+/** Whether `value` is one `field` can ever match (used to warn about typos like `ci:passs`). */
+export const isValidFilterValue = (field: FilterField, value: string): boolean => {
+	const normalized = value.toLowerCase()
+	switch (field) {
+		case "draft":
+		case "me.reviewed":
+		case "me.reviewed_since_push":
+			return parseBoolean(normalized) !== null
+		case "size":
+		case "files":
+			return parseCount(normalized) !== null
+		case "age":
+		case "idle":
+			return parseDuration(normalized) !== null
+		case "ci":
+			return normalized in ciAliases
+		case "review":
+			return normalized in reviewAliases
+		case "risk":
+			return parseRisk(normalized) !== null
+		case "brief":
+			return briefValues.has(normalized)
+		default:
+			return normalized.length > 0
+	}
+}
+
 // Glob → RegExp for `file:` (supports `**`, `*`, `?`). Kept for when file lists load.
 export const globToRegExp = (glob: string): RegExp => {
 	let source = ""
@@ -169,6 +201,8 @@ const evaluatePositive = (pullRequest: PullRequestItem, predicate: FilterPredica
 			const actual = context.lookups.brief(pullRequest)
 			return actual === "unknown" ? "unknown" : actual === value
 		}
+		case "section":
+			return context.lookups.section(pullRequest, value)
 		case "me.reviewed": {
 			const expected = parseBoolean(value)
 			if (pullRequest.viewerLatestReviewOid === undefined || expected === null) return "unknown"

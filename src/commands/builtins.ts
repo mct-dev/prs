@@ -185,7 +185,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 		title: "Open command palette",
 		scope: "Global",
 		subtitle: "Search every available route through prs",
-		shortcut: "ctrl-p/cmd-k/?",
+		shortcut: "ctrl-p/cmd-k",
 		keywords: ["palette", "commands", "deck", "help", "keys", "keyboard", "shortcuts"],
 		run: Atom.set(activeModalAtom, Modal.CommandPalette(initialCommandPaletteState)),
 	}),
@@ -214,6 +214,15 @@ export const globalCommands: readonly CommandDefinition[] = [
 			yield* Atom.set(filterDraftAtom, "")
 			yield* Atom.set(filterModeAtom, false)
 		}),
+	}),
+	defineCommand({
+		id: "legend.open",
+		title: "Show icon legend",
+		scope: "Global",
+		subtitle: "What the review, check and brief icons mean",
+		shortcut: "?",
+		keywords: ["help", "icons", "glyphs", "legend", "key", "symbols"],
+		run: Atom.set(activeModalAtom, Modal.Legend()),
 	}),
 
 	// === Workspace surface switches ===

@@ -34,6 +34,7 @@ import {
 	resolveLoad,
 	retryProgressAtom,
 	sectionGroupsAtom,
+	sectionReasonForAtom,
 	sectionsConfigErrorAtom,
 	selectedPullRequestAtom,
 	visibleGroupsAtom,
@@ -41,6 +42,8 @@ import {
 } from "../../ui/pullRequests/atoms.js"
 import { describeFilterQuery } from "../../filter/parse.js"
 import {
+	activeSectionId,
+	selectedRowSectionId,
 	focusedSectionHeaderId,
 	type SectionNavGroup,
 	type SectionNavResult,
@@ -234,6 +237,14 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		[selectedPullRequest, selectedIndex],
 	)
 	const focusedSectionId = focusedSectionHeaderId(sectionNavGroups, sectionCursor, sectionSelection)
+	const currentSectionId = activeSectionId(sectionNavGroups, sectionCursor, sectionSelection)
+	const sectionReasonFor = useAtomValue(sectionReasonForAtom)
+	const currentSectionSummary = sectionGroups.find((group) => group.id === currentSectionId)?.reason?.summary ?? null
+	// The row's own section, not the one the header cursor is in.
+	const rowSectionId = selectedRowSectionId(sectionNavGroups, sectionSelection)
+	const selectedReasonText = selectedPullRequest && rowSectionId ? sectionReasonFor(selectedPullRequest, rowSectionId) : null
+	// The row only repeats what its (visible) header says when it adds something (e.g. which team).
+	const selectedSectionReason = rowSectionId === currentSectionId && selectedReasonText === currentSectionSummary ? null : selectedReasonText
 	const pullRequestSections = useMemo<PullRequestSections | null>(
 		() =>
 			activeView._tag === "Sections"
@@ -247,11 +258,13 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 							collapsed: group.collapsed,
 							count: group.pullRequests.length,
 							focused: group.id === focusedSectionId,
+							reason: group.id === currentSectionId ? (group.reason?.summary ?? null) : null,
 						})),
 						configError: sectionsConfigError,
+						selectedReason: selectedSectionReason,
 					}
 				: null,
-		[activeView._tag, sectionGroups, sectionsConfigError, focusedSectionId],
+		[activeView._tag, sectionGroups, sectionsConfigError, focusedSectionId, currentSectionId, selectedSectionReason],
 	)
 	const activeViews = useAtomValue(activeViewsAtom)
 	const currentQueueCacheKey = viewCacheKey(activeView)

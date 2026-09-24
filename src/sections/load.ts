@@ -4,6 +4,7 @@ import type { FilterExpr } from "../filter/parse.js"
 import { compileSections, referencedTeams } from "./compile.js"
 import type { SectionSort, SectionsConfig, SectionVarValue } from "./config.js"
 import { mergeQueryResults } from "./merge.js"
+import { describeSection, type SectionReason } from "./reason.js"
 
 // Loads every section of `sections.yaml`: resolve vars and team members,
 // compile, then fetch each section. Every GitHub request (team members and
@@ -30,6 +31,8 @@ export interface SectionState {
 	readonly where: FilterExpr | null
 	readonly sort: SectionSort
 	readonly exclusive: boolean
+	/** Plain-language description of the query; see reason.ts. */
+	readonly reason?: SectionReason | null
 }
 
 export interface SectionsSnapshot {
@@ -92,7 +95,7 @@ export const loadSections = <E, R>(config: SectionsConfig, adapter: SectionLoadA
 		)
 
 		const compiled = compileSections(config, { viewer, vars, teamMembers })
-		const states: SectionState[] = compiled.map((section) => ({
+		const states: SectionState[] = compiled.map((section, index) => ({
 			id: section.id,
 			title: section.title,
 			key: section.key,
@@ -104,6 +107,7 @@ export const loadSections = <E, R>(config: SectionsConfig, adapter: SectionLoadA
 			where: section.where,
 			sort: section.sort,
 			exclusive: section.exclusive,
+			reason: section.error ? null : describeSection(config.sections[index]!, { vars: { ...vars, me: viewer }, teamMembers }),
 		}))
 		const items = new Map<string, readonly PullRequestItem[]>()
 		const setItems = (index: number, pullRequests: readonly PullRequestItem[]) => {
