@@ -158,6 +158,11 @@ export interface PullRequestItem {
 	readonly updatedAt: Date
 	readonly closedAt: Date | null
 	readonly url: string
+	/**
+	 * Commit oid of the viewer's latest submitted review. `undefined` means the
+	 * data was not fetched; `null` means the viewer has not reviewed.
+	 */
+	readonly viewerLatestReviewOid?: string | null
 }
 
 // === Workflow runs (GitHub Actions) ===
