@@ -159,6 +159,15 @@ export const getCheckInfoFromContexts = (contexts: readonly RawCheckContext[]): 
 // PR / Issue / Repository / MergeInfo parsing
 // ---------------------------------------------------------------------------
 
+// `undefined` = not fetched, `null` = no submitted review. A pending (unsubmitted)
+// latest review hides whether an earlier one exists, so it counts as unknown.
+const viewerLatestReviewOid = (item: RawPullRequestSummaryNode): { readonly viewerLatestReviewOid?: string | null } => {
+	if (item.viewerLatestReview === undefined) return {}
+	if (item.viewerLatestReview === null) return { viewerLatestReviewOid: null }
+	if (item.viewerLatestReview.state === "PENDING") return {}
+	return { viewerLatestReviewOid: item.viewerLatestReview.commit?.oid ?? null }
+}
+
 export const parsePullRequestSummary = (item: RawPullRequestSummaryNode): PullRequestItem => {
 	const checkInfo = getCheckInfoFromContexts(item.statusCheckRollup?.contexts.nodes ?? [])
 	return {
@@ -186,6 +195,7 @@ export const parsePullRequestSummary = (item: RawPullRequestSummaryNode): PullRe
 		updatedAt: new Date(item.updatedAt),
 		closedAt: normalizeDate(item.closedAt),
 		url: item.url,
+		...viewerLatestReviewOid(item),
 	}
 }
 

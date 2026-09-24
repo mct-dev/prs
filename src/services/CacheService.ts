@@ -88,6 +88,7 @@ const CachedPullRequestItemSchema = Schema.Struct({
 	updatedAt: Schema.optional(Schema.String),
 	closedAt: Schema.NullOr(Schema.String),
 	url: Schema.String,
+	viewerLatestReviewOid: Schema.optionalKey(Schema.NullOr(Schema.String)),
 })
 
 const CachedPullRequestViewSchema = Schema.Union([
@@ -227,6 +228,7 @@ const cachedPullRequestToDomain = (cached: CachedPullRequestItem): PullRequestIt
 		updatedAt,
 		closedAt,
 		url: cached.url,
+		...(cached.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: cached.viewerLatestReviewOid } : {}),
 	}
 }
 
@@ -289,6 +291,7 @@ const encodePullRequest = (pullRequest: PullRequestItem): CachedPullRequestItem 
 	updatedAt: pullRequest.updatedAt.toISOString(),
 	closedAt: pullRequest.closedAt?.toISOString() ?? null,
 	url: pullRequest.url,
+	...(pullRequest.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: pullRequest.viewerLatestReviewOid } : {}),
 })
 
 const repositoryDetailsToDomain = (cached: CachedRepositoryDetails): RepositoryDetails | null => {

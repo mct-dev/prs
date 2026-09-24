@@ -165,6 +165,62 @@ const uniqueLabels = (items: readonly { readonly labels: readonly { readonly nam
 	return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name))
 }
 
+const mockTeamMembers = Array.from({ length: 6 }, (_, index) => mockAuthor(index * 2 + 1))
+
+// Tiny interpreter for the qualifiers sections use, so mock mode shows
+// plausible sections. Positive `author:` terms OR together like on GitHub.
+const mockSearchMatches = (item: PullRequestItem, query: string) => {
+	const positiveAuthors: string[] = []
+	const bare = (login: string) => login.toLowerCase().replace(/^app\//, "")
+	const matches = query
+		.split(/\s+/)
+		.filter((token) => token.length > 0)
+		.every((token) => {
+			const negated = token.startsWith("-")
+			const body = negated ? token.slice(1) : token
+			const separator = body.indexOf(":")
+			if (separator < 0) return item.title.toLowerCase().includes(body.toLowerCase())
+			const qualifier = body.slice(0, separator).toLowerCase()
+			const value = body.slice(separator + 1)
+			let result: boolean
+			switch (qualifier) {
+				case "author":
+					if (!negated) {
+						positiveAuthors.push(bare(value))
+						return true
+					}
+					result = bare(item.author) === bare(value)
+					break
+				case "review-requested":
+					result = item.author !== value && item.reviewStatus === "review"
+					break
+				case "reviewed-by":
+					result = item.author !== value && (item.reviewStatus === "approved" || item.reviewStatus === "changes")
+					break
+				case "assignee":
+					result = item.reviewStatus === "changes"
+					break
+				case "draft":
+					result = (item.reviewStatus === "draft") === (value === "true")
+					break
+				case "repo":
+					result = item.repository.toLowerCase() === value.toLowerCase()
+					break
+				default:
+					return true
+			}
+			return negated ? !result : result
+		})
+	return matches && (positiveAuthors.length === 0 || positiveAuthors.includes(bare(item.author)))
+}
+
+// Deterministic viewer reviews so the "new commits since my review" section has content.
+const withMockViewerReview = (item: PullRequestItem, username: string): PullRequestItem => {
+	if (item.author === username) return { ...item, viewerLatestReviewOid: null }
+	if (item.reviewStatus !== "approved" && item.reviewStatus !== "changes") return { ...item, viewerLatestReviewOid: null }
+	return { ...item, viewerLatestReviewOid: item.number % 2 === 0 ? item.headRefOid : `${item.headRefOid}-old` }
+}
+
 export const MockGitHubService = {
 	layer: (options: MockOptions) => {
 		const fixture = loadMockFixtureSnapshot()
@@ -388,6 +444,17 @@ export const MockGitHubService = {
 				removePullRequestLabel: () => Effect.void,
 				addIssueLabel: () => Effect.void,
 				removeIssueLabel: () => Effect.void,
+				searchPullRequests: (query: string, limit: number) => {
+					const source = fixture ? [...new Map([...items, ...userItems].map((item) => [item.url, item])).values()] : items
+					return Effect.succeed(
+						source
+							.filter((item) => mockSearchMatches(item, query))
+							.map((item) => withMockViewerReview(item, username))
+							.slice(0, limit),
+					)
+				},
+				listTeamMembers: () => Effect.succeed(mockTeamMembers),
+				listViewerTeams: () => Effect.succeed(["mock-org/mock-team"]),
 				listPullRequestPage: (input: ItemListInput<"pullRequest">) => {
 					const queueMode = queueModeForListMode(input.mode)
 					const filtered = filterByView(queueMode, input.repository, pullRequestSource(queueMode, input.repository), username, strictUserScope)

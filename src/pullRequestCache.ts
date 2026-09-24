@@ -32,6 +32,7 @@ export const mergePullRequestDetail = (summary: PullRequestItem, detail: PullReq
 	checkSummary: detail.checkSummary,
 	checks: detail.checks,
 	detailLoaded: true,
+	...(summary.viewerLatestReviewOid === undefined && detail.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: detail.viewerLatestReviewOid } : {}),
 })
 
 export const freshPullRequestLoad = (
