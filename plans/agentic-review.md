@@ -148,6 +148,21 @@ Read-only is a hard rule. The review must never post, approve, or push.
 
 ## Status
 
+- **Round 2 (2026-09-24, main 1168c27): shipped.**
+  - Rebrand to prs, with `PRS_*` env vars (`GHUI_*` still accepted) and animated contour/plasma/torus loading art.
+  - Reviewers row in details.
+  - `esc` from a focus-area diff returns to the brief.
+  - `B` preset editor (skill, model, budget, prompt).
+  - j/k clamped to the current section, `section:` filter, filter autocomplete and recents, `?` legend, section and row "why" reasons, Teams picker.
+  - Markdown/HTML comment renderer, with control-char and URL safety and a lexer time budget.
+  - Inline diff threads (`c`/`C`), `◆N` file badges.
+  - 958 tests.
+  - Known gaps:
+    - Highlight continuity across thread splits.
+    - Only the first 100 review threads load.
+    - Image placeholders only.
+    - Diff has no viewport windowing.
+
 In progress. Phases: 1 sections → 2 filters → 3 agent runner (done: runner, cache, commands, minimal brief block) → 4 brief UI (done).
 
 - **Phase 4 (brief UI): shipped** on `feat/brief-ui`.
