@@ -85,3 +85,20 @@ describe("comments view keys", () => {
 		expect(run(false, ["return"])).toEqual(["confirm"])
 	})
 })
+
+describe("stacked diff memoization", () => {
+	test("toggling a thread in one file reuses every other file's segments", () => {
+		const fresh = splitPatchFiles(patch)
+		const withHeight = (height: number) => (file: { name: string }) =>
+			file.name === "src/example/one.ts" ? [{ key: "k:one:RIGHT:2", side: "RIGHT" as const, line: 2, height }] : []
+		const collapsed = buildStackedDiffFiles(fresh, "unified", "none", 80, withHeight(1))
+		const expanded = buildStackedDiffFiles(fresh, "unified", "none", 80, withHeight(5))
+		const again = buildStackedDiffFiles(fresh, "unified", "none", 80, withHeight(1))
+		// The toggled file is re-laid out and the next file shifts down...
+		expect(expanded[0]!.diffHeight).toBe(collapsed[0]!.diffHeight + 4)
+		expect(expanded[1]!.sections.map((section) => section.top)).toEqual(collapsed[1]!.sections.map((section) => section.top + 4))
+		// ...but a layout seen before comes straight from the cache.
+		expect(again[0]!.sections).toBe(collapsed[0]!.sections)
+		expect(again).toEqual(collapsed)
+	})
+})

@@ -377,6 +377,39 @@ const fileBodySections = (file: DiffFilePatch, threads: readonly DiffThreadPlace
 	return { sections, height: offset - top }
 }
 
+interface FileBody {
+	readonly sections: readonly DiffFileSection[]
+	readonly height: number
+}
+
+// Toggling one thread changes only that file's placements, so each file's
+// segmented body is memoized on (view, wrap, width, its own placements) and
+// merely re-offset when an earlier file grows or shrinks.
+const FILE_BODY_CACHE_LIMIT = 8
+const fileBodyCache = new WeakMap<DiffFilePatch, Map<string, { body: FileBody; top: number; placed: readonly DiffFileSection[] }>>()
+
+const cachedFileBody = (file: DiffFilePatch, threads: readonly DiffThreadPlacement[], view: DiffView, wrapMode: DiffWrapMode, width: number, top: number): FileBody => {
+	const key = `${view}\u0001${wrapMode}\u0001${width}\u0001${threads.map((thread) => `${thread.key}\u0002${thread.side}\u0002${thread.line}\u0002${thread.height}`).join("\u0001")}`
+	let perFile = fileBodyCache.get(file)
+	if (!perFile) {
+		perFile = new Map()
+		fileBodyCache.set(file, perFile)
+	}
+	let hit = perFile.get(key)
+	if (hit) {
+		if (hit.top !== top) {
+			hit = { body: hit.body, top, placed: hit.body.sections.map((section) => ({ ...section, top: section.top + top })) }
+			perFile.set(key, hit)
+		}
+		return { sections: hit.placed, height: hit.body.height }
+	}
+	const body = fileBodySections(file, threads, view, wrapMode, width, 0)
+	if (perFile.size >= FILE_BODY_CACHE_LIMIT) perFile.delete(perFile.keys().next().value!)
+	const placed = body.sections.map((section) => ({ ...section, top: section.top + top }))
+	perFile.set(key, { body, top, placed })
+	return { sections: placed, height: body.height }
+}
+
 export const buildStackedDiffFiles = (
 	files: readonly DiffFilePatch[],
 	view: DiffView,
@@ -389,7 +422,7 @@ export const buildStackedDiffFiles = (
 		const separatorBefore = index === 0 ? 0 : 1
 		const headerLine = offset + separatorBefore
 		const diffStartLine = headerLine + 2
-		const body = fileBodySections(file, threadsForFile(file, index), view, wrapMode, width, diffStartLine)
+		const body = cachedFileBody(file, threadsForFile(file, index), view, wrapMode, width, diffStartLine)
 		const stackedFile = {
 			file,
 			index,
