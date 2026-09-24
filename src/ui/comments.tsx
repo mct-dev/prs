@@ -1,6 +1,7 @@
 import { TextAttributes } from "@opentui/core"
 import { formatRelativeDate } from "../date.js"
 import type { DiffCommentSide } from "../domain.js"
+import { isSafeUrl } from "../safeUrl.js"
 import { colors } from "./colors.js"
 import { fitCell, TextLine } from "./primitives.js"
 
@@ -191,7 +192,7 @@ export const CommentSegments = ({
 			const isHovered = segment.url !== undefined && segment.url === hoveredUrl
 			const fg = selected ? colors.accent : isHovered ? colors.accent : segment.fg
 			return (
-				<span key={index} fg={fg} {...(attributes !== 0 ? { attributes } : {})} {...(segment.url !== undefined ? { link: { url: segment.url } } : {})}>
+				<span key={index} fg={fg} {...(attributes !== 0 ? { attributes } : {})} {...(segment.url !== undefined && isSafeUrl(segment.url) ? { link: { url: segment.url } } : {})}>
 					{segment.text}
 				</span>
 			)

@@ -1,6 +1,7 @@
 import type { IssueItem, PullRequestItem } from "../domain.js"
 import { errorMessage } from "../errors.js"
 import type { PullRequestView } from "../pullRequestViews.js"
+import { isSafeUrl } from "../safeUrl.js"
 import { parseIssueReferenceUrl } from "../ui/inlineSegments.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 
@@ -92,6 +93,10 @@ export const useLinkNavigation = ({
 		const issueReference = parseIssueReferenceUrl(url)
 		const targetUrl = issueReference ? `https://github.com/${issueReference.repository}/issues/${issueReference.number}` : url
 		if (issueReference && navigateIssueReference(issueReference.repository, issueReference.number)) return
+		if (!isSafeUrl(targetUrl)) {
+			flashNotice("Refusing to open a non-web link")
+			return
+		}
 		void openUrl(targetUrl)
 			.then(() => flashNotice(`Opened ${targetUrl}`))
 			.catch((error) => flashNotice(errorMessage(error)))

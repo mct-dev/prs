@@ -1,14 +1,19 @@
 import { Context, Effect, Layer } from "effect"
 import type { PullRequestItem } from "../domain.js"
-import { CommandRunner, type CommandError } from "./CommandRunner.js"
+import { isSafeUrl } from "../safeUrl.js"
+import { CommandError, CommandRunner } from "./CommandRunner.js"
 
-// `open` ships on macOS; `xdg-open` is the Linux/BSD convention; `start` is the
-// Windows shell built-in and requires a dummy title argument before the URL.
-const platformOpener = (): { readonly command: string; readonly prefix: readonly string[] } => {
-	if (process.platform === "darwin") return { command: "open", prefix: [] }
-	if (process.platform === "win32") return { command: "cmd", prefix: ["/c", "start", ""] }
+// `open` ships on macOS; `xdg-open` is the Linux/BSD convention. On Windows,
+// `url.dll` opens the URL without going through `cmd`, whose metacharacter
+// parsing (`&`, `|`, `^`) would otherwise treat parts of a URL as commands.
+export const platformOpener = (platform: NodeJS.Platform = process.platform): { readonly command: string; readonly prefix: readonly string[] } => {
+	if (platform === "darwin") return { command: "open", prefix: [] }
+	if (platform === "win32") return { command: "rundll32", prefix: ["url.dll,FileProtocolHandler"] }
 	return { command: "xdg-open", prefix: [] }
 }
+
+const refuseUrl = (command: string, url: string) =>
+	Effect.fail(new CommandError({ command, args: [url], detail: "Refusing to open a URL that is not a plain http(s) link", cause: null }))
 
 export class BrowserOpener extends Context.Service<
 	BrowserOpener,
@@ -28,6 +33,7 @@ export class BrowserOpener extends Context.Service<
 			})
 
 			const openUrl = Effect.fn("BrowserOpener.openUrl")(function* (url: string) {
+				if (!isSafeUrl(url)) return yield* refuseUrl(opener.command, url)
 				yield* command.run(opener.command, [...opener.prefix, url])
 			})
 
