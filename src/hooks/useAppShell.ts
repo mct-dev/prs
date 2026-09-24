@@ -55,6 +55,7 @@ import { DIFF_FILE_PANEL_AUTO_THRESHOLD, diffFilePanelOverrideAtom, selectedDiff
 import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { briefFullViewAtom } from "../ui/review/briefViewAtoms.js"
 import { useBriefDiffTarget } from "../ui/review/useBriefDiffTarget.js"
+import { useCommentDiffTarget } from "../ui/comments/useCommentDiffTarget.js"
 import { useBriefView } from "./useBriefView.js"
 import { runsFullViewAtom } from "../ui/runs/atoms.js"
 import { diffCommentThreadMapKey } from "../ui/diff/comments.js"
@@ -740,6 +741,21 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		diffFullView,
 		readyDiffFiles,
 		diffCommentAnchors,
+		setDiffFileIndex,
+		setDiffCommentAnchorIndex,
+		ensureDiffLineVisible,
+		scrollToDiffFile: diffNav.scrollToDiffFile,
+		flashNotice,
+	})
+	useCommentDiffTarget({
+		selectedPullRequest,
+		selectedOrderedComment,
+		selectedDiffKey,
+		diffFullView,
+		stackedDiffFiles,
+		diffCommentAnchors,
+		diffThreads,
+		openDiffView,
 		setDiffFileIndex,
 		setDiffCommentAnchorIndex,
 		ensureDiffLineVisible,

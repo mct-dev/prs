@@ -1008,6 +1008,17 @@ export const globalCommands: readonly CommandDefinition[] = [
 		run: Effect.sync(() => invokeHandoff("openDiffCommentModal")),
 	}),
 
+	defineCommand({
+		id: "comments.open-in-diff",
+		title: "Show comment in diff",
+		scope: "Comments",
+		subtitle: "Open the diff at the comment's file and line",
+		shortcut: "d",
+		disabledReason: selectedCommentReasonAtom,
+		keywords: ["review", "file", "thread", "jump"],
+		run: Effect.sync(() => invokeHandoff("openSelectedCommentInDiff")),
+	}),
+
 	// === Comment mutations ===
 	defineCommand({
 		id: "comments.reply",

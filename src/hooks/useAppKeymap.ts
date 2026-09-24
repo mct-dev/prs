@@ -300,6 +300,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				halfPage: i.halfPage,
 				visibleCount: i.commentsRowCount,
 				canEditSelected: canEditComment(i.selectedOrderedComment, i.username),
+				onReviewComment: i.selectedOrderedComment?._tag === "review-comment",
 				moveCommentsSelection: i.moveCommentsSelection,
 				setCommentsSelection: i.setCommentsSelection,
 				closeCommentsView: i.closeCommentsView,

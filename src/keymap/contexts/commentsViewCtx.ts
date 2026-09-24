@@ -5,6 +5,7 @@ export interface BuildCommentsViewCtxInput {
 	readonly halfPage: number
 	readonly visibleCount: number
 	readonly canEditSelected: boolean
+	readonly onReviewComment: boolean
 	readonly moveCommentsSelection: (delta: number) => void
 	readonly setCommentsSelection: (index: number) => void
 	readonly closeCommentsView: () => void
@@ -19,6 +20,7 @@ export const buildCommentsViewCtx = ({
 	halfPage,
 	visibleCount,
 	canEditSelected,
+	onReviewComment,
 	moveCommentsSelection,
 	setCommentsSelection,
 	closeCommentsView,
@@ -33,11 +35,14 @@ export const buildCommentsViewCtx = ({
 	scrollTo: setCommentsSelection,
 	visibleCount,
 	canEditSelected,
+	onReviewComment,
 	closeCommentsView,
 	openInBrowser: openSelectedCommentInBrowser,
 	refresh: refreshSelectedComments,
 	newComment: () => runCommandById("comments.new"),
 	confirmSelection: confirmCommentSelection,
+	openInDiff: () => runCommandById("comments.open-in-diff"),
+	reply: () => runCommandById("comments.reply"),
 	editSelected: () => runCommandById("comments.edit"),
 	deleteSelected: () => runCommandById("comments.delete"),
 	toggleCard: cards.toggleSelectedCard,
