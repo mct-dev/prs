@@ -105,6 +105,7 @@ export const validatePresetForm = (id: string, agent: ReviewAgentKind, values: P
 	if (skill && /\s/.test(skill)) return { _tag: "error", field: "skill", message: "Skill names have no spaces." }
 	const model = blankToNull(values.model)
 	if (model && /\s/.test(model)) return { _tag: "error", field: "model", message: "Model names have no spaces." }
+	if (model?.startsWith("-")) return { _tag: "error", field: "model", message: "Model names can't start with -." }
 	return { _tag: "ok", draft: { id, agent, skill, model, maxBudgetUsd, extraPrompt: values.extraPrompt.trim() } }
 }
 

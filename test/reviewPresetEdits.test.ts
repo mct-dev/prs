@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Effect } from "effect"
@@ -94,6 +94,11 @@ describe("preset form validation", () => {
 		})
 		expect(validatePresetForm("x", "claude", { ...values, skill: "two words" })).toMatchObject({ _tag: "error", field: "skill" })
 		expect(validatePresetForm("x", "claude", { ...values, model: "big model" })).toMatchObject({ _tag: "error", field: "model" })
+		expect(validatePresetForm("x", "claude", { ...values, model: "--dangerously-skip-permissions" })).toMatchObject({
+			_tag: "error",
+			field: "model",
+			message: "Model names can't start with -.",
+		})
 	})
 
 	test("preset names", () => {
@@ -134,6 +139,14 @@ describe("updateStoredReviewConfig", () => {
 		const loaded = (await Effect.runPromise(loadStoredReviewConfig)).review
 		expect(loaded.defaultPreset).toBe("deep")
 		expect(loaded.presets.deep).toMatchObject({ agent: "claude", model: "opus", maxBudgetUsd: 5 })
+	})
+
+	test("writes through a temp file and leaves no temp files behind", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "prs-review-config-"))
+		tempDirs.push(dir)
+		process.env.GHUI_CONFIG_DIR = dir
+		await Effect.runPromise(updateStoredReviewConfig((review) => upsertPresetRaw(review, draft)))
+		expect(await readdir(dir)).toEqual(["config.json"])
 	})
 
 	test("creates the file when it does not exist", async () => {

@@ -25,6 +25,13 @@ const put = async (path: string, content: string) => {
 const skillFile = (name: string | null, description: string) => `---\n${name ? `name: ${name}\n` : ""}description: ${description}\n---\n\n# Body\n`
 
 describe("parseSkillFrontmatter", () => {
+	test("folds YAML block scalar descriptions to one line", () => {
+		expect(parseSkillFrontmatter("---\nname: deep\ndescription: >-\n  Reviews a PR\n  in depth.\n---\n")).toEqual({ name: "deep", description: "Reviews a PR in depth." })
+		expect(parseSkillFrontmatter("---\nname: lit\ndescription: |\n  Line one\n  Line two\n---\n")).toEqual({ name: "lit", description: "Line one Line two" })
+	})
+	test("falls back to key: value lines when the frontmatter is not strict YAML", () => {
+		expect(parseSkillFrontmatter("---\nname: loose\ndescription: Use when: reviewing\n---\n")).toEqual({ name: "loose", description: "Use when: reviewing" })
+	})
 	test("reads single-line name and description, unquoting values", () => {
 		expect(parseSkillFrontmatter(`---\nname: "careful-review"\ndescription: 'Reviews a PR carefully'\nallowed-tools: Read\n---\nbody`)).toEqual({
 			name: "careful-review",
@@ -32,8 +39,8 @@ describe("parseSkillFrontmatter", () => {
 		})
 	})
 
-	test("block scalars and missing frontmatter degrade to empty values", () => {
-		expect(parseSkillFrontmatter("---\nname: x\ndescription: >\n  folded text\n---\n")).toEqual({ name: "x", description: "" })
+	test("missing frontmatter or values degrade to empty values", () => {
+		expect(parseSkillFrontmatter("---\nname: x\ndescription: >\n  folded text\n---\n")).toEqual({ name: "x", description: "folded text" })
 		expect(parseSkillFrontmatter("# no frontmatter")).toEqual({ name: null, description: "" })
 		expect(parseSkillFrontmatter("---\nname:\n---\n")).toEqual({ name: null, description: "" })
 	})

@@ -25,18 +25,33 @@ const unquote = (value: string) => {
 	return (trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")) ? trimmed.slice(1, -1) : trimmed
 }
 
-/** `name` and `description` from a SKILL.md YAML frontmatter block (single-line values only). */
+const lineFields = (block: string): Record<string, unknown> => {
+	const fields: Record<string, unknown> = {}
+	for (const line of block.split(/\r?\n/)) {
+		const field = /^([A-Za-z_-]+):\s*(.*)$/.exec(line)
+		if (field) fields[field[1]!] = unquote(field[2]!)
+	}
+	return fields
+}
+
+const frontmatterFields = (block: string): Record<string, unknown> => {
+	try {
+		const parsed = Bun.YAML.parse(block) as unknown
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+	} catch {
+		// Hand-written frontmatter is often not strict YAML (unquoted colons); fall back to key: value lines.
+	}
+	return lineFields(block)
+}
+
+/** `name` and `description` from a SKILL.md YAML frontmatter block. Block scalars (`>-`, `|`) fold to one line. */
 export const parseSkillFrontmatter = (text: string): { readonly name: string | null; readonly description: string } => {
 	const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
 	if (!match) return { name: null, description: "" }
-	const fields = new Map<string, string>()
-	for (const line of match[1]!.split(/\r?\n/)) {
-		const field = /^([A-Za-z_-]+):\s*(.*)$/.exec(line)
-		if (field) fields.set(field[1]!, unquote(field[2]!))
-	}
-	const name = fields.get("name")
-	const description = fields.get("description") ?? ""
-	return { name: name && name.length > 0 ? name : null, description: description === ">" || description === "|" ? "" : description }
+	const fields = frontmatterFields(match[1]!)
+	const name = typeof fields.name === "string" ? fields.name.trim() : ""
+	const description = typeof fields.description === "string" ? fields.description.replace(/\s+/g, " ").trim() : ""
+	return { name: name.length > 0 ? name : null, description }
 }
 
 const scan = async (pattern: string, cwd: string): Promise<readonly string[]> => {

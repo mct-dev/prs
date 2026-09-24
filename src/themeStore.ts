@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises"
+import { mkdir, rename, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { Effect, Schema } from "effect"
@@ -42,7 +42,15 @@ const readStoredConfig = async () => {
 const writeStoredConfig = async (config: StoredConfig) => {
 	const path = configPath()
 	await mkdir(dirname(path), { recursive: true })
-	await Bun.write(path, `${JSON.stringify(config, null, "\t")}\n`)
+	// Write a sibling temp file, then rename over config.json, so a crash mid-write can't truncate it.
+	const temporary = `${path}.${process.pid}.${Date.now()}.tmp`
+	await Bun.write(temporary, `${JSON.stringify(config, null, "\t")}\n`)
+	try {
+		await rename(temporary, path)
+	} catch (error) {
+		await rm(temporary, { force: true })
+		throw error
+	}
 }
 
 export const loadStoredThemeId: Effect.Effect<ThemeId> = Effect.catchCause(
