@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { evaluateExpression, evaluatePredicate, filterPullRequests, globToRegExp, makeFilterContext, parseDuration } from "../src/filter/evaluate.js"
+import { evaluateExpression, evaluatePredicate, filterPullRequests, globToRegExp, makeFilterContext, parseDuration, unknownFilterLookups } from "../src/filter/evaluate.js"
 import { describeFilterQuery, FilterParseError, parseFilterQuery, parseFilterToken, parseWhereExpression, type FilterPredicate } from "../src/filter/parse.js"
 import { makePullRequest } from "./fixtures/pullRequest.js"
 
@@ -128,7 +128,7 @@ describe("evaluatePredicate", () => {
 	test("risk and brief come from injected lookups", () => {
 		expect(evaluate("risk>=medium")).toBe("unknown")
 		expect(evaluate("brief:done")).toBe("unknown")
-		const withRisk = makeFilterContext({ now, lookups: { risk: () => "high", brief: () => "stale" } })
+		const withRisk = makeFilterContext({ now, lookups: { ...unknownFilterLookups, risk: () => "high", brief: () => "stale" } })
 		expect(evaluatePredicate(makePullRequest(), predicate("risk>=medium"), withRisk)).toBe(true)
 		expect(evaluatePredicate(makePullRequest(), predicate("risk:low"), withRisk)).toBe(false)
 		expect(evaluatePredicate(makePullRequest(), predicate("brief:stale"), withRisk)).toBe(true)

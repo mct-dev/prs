@@ -13,6 +13,8 @@ export type BriefStatus = "none" | "stale" | "running" | "done"
 export interface FilterLookups {
 	readonly risk: (pullRequest: PullRequestItem) => RiskLevel | "unknown"
 	readonly brief: (pullRequest: PullRequestItem) => BriefStatus | "unknown"
+	/** Whether the PR is in section `id` (lowercased). Unknown until sections have loaded, or for an unknown id. */
+	readonly section: (pullRequest: PullRequestItem, id: string) => Tri
 }
 
 export interface FilterContext {
@@ -24,6 +26,7 @@ export interface FilterContext {
 export const unknownFilterLookups: FilterLookups = {
 	risk: () => "unknown",
 	brief: () => "unknown",
+	section: () => "unknown",
 }
 
 export const makeFilterContext = (options: Partial<FilterContext> = {}): FilterContext => ({
@@ -169,6 +172,8 @@ const evaluatePositive = (pullRequest: PullRequestItem, predicate: FilterPredica
 			const actual = context.lookups.brief(pullRequest)
 			return actual === "unknown" ? "unknown" : actual === value
 		}
+		case "section":
+			return context.lookups.section(pullRequest, value)
 		case "me.reviewed": {
 			const expected = parseBoolean(value)
 			if (pullRequest.viewerLatestReviewOid === undefined || expected === null) return "unknown"

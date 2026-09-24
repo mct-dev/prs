@@ -89,3 +89,37 @@ export const assignSections = (
 		return { id: section.id, pullRequests: sortSectionPullRequests(matching, section.sort, context) }
 	})
 }
+
+/** url → ids of the sections it was assigned to, in config order. */
+export const sectionMembershipByUrl = (groups: readonly SectionGroup[]): ReadonlyMap<string, readonly string[]> => {
+	const byUrl = new Map<string, string[]>()
+	for (const group of groups) {
+		for (const pullRequest of group.pullRequests) {
+			const ids = byUrl.get(pullRequest.url)
+			if (ids) ids.push(group.id)
+			else byUrl.set(pullRequest.url, [group.id])
+		}
+	}
+	return byUrl
+}
+
+export interface SectionLookupState {
+	readonly id: string
+	readonly status: "loading" | "ready" | "error"
+}
+
+/**
+ * The `section:<id>` lookup. Unknown (never hides) while no section has
+ * loaded, for an id that is not configured, or while that section is still
+ * loading; otherwise whether the PR was assigned to the section.
+ */
+export const sectionLookup =
+	(states: readonly SectionLookupState[], membership: ReadonlyMap<string, readonly string[]> | null) =>
+	(pullRequest: PullRequestItem, id: string): boolean | "unknown" => {
+		if (membership === null) return "unknown"
+		const state = states.find((candidate) => candidate.id.toLowerCase() === id)
+		if (!state) return "unknown"
+		const ids = membership.get(pullRequest.url) ?? []
+		if (ids.some((candidate) => candidate.toLowerCase() === id)) return true
+		return state.status === "loading" ? "unknown" : false
+	}

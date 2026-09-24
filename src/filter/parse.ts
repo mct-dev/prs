@@ -21,6 +21,7 @@ export const filterFields = [
 	"review",
 	"risk",
 	"brief",
+	"section",
 	"me.reviewed",
 	"me.reviewed_since_push",
 ] as const
@@ -189,4 +190,4 @@ export const describeFilterQuery = (input: string): string => {
 	return parts.join(" ")
 }
 
-export const filterHelpText = "author: repo: label: draft: ci: review: size> files> age> idle> risk: brief: · -field:x negates"
+export const filterHelpText = "author: repo: label: draft: ci: review: size> files> age> idle> risk: brief: section: · -field:x negates"

@@ -12,13 +12,13 @@ import { freshPullRequestLoad, mergePullRequestDetail } from "../../pullRequestC
 export { nextLoadAfterPage } from "../../pullRequestCache.js"
 import type { PullRequestLoad } from "../../pullRequestLoad.js"
 import { activePullRequestViews, type PullRequestView, SECTIONS_VIEW_CACHE_KEY, sectionsView, viewCacheKey, viewRepository, viewToListInput } from "../../pullRequestViews.js"
-import { type FilterLookups, filterPullRequests, makeFilterContext } from "../../filter/evaluate.js"
+import { type FilterLookups, filterPullRequests, makeFilterContext, unknownFilterLookups } from "../../filter/evaluate.js"
 import { parseFilterQuery } from "../../filter/parse.js"
 import { briefFilterValue, briefRisk, briefStatusFor } from "../../review/briefStatus.js"
 import { loadSectionsConfig } from "../../sections/config.js"
 import { loadSections, type SectionState, type SectionsSnapshot, type SectionStatus } from "../../sections/load.js"
 import type { SectionCursor } from "../../sections/cursor.js"
-import { assignSections } from "../../sections/merge.js"
+import { assignSections, sectionLookup, sectionMembershipByUrl } from "../../sections/merge.js"
 import { CacheService } from "../../services/CacheService.js"
 import { GitHubService } from "../../services/GitHubService.js"
 import { githubRuntime, homePullRequestView, pullRequestPageSize } from "../../services/runtime.js"
@@ -382,14 +382,35 @@ export const filteredPullRequestsAtom = Atom.make((get) => {
 	return filterPullRequests(pullRequests, query, filterContext(get))
 })
 
-const filterContext = (get: Atom.AtomContext) => {
+// Context for section `where:` rules: no `section:` lookup (that would be circular).
+const baseFilterContext = (get: Atom.AtomContext) => {
 	const username = get(usernameAtom)
 	const reviews = get(agentReviewIndexAtom)
 	const lookups: FilterLookups = {
+		...unknownFilterLookups,
 		risk: (pullRequest) => briefRisk(briefStatusFor(reviews, pullRequest)) ?? "unknown",
 		brief: (pullRequest) => briefFilterValue(briefStatusFor(reviews, pullRequest)),
 	}
 	return makeFilterContext({ now: new Date(), lookups, ...(AsyncResult.isSuccess(username) ? { viewer: username.value } : {}) })
+}
+
+/**
+ * url → section ids, assigned over the (unfiltered) sections load so
+ * `section:<id>` works from any view. Null until sections have loaded.
+ */
+export const sectionMembershipAtom = Atom.make((get): ReadonlyMap<string, readonly string[]> | null => {
+	const states = get(sectionStatesAtom)
+	const load = get(queueLoadCacheAtom)[SECTIONS_VIEW_CACHE_KEY]
+	if (states.length === 0 || !load) return null
+	const byUrl = new Map(load.data.map((pullRequest) => [pullRequest.url, pullRequest]))
+	const membership = new Map(states.map((state) => [state.id, state.urls]))
+	return sectionMembershipByUrl(assignSections(states, membership, byUrl, baseFilterContext(get)))
+})
+
+const filterContext = (get: Atom.AtomContext) => {
+	const base = baseFilterContext(get)
+	const section = sectionLookup(get(sectionStatesAtom), get(sectionMembershipAtom))
+	return { ...base, lookups: { ...base.lookups, section } }
 }
 
 export interface SectionGroupView {
@@ -410,7 +431,7 @@ export const sectionGroupsAtom = Atom.make((get): readonly SectionGroupView[] =>
 	const pullRequests = get(filteredPullRequestsAtom)
 	const byUrl = new Map(pullRequests.map((pullRequest) => [pullRequest.url, pullRequest]))
 	const membership = new Map(states.map((state) => [state.id, state.urls]))
-	const groups = assignSections(states, membership, byUrl, filterContext(get))
+	const groups = assignSections(states, membership, byUrl, baseFilterContext(get))
 	// With `/` free text, rank PRs inside each section by match score (the
 	// order of filteredPullRequestsAtom) instead of the section's sort.
 	const ranked = parseFilterQuery(get(effectiveFilterQueryAtom)).text.trim().length > 0
