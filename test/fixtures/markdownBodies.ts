@@ -57,3 +57,40 @@ export const plainReviewBody = `Nit: rename \`count\` to \`itemCount\` for clari
 |------|-------|
 | alpha | 1 |
 | beta | 22 |`
+
+// A PR description shaped like the ones bots and templates produce: hidden
+// summary marker, rules, GitHub alerts, bold section labels, `<sup>`, a
+// `<picture>` badge (inline and multi-line) and a tool attribution footer.
+export const prDescriptionBody = `<!-- SOME_BOT_SUMMARY -->
+## Summary
+
+Adds the widget cache. Fixes #123 and see \`src/cache.ts\`.
+
+---
+
+> [!NOTE]
+> This PR depends on #120 landing first.
+
+> [!WARNING]
+> Breaking change for **alice**.
+
+**Changes**
+
+- Adds \`Cache.get\`
+- Removes the old path<sup>1</sup>
+
+<sup>Built by a bot</sup>
+
+<a href="https://example.com/ci"><picture><source media="(prefers-color-scheme: dark)" srcset="https://example.com/dark.svg"><img src="https://example.com/light.svg" alt="Badge"></picture></a>
+
+<a href="https://example.com/coverage">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://example.com/cov-dark.svg">
+    <img src="https://example.com/cov-light.svg" alt="Coverage">
+  </picture>
+</a>
+
+🤖 Generated with [Claude Code](https://example.com/claude-code)
+
+https://example.com/code/session_abc
+`

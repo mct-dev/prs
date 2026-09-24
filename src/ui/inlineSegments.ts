@@ -86,9 +86,9 @@ export const collectUrlPositions = (lines: readonly { readonly segments: readonl
 		let col = 0
 		for (const segment of line.segments) {
 			if (segment.url !== undefined) {
-				positions.push({ url: segment.url, lineIndex, startCol: col, endCol: col + segment.text.length })
+				positions.push({ url: segment.url, lineIndex, startCol: col, endCol: col + Bun.stringWidth(segment.text) })
 			}
-			col += segment.text.length
+			col += Bun.stringWidth(segment.text)
 		}
 	})
 	return positions
