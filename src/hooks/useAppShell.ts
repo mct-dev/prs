@@ -7,6 +7,8 @@ import { parseRepositoryInput } from "../pullRequestViews.js"
 
 import { colors } from "../ui/colors.js"
 import { workspaceSurfaceAtom } from "../workspace/atoms.js"
+import { diffThreadToggledAtom } from "../ui/diff/threadAtoms.js"
+import { useDiffThreadToggles } from "../ui/diff/useDiffThreadToggles.js"
 import { useRepoSurface } from "../surfaces/repo/useRepoSurface.js"
 import { usePullRequestSurface } from "../surfaces/pullRequest/usePullRequestSurface.js"
 import { computeLayout, diffFilePanelWidthFor, isTerminalTooSmall } from "../workspace/layout.js"
@@ -411,6 +413,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		selectedDiffCommentThread,
 		diffLineColorContextKey,
 		diffCommentThreadAnchors,
+		diffThreads,
 	} = useDiffCommentDerivations({
 		selectedDiffState,
 		readyDiffFiles,
@@ -426,7 +429,9 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		diffCommentRangeStartIndex,
 		selectedDiffKey,
 		diffCommentThreads,
+		diffThreadToggled: useAtomValue(diffThreadToggledAtom),
 	})
+	useDiffThreadToggles({ stackedDiffFiles, selectedDiffCommentAnchor, selectedDiffKey, diffThreads, flashNotice })
 	const getCurrentGroupIndex = (current: number) => groupIndexAt(groupStarts, current)
 	const { headerRight, headerLeftWidth, footerNotice, homeCrumb, breadcrumbSeparatorText, headerRepoWidth } = computeHeaderDerivations({
 		username,

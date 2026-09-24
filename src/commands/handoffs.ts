@@ -38,6 +38,8 @@ type Handoff =
 	| "moveDiffCommentThreadPrevious"
 	| "openSelectedDiffComment"
 	| "toggleDiffCommentRange"
+	| "toggleDiffThread"
+	| "toggleAllDiffThreads"
 	| "openDiffCommentModal"
 	| "viewRepository"
 	| "viewAuthored"

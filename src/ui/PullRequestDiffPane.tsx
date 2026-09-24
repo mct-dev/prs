@@ -1,5 +1,5 @@
 import type { DiffRenderable, MouseEvent, ScrollBoxRenderable } from "@opentui/core"
-import { useMemo, type ReactNode, type Ref } from "react"
+import { useMemo, type Ref } from "react"
 import type { DiffCommentSide, PullRequestItem, PullRequestReviewComment } from "../domain.js"
 import { colors, lineNumberTextColor, type ThemeId } from "./colors.js"
 import { CommentBodyLine, commentCountText, commentMetaSegments, CommentSegmentsLine } from "./comments.js"
@@ -12,7 +12,6 @@ import {
 	diffStatText,
 	diffSegmentKey,
 	stackedDiffFileIndexAtLine,
-	type DiffFileSection,
 	type DiffFileStats,
 	type DiffView,
 	type DiffWhitespaceMode,
@@ -23,6 +22,8 @@ import {
 } from "./diff.js"
 import { LoadingPane, StatusCard } from "./DetailsPane.js"
 import { DiffStats } from "./diffStats.js"
+import { DiffThreadBlock } from "./diff/DiffThreadBlock.js"
+import { diffThreadWidth } from "./diff/threads.js"
 import { Divider, fitCell, PaddedRow, PlainLine, TextLine } from "./primitives.js"
 import { shortRepoName } from "./pullRequests.js"
 
@@ -96,7 +97,6 @@ export const PullRequestDiffPane = ({
 	loadingIndicator,
 	scrollRef,
 	setDiffRef,
-	renderThreads,
 	selectedCommentAnchor,
 	selectedCommentLabel,
 	selectedCommentThread,
@@ -117,7 +117,6 @@ export const PullRequestDiffPane = ({
 	loadingIndicator: string
 	scrollRef: Ref<ScrollBoxRenderable>
 	setDiffRef: (segmentKey: string, diff: DiffRenderable | null) => void
-	renderThreads?: (stackedFile: StackedDiffFilePatch, section: Extract<DiffFileSection, { kind: "threads" }>) => ReactNode
 	selectedCommentAnchor: StackedDiffCommentAnchor | null
 	selectedCommentLabel: string | null
 	selectedCommentThread: readonly PullRequestReviewComment[]
@@ -257,7 +256,7 @@ export const PullRequestDiffPane = ({
 								/>
 							) : (
 								<box key={`threads-${section.top}`} height={section.height} flexShrink={0} flexDirection="column">
-									{renderThreads?.(stackedFile, section)}
+									<DiffThreadBlock keys={section.keys} width={diffThreadWidth(paneWidth)} />
 								</box>
 							),
 						)}

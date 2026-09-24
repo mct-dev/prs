@@ -14,6 +14,8 @@ export interface DiffViewCtx {
 	readonly reload: () => void
 	readonly nextThread: () => void
 	readonly previousThread: () => void
+	readonly toggleThread: () => void
+	readonly toggleAllThreads: () => void
 	readonly moveAnchor: (delta: number, opts?: { preserveViewportRow?: boolean }) => void
 	readonly moveAnchorToBoundary: (boundary: "first" | "last") => void
 	readonly alignAnchor: (align: DiffAlign) => void
@@ -38,6 +40,8 @@ export const diffViewKeymap = Diff(
 	{ id: "diff.reload", title: "Reload diff", keys: ["r"], run: (s) => s.reload() },
 	{ id: "diff.next-thread", title: "Next thread", keys: ["n"], run: (s) => s.nextThread() },
 	{ id: "diff.previous-thread", title: "Previous thread", keys: ["p"], run: (s) => s.previousThread() },
+	{ id: "diff.toggle-thread", title: "Expand / collapse thread", keys: ["c"], run: (s) => s.toggleThread() },
+	{ id: "diff.toggle-all-threads", title: "Expand / collapse all threads", keys: ["shift+c"], run: (s) => s.toggleAllThreads() },
 
 	// Half-page anchor moves preserve viewport row (true vim semantics)
 	{
