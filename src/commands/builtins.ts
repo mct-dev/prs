@@ -396,10 +396,11 @@ export const globalCommands: readonly CommandDefinition[] = [
 		when: briefFullViewAtom,
 		disabledReason: briefCloseDisabledReasonAtom,
 		run: Effect.gen(function* () {
+			const pullRequest = yield* Atom.get(selectedPullRequestAtom)
 			const entry = yield* Atom.get(selectedReviewEntryAtom)
 			const area = entry?.brief?.focus_areas[yield* Atom.get(briefFocusIndexAtom)]
-			if (!area) return
-			yield* Atom.set(pendingBriefDiffTargetAtom, { file: area.file, lines: area.lines ?? null })
+			if (!pullRequest || !area) return
+			yield* Atom.set(pendingBriefDiffTargetAtom, { url: pullRequest.url, file: area.file, lines: area.lines ?? null })
 			yield* Atom.set(briefFullViewAtom, false)
 			yield* Atom.set(briefReturnToDetailAtom, false)
 			yield* Effect.sync(() => invokeHandoff("openDiffView"))

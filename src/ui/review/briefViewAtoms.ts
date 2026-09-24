@@ -19,7 +19,12 @@ export interface BriefDiffTarget {
 	readonly lines: string | null
 }
 
-export const pendingBriefDiffTargetAtom = Atom.make<BriefDiffTarget | null>(null)
+/** A target parked for the diff view, tied to the PR it came from. */
+export interface PendingBriefDiffTarget extends BriefDiffTarget {
+	readonly url: string
+}
+
+export const pendingBriefDiffTargetAtom = Atom.make<PendingBriefDiffTarget | null>(null)
 
 /** The latest review run (record + decoded brief) for the selected PR. */
 export const selectedReviewEntryAtom = Atom.make((get): ReviewEntry | null => {

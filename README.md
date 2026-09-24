@@ -138,7 +138,7 @@ time; pressing `b` again while one is running just says so. **Cancel agent
 review** in the command palette stops a running review. Briefs are cached per
 head commit and marked `stale` after a force-push.
 
-The PR list shows each review's state in the row's gutter: a spinner while it
+The PR list shows each review's state in a column at the end of the row: a spinner while it
 runs, a dot colored by risk (low, medium, high) when it is done, a dim ring when
 the brief is for an older head, and an error mark when the run failed.
 

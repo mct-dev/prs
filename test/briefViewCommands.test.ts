@@ -79,7 +79,7 @@ describe("brief view commands", () => {
 			await run(registry, "brief.open-focus")
 			console.log(JSON.stringify({ target: registry.get(pendingBriefDiffTargetAtom), brief: registry.get(briefFullViewAtom), handoffs }))
 		`)
-		expect(JSON.parse(stdout)).toEqual({ target: { file: "src/b.ts", lines: null }, brief: false, handoffs: 1 })
+		expect(JSON.parse(stdout)).toEqual({ target: { url: "https://example.test/pr/42", file: "src/b.ts", lines: null }, brief: false, handoffs: 1 })
 	})
 
 	test("o pages the log, or falls back to showing its path", async () => {

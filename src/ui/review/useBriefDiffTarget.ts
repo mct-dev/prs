@@ -14,6 +14,7 @@ const LAYOUT_RETRY_ATTEMPTS = 6
  * scroll for a few frames while the stacked diff lays out.
  */
 export const useBriefDiffTarget = ({
+	selectedPullRequestUrl,
 	diffFullView,
 	readyDiffFiles,
 	diffCommentAnchors,
@@ -22,6 +23,7 @@ export const useBriefDiffTarget = ({
 	ensureDiffLineVisible,
 	flashNotice,
 }: {
+	readonly selectedPullRequestUrl: string | null
 	readonly diffFullView: boolean
 	readonly readyDiffFiles: readonly { readonly name: string }[]
 	readonly diffCommentAnchors: readonly StackedDiffCommentAnchor[]
@@ -41,7 +43,13 @@ export const useBriefDiffTarget = ({
 	)
 
 	useEffect(() => {
-		if (!pending || !diffFullView || readyDiffFiles.length === 0 || diffCommentAnchors.length === 0) return
+		if (!pending) return
+		// A target left over from another PR (e.g. its diff never loaded) is dropped, not applied here.
+		if (pending.url !== selectedPullRequestUrl) {
+			setPending(null)
+			return
+		}
+		if (!diffFullView || readyDiffFiles.length === 0 || diffCommentAnchors.length === 0) return
 		setPending(null)
 		const resolved = resolveBriefDiffTarget(pending, readyDiffFiles, diffCommentAnchors)
 		if (!resolved) {
@@ -63,5 +71,5 @@ export const useBriefDiffTarget = ({
 		timeoutRef.current = setTimeout(settle, 0)
 		// Runs when the target is parked and again once the diff's files arrive.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [pending, diffFullView, readyDiffFiles.length, diffCommentAnchors.length])
+	}, [pending, selectedPullRequestUrl, diffFullView, readyDiffFiles.length, diffCommentAnchors.length])
 }

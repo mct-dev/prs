@@ -731,6 +731,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 	} = diffNav
 
 	useBriefDiffTarget({
+		selectedPullRequestUrl: selectedPullRequest?.url ?? null,
 		diffFullView,
 		readyDiffFiles,
 		diffCommentAnchors,
