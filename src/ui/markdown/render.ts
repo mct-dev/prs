@@ -1,11 +1,20 @@
 import { marked, type Token, type Tokens } from "marked"
-import { decodeEntities, htmlToMarkdown, replaceEmojiShortcodes, splitBody, attribute, type BodyChunk } from "./html.js"
+import { decodeEntities, hasControls, htmlToMarkdown, stripControls, replaceEmojiShortcodes, splitBody, attribute, type BodyChunk } from "./html.js"
 import type { MarkdownLine, MarkdownLink, MarkdownOptions, MarkdownRender, MarkdownRole, MarkdownSpan } from "./types.js"
 import { breakByWidth, mergeSpans, spansWidth, textWidth, wrapSpans } from "./wrap.js"
 
 // Details blocks at or under this many rendered lines start expanded.
 export const DETAILS_AUTO_OPEN_MAX_LINES = 6
 const MAX_HTML_DEPTH = 3
+// Lists and quotes nested deeper than this stop indenting further, so a
+// hostile body cannot squeeze the text column down to nothing.
+export const MAX_NEST_DEPTH = 6
+// `marked` inline lexing is quadratic on long runs of emphasis/HTML markers
+// (tens of seconds at 64k chars), and it runs on the UI thread. Past these
+// budgets a body renders as plain wrapped text instead.
+export const MARKDOWN_MAX_CHARS = 20_000
+const MAX_MARKERS_PER_PARAGRAPH = 600
+export const PLAIN_TEXT_NOTE = "(large comment, shown as plain text)"
 const BULLETS = ["•", "◦", "▪"] as const
 
 interface RenderContext {
@@ -14,6 +23,7 @@ interface RenderContext {
 	detailsCount: number
 	collapsedDetails: number
 	htmlDepth: number
+	quoteDepth: number
 }
 
 interface InlineStyle {
@@ -32,6 +42,10 @@ const span = (text: string, style: InlineStyle): MarkdownSpan => ({
 	...(style.strike ? { strike: true } : {}),
 	...(style.url !== undefined ? { url: style.url } : {}),
 })
+
+// A link target carrying control characters is dropped outright: the label
+// still renders, but nothing downstream (OSC 8, the opener) ever sees it.
+const cleanUrl = (url: string | null | undefined): string | null => (url && url.length > 0 && !hasControls(url) ? url : null)
 
 const registerLink = (context: RenderContext, url: string, label: string, kind: MarkdownLink["kind"]) => {
 	const existing = context.links.find((link) => link.url === url)
@@ -84,7 +98,12 @@ const inlineSpans = (
 		strike: style.strike || html.strike > 0,
 		...(html.url !== null ? { url: html.url } : style.url !== undefined ? { url: style.url } : {}),
 	})
-	const pushImage = (alt: string, url: string) => {
+	const pushImage = (alt: string, rawUrl: string) => {
+		const url = cleanUrl(rawUrl)
+		if (url === null) {
+			out.push(span(`▣ image${alt.length > 0 ? `: ${alt}` : ""}`, { role: "image" }))
+			return
+		}
 		const index = registerLink(context, url, alt.length > 0 ? alt : "image", "image")
 		out.push(span(`▣ image${alt.length > 0 ? `: ${alt}` : ""}`, { role: "image", url }), span(`[${index}]`, { role: "linkIndex" }))
 	}
@@ -121,10 +140,15 @@ const inlineSpans = (
 					pushImage(image.text, image.href)
 					break
 				}
-				const isBare = label === link.href || label === link.href.replace(/^mailto:/, "")
-				const index = registerLink(context, link.href, isBare ? shortenUrl(link.href) : label, "link")
-				if (isBare) out.push(span(shortenUrl(link.href), { ...current(), role: "link", url: link.href }))
-				else out.push(...inlineSpans(link.tokens, { ...current(), role: "link", url: link.href }, context, html))
+				const href = cleanUrl(link.href)
+				if (href === null) {
+					out.push(...inlineSpans(link.tokens, current(), context, html))
+					break
+				}
+				const isBare = label === href || label === href.replace(/^mailto:/, "")
+				const index = registerLink(context, href, isBare ? shortenUrl(href) : label, "link")
+				if (isBare) out.push(span(shortenUrl(href), { ...current(), role: "link", url: href }))
+				else out.push(...inlineSpans(link.tokens, { ...current(), role: "link", url: href }, context, html))
 				out.push(span(`[${index}]`, { role: "linkIndex" }))
 				break
 			}
@@ -148,7 +172,7 @@ const inlineSpans = (
 					if (closing) {
 						if (html.url !== null) out.push(span(`[${registerLink(context, html.url, html.url, "link")}]`, { role: "linkIndex" }))
 						html.url = null
-					} else html.url = attribute(tag, "href")
+					} else html.url = cleanUrl(attribute(tag, "href"))
 				} else if (name === "img") {
 					const src = attribute(tag, "src")
 					if (src) pushImage(attribute(tag, "alt") ?? "", src)
@@ -223,7 +247,10 @@ const renderTable = (token: Tokens.Table, width: number, context: RenderContext)
 	])
 }
 
+const isList = (token: Token) => token.type === "list"
+
 const renderList = (token: Tokens.List, width: number, context: RenderContext, depth: number): MarkdownLine[] => {
+	if (depth >= MAX_NEST_DEPTH) return renderFlatList(token, width, context, depth)
 	const start = typeof token.start === "number" ? token.start : 1
 	const markers = token.items.map((item, index) => (token.ordered ? `${start + index}.` : BULLETS[depth % BULLETS.length]!))
 	const markerWidth = Math.max(...markers.map(textWidth))
@@ -236,6 +263,24 @@ const renderList = (token: Tokens.List, width: number, context: RenderContext, d
 		const body = renderBlocks(children, Math.max(1, width - spansWidth(first)), context, depth + 1, item.loose)
 		const lines = prefixLines(body.length > 0 ? body : [blank], first, rest)
 		return item.loose && index < token.items.length - 1 ? [...lines, blank] : lines
+	})
+}
+
+// Past the nesting cap, sublists render at their parent's indentation.
+const renderFlatList = (token: Tokens.List, width: number, context: RenderContext, depth: number): MarkdownLine[] => {
+	const marker: MarkdownSpan = { text: `${BULLETS[depth % BULLETS.length]!} `, role: "bullet" }
+	const indent: MarkdownSpan = { text: "  ", role: "text" }
+	return token.items.flatMap((item) => {
+		const children = item.tokens.filter((child) => child.type !== "checkbox")
+		const own = renderBlocks(
+			children.filter((child) => !isList(child)),
+			Math.max(1, width - 2),
+			context,
+			depth,
+			item.loose,
+		)
+		const nested = children.filter(isList).flatMap((child) => renderFlatList(child as Tokens.List, width, context, depth))
+		return [...prefixLines(own.length > 0 ? own : [blank], [marker], [indent]), ...nested]
 	})
 }
 
@@ -274,7 +319,11 @@ const renderBlock = (token: Token, width: number, context: RenderContext, depth:
 		case "code":
 			return renderCode(token as Tokens.Code, width)
 		case "blockquote": {
-			const inner = renderBlocks((token as Tokens.Blockquote).tokens, Math.max(1, width - 2), context, depth, true)
+			const flat = context.quoteDepth >= MAX_NEST_DEPTH
+			context.quoteDepth++
+			const inner = renderBlocks((token as Tokens.Blockquote).tokens, flat ? width : Math.max(1, width - 2), context, depth, true)
+			context.quoteDepth--
+			if (flat) return inner
 			const bar: MarkdownSpan = { text: "│ ", role: "frame" }
 			return prefixLines(recolor(inner, "text", "quote"), [bar], [bar])
 		}
@@ -318,10 +367,52 @@ const renderChunks = (chunks: readonly BodyChunk[], width: number, context: Rend
 	return out
 }
 
-export const renderMarkdownUncached = (body: string, options: MarkdownOptions): MarkdownRender => {
+const INLINE_MARKERS = /[*_<[`~]/g
+const LIST_MARKER = /^\s*(?:[*+-]|\d+[.)])\s/gm
+// Inline lexing happens per paragraph or list item, so that is the unit the
+// marker budget applies to.
+const INLINE_RUN_BREAK = /\n[ \t]*\n|\n(?=[ \t]*(?:[*+-]|\d+[.)])[ \t])/
+
+// `marked` recurses once per `>`, so thousands of them overflow the stack.
+const DEEP_QUOTE = /^(?:[ \t]*>){33}/m
+
+export const exceedsMarkdownBudget = (body: string) =>
+	body.length > MARKDOWN_MAX_CHARS ||
+	DEEP_QUOTE.test(body) ||
+	body.split(INLINE_RUN_BREAK).some((run) => (run.replace(LIST_MARKER, "").match(INLINE_MARKERS)?.length ?? 0) > MAX_MARKERS_PER_PARAGRAPH)
+
+const renderPlain = (body: string, width: number): MarkdownLine[] => [
+	{ spans: [{ text: PLAIN_TEXT_NOTE, role: "muted" }] },
+	blank,
+	...body
+		.replace(/\t/g, "  ")
+		.split("\n")
+		.flatMap((line) => (line.length === 0 ? [blank] : wrapSpans([{ text: line, role: "text" }], width))),
+]
+
+// Last line of defence: a body that still trips the parser renders as text
+// rather than taking the UI down with it.
+const renderChunksOrPlain = (body: string, width: number, context: RenderContext): MarkdownLine[] => {
+	try {
+		return renderChunks(splitBody(body), width, context, 0)
+	} catch {
+		context.links.length = 0
+		context.detailsCount = 0
+		context.collapsedDetails = 0
+		return renderPlain(body.trim(), width)
+	}
+}
+
+export const renderMarkdownUncached = (rawBody: string, options: MarkdownOptions): MarkdownRender => {
+	const body = stripControls(rawBody)
 	const width = Math.max(4, Math.floor(options.width))
-	const context: RenderContext = { links: [], detailsOpen: options.detailsOpen, detailsCount: 0, collapsedDetails: 0, htmlDepth: 0 }
-	const lines = body.trim().length === 0 ? [{ spans: [{ text: "(empty comment)", role: "muted" as const }] }] : renderChunks(splitBody(body), width, context, 0)
+	const context: RenderContext = { links: [], detailsOpen: options.detailsOpen, detailsCount: 0, collapsedDetails: 0, htmlDepth: 0, quoteDepth: 0 }
+	const lines =
+		body.trim().length === 0
+			? [{ spans: [{ text: "(empty comment)", role: "muted" as const }] }]
+			: exceedsMarkdownBudget(body)
+				? renderPlain(body.trim(), width)
+				: renderChunksOrPlain(body, width, context)
 	return {
 		lines: lines.length > 0 ? lines : [{ spans: [{ text: "(empty comment)", role: "muted" }] }],
 		links: context.links,

@@ -117,12 +117,22 @@ const NAMED_ENTITIES: Record<string, string> = {
 	check: "✓",
 }
 
+// C0 (except tab/newline), DEL and C1. Comment bodies are untrusted: a raw
+// ESC reaching the terminal could rewrite the screen or forge hyperlinks.
+// oxlint-disable-next-line no-control-regex -- intentional: untrusted text is scrubbed of terminal controls
+const CONTROL_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g
+const isControlCode = (code: number) => (code < 0x20 && code !== 0x09 && code !== 0x0a) || (code >= 0x7f && code <= 0x9f)
+export const stripControls = (text: string) => text.replace(CONTROL_CHARS, "")
+// oxlint-disable-next-line no-control-regex -- intentional: untrusted text is scrubbed of terminal controls
+export const hasControls = (text: string) => /[\u0000-\u001f\u007f-\u009f]/.test(text)
+
 export const decodeEntities = (text: string) =>
 	text.includes("&")
 		? text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
 				if (entity[0] === "#") {
 					const code = entity[1] === "x" || entity[1] === "X" ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10)
-					return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match
+					if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return match
+					return isControlCode(code) ? "" : String.fromCodePoint(code)
 				}
 				return NAMED_ENTITIES[entity.toLowerCase()] ?? match
 			})
