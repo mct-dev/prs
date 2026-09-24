@@ -25,7 +25,7 @@ bun link   # puts `prs` on your PATH
 prs
 ```
 
-Environment variables still use the `GHUI_` prefix inherited from upstream (for example `GHUI_PR_FETCH_LIMIT`). Config lives in `~/.config/prs/` and the cache in `~/.cache/prs/`, so `prs` and `ghui` can be installed side by side.
+Environment variables use the `PRS_` prefix (for example `PRS_PR_FETCH_LIMIT`). The `GHUI_` names inherited from upstream still work as a fallback. Config lives in `~/.config/prs/` and the cache in `~/.cache/prs/`, so `prs` and `ghui` can be installed side by side.
 
 ## Credits
 
@@ -33,20 +33,22 @@ Forked from [kitlangton/ghui](https://github.com/kitlangton/ghui) at `76c91b8` (
 
 ## Configuration
 
-- `GHUI_PR_FETCH_LIMIT`: max PRs fetched, defaults to `200`
-- `GHUI_RUN_FETCH_LIMIT`: max workflow runs fetched per PR, defaults to `20`
+- `PRS_PR_FETCH_LIMIT`: max PRs fetched, defaults to `500`
+- `PRS_RUN_FETCH_LIMIT`: max workflow runs fetched per PR, defaults to `20`
+- `PRS_NO_ANIMATION=1`: show a still loading picture instead of the animated one
+- `PRS_LOADING_ART=contours|plasma|torus`: pick the loading art (default `contours`)
 
 Example:
 
 ```bash
-GHUI_PR_FETCH_LIMIT=100 prs
+PRS_PR_FETCH_LIMIT=100 prs
 ```
 
 You can also copy `.env.example` to `.env` and edit the values locally.
 
-prs stores UI preferences in `config.json` under `GHUI_CONFIG_DIR` when set,
+prs stores UI preferences in `config.json` under `PRS_CONFIG_DIR` when set,
 otherwise under the platform config directory. On Linux this is normally
-`~/.config/ghui/config.json`.
+`~/.config/prs/config.json`.
 
 Example:
 

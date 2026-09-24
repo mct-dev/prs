@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { Effect, Schema } from "effect"
+import { envVar } from "./env.js"
 import { isThemeId, type ThemeId } from "./ui/colors.js"
 import { normalizeThemeConfig, type ThemeConfig } from "./themeConfig.js"
 import { DiffWhitespaceMode } from "./ui/diff.js"
@@ -21,7 +22,8 @@ interface StoredConfig {
 }
 
 const configDirectory = () => {
-	if (process.env.GHUI_CONFIG_DIR) return process.env.GHUI_CONFIG_DIR
+	const override = envVar("CONFIG_DIR")
+	if (override) return override
 	if (process.env.XDG_CONFIG_HOME) return join(process.env.XDG_CONFIG_HOME, "prs")
 	if (process.platform === "win32" && process.env.APPDATA) return join(process.env.APPDATA, "prs")
 	return join(homedir(), ".config", "prs")

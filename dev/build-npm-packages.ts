@@ -21,7 +21,7 @@ const run = (cmd: readonly string[]) => {
 	if (proc.exitCode !== 0) throw new Error(`Command failed (${proc.exitCode}): ${cmd.join(" ")}`)
 }
 
-const reuseReleaseBinary = process.env.GHUI_REUSE_RELEASE_BINARY === "1"
+const reuseReleaseBinary = (process.env.PRS_REUSE_RELEASE_BINARY ?? process.env.GHUI_REUSE_RELEASE_BINARY) === "1"
 
 const selectedTargets = () => {
 	if (requested === "main") return []

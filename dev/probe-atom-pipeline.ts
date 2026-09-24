@@ -14,10 +14,10 @@
 // step 2, we've reproduced the bug in headless mode and can diff each
 // atom's state to find where the broken data is coming from.
 //
-// Logs to /tmp/prs-debug.log (default GHUI_DEBUG_LOG path) so the
+// Logs to /tmp/prs-debug.log (default PRS_DEBUG_LOG path) so the
 // devLog instrumentation in atoms.ts fires.
 
-process.env.GHUI_DEBUG_LOG ??= "/tmp/prs-debug.log"
+if (!process.env.PRS_DEBUG_LOG && !process.env.GHUI_DEBUG_LOG) process.env.PRS_DEBUG_LOG = "/tmp/prs-debug.log"
 
 import * as Atom from "effect/unstable/reactivity/Atom"
 import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"
@@ -98,7 +98,7 @@ const sample = (label: string) => {
 const unsubDisplayed = registry.subscribe(displayedPullRequestsAtom, () => {})
 const unsubVisible = registry.subscribe(visiblePullRequestsAtom, () => {})
 
-// 1. Start in Queue authored global (the initial-view state ghui boots into).
+// 1. Start in Queue authored global (the initial-view state prs boots into).
 const globalAuthored: PullRequestView = { _tag: "Queue", mode: "authored", repository: null }
 console.log(">> Setting activeView to Queue(authored, global)")
 registry.set(activeViewAtom, globalAuthored)
