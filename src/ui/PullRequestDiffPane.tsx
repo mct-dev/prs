@@ -260,7 +260,7 @@ export const PullRequestDiffPane = ({
 									style={{ flexShrink: 0 }}
 								/>
 							) : (
-								<box key={`threads-${section.top}`} height={section.height} flexShrink={0} flexDirection="column">
+								<box key={`threads-${section.keys.join("\u0001")}`} height={section.height} flexShrink={0} flexDirection="column">
 									<DiffThreadBlock keys={section.keys} width={diffThreadWidth(paneWidth)} />
 								</box>
 							),
