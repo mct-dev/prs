@@ -32,6 +32,7 @@ import {
 	type RawPullRequestSummaryNode,
 	type RepositoryDetailsResponseSchema,
 } from "../src/services/githubSchemas.ts"
+import { pullRequestDetailQuery, pullRequestSummarySearchQuery, repositoryPullRequestsQuery } from "../src/services/githubSchemas.ts"
 
 const checkRun = (over: { status?: string; conclusion?: string; name?: string } = {}): RawCheckContext =>
 	Schema.decodeUnknownSync(RawCheckContextSchema)({
@@ -208,6 +209,59 @@ describe("parsePullRequest", () => {
 		expect(pr.additions).toBe(12)
 		expect(pr.deletions).toBe(3)
 		expect(pr.changedFiles).toBe(4)
+	})
+})
+
+describe("parseReviewers", () => {
+	const user = (login: string, isViewer = false) => ({ __typename: "User", login, isViewer })
+	const detail: RawPullRequestNode = {
+		...baseDetail,
+		reviewRequests: {
+			nodes: [
+				{ asCodeOwner: true, requestedReviewer: { __typename: "Team", combinedSlug: "my-org/platform" } },
+				{ asCodeOwner: false, requestedReviewer: user("erin") },
+				{ asCodeOwner: false, requestedReviewer: null },
+			],
+		},
+		latestReviews: {
+			nodes: [
+				{ state: "COMMENTED", author: user("alice", true) },
+				{ state: "COMMENTED", author: { login: "review-bot" } },
+				{ state: "CHANGES_REQUESTED", author: user("bob") },
+				{ state: "APPROVED", author: user("erin") },
+				{ state: "DISMISSED", author: user("dave") },
+				{ state: "COMMENTED", author: null },
+			],
+		},
+		latestOpinionatedReviews: { nodes: [{ state: "APPROVED", author: user("alice", true) }] },
+		baseRef: { refUpdateRule: { requiredApprovingReviewCount: 2 } },
+	}
+
+	test("one row per reviewer; an approval outranks a later comment and a re-request outranks both", () => {
+		expect(parsePullRequest(detail).reviewers).toEqual({
+			reviewers: [
+				{ kind: "user", login: "alice", state: "approved", codeOwner: false, isViewer: true },
+				{ kind: "user", login: "review-bot", state: "commented", codeOwner: false, isViewer: false },
+				{ kind: "user", login: "bob", state: "changes", codeOwner: false, isViewer: false },
+				{ kind: "user", login: "dave", state: "dismissed", codeOwner: false, isViewer: false },
+				{ kind: "team", login: "my-org/platform", state: "requested", codeOwner: true, isViewer: false },
+				{ kind: "user", login: "erin", state: "requested", codeOwner: false, isViewer: false },
+			],
+			requiredApprovals: 2,
+		})
+	})
+
+	test("only the per-PR detail query asks for reviewers", () => {
+		expect(pullRequestDetailQuery).toContain("latestOpinionatedReviews")
+		expect(pullRequestDetailQuery).toContain("refUpdateRule")
+		expect(pullRequestSummarySearchQuery).not.toContain("reviewRequests")
+		expect(repositoryPullRequestsQuery).not.toContain("reviewRequests")
+	})
+
+	test("an unreadable branch rule gives null, and no reviewer fields leave reviewers unset", () => {
+		expect(parsePullRequest({ ...detail, baseRef: { refUpdateRule: null } }).reviewers?.requiredApprovals).toBeNull()
+		expect(parsePullRequest({ ...detail, baseRef: null }).reviewers?.requiredApprovals).toBeNull()
+		expect("reviewers" in parsePullRequest(baseDetail)).toBe(false)
 	})
 })
 

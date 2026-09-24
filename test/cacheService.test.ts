@@ -142,6 +142,28 @@ describe("CacheService", () => {
 		expect(cached?.createdAt).toBeInstanceOf(Date)
 	})
 
+	test("round-trips reviewers, and older rows without them decode as unfetched", async () => {
+		const filename = await tempCachePath()
+		const reviewers = {
+			reviewers: [
+				{ kind: "user" as const, login: "alice", state: "approved" as const, codeOwner: false, isViewer: true },
+				{ kind: "team" as const, login: "my-org/platform", state: "requested" as const, codeOwner: true, isViewer: false },
+			],
+			requiredApprovals: 2,
+		}
+		const [withReviewers, without] = await runCache(
+			filename,
+			Effect.gen(function* () {
+				const cache = yield* CacheService
+				yield* cache.upsertPullRequest(pullRequest(5, { reviewers }))
+				yield* cache.upsertPullRequest(pullRequest(6))
+				return [yield* cache.readPullRequest({ repository: "owner/repo", number: 5 }), yield* cache.readPullRequest({ repository: "owner/repo", number: 6 })] as const
+			}),
+		)
+		expect(withReviewers?.reviewers).toEqual(reviewers)
+		expect(without?.reviewers).toBeUndefined()
+	})
+
 	test("queue summaries do not clobber hydrated details, including checks", async () => {
 		const filename = await tempCachePath()
 		const detail = pullRequest(4, {

@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises"
+import { mkdir, rename, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { Effect, Schema } from "effect"
@@ -44,7 +44,15 @@ const readStoredConfig = async () => {
 const writeStoredConfig = async (config: StoredConfig) => {
 	const path = configPath()
 	await mkdir(dirname(path), { recursive: true })
-	await Bun.write(path, `${JSON.stringify(config, null, "\t")}\n`)
+	// Write a sibling temp file, then rename over config.json, so a crash mid-write can't truncate it.
+	const temporary = `${path}.${process.pid}.${Date.now()}.tmp`
+	await Bun.write(temporary, `${JSON.stringify(config, null, "\t")}\n`)
+	try {
+		await rename(temporary, path)
+	} catch (error) {
+		await rm(temporary, { force: true })
+		throw error
+	}
 }
 
 export const loadStoredThemeId: Effect.Effect<ThemeId> = Effect.catchCause(
@@ -147,4 +155,17 @@ export const saveStoredDiffWhitespaceMode = (diffWhitespaceMode: DiffWhitespaceM
 		if (config.diffWhitespaceMode === diffWhitespaceMode) return
 
 		await writeStoredConfig({ ...config, diffWhitespaceMode })
+	})
+
+/**
+ * Rewrites the `review` block of config.json through `update`, keeping every
+ * other key. Used by the review preset modal (edit, new, default, delete).
+ */
+export const updateStoredReviewConfig = (update: (review: unknown) => Record<string, unknown>): Effect.Effect<void, unknown> =>
+	Effect.tryPromise({
+		try: async () => {
+			const config = await readStoredConfig()
+			await writeStoredConfig({ ...config, review: update(config.review) })
+		},
+		catch: (error) => error,
 	})

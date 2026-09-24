@@ -157,6 +157,17 @@ duration, reviewed head, stale state, log path). In the brief view:
 - `ctrl-u` / `ctrl-d`, `gg` / `G`: page, or jump to the top or bottom
 - `esc`: go back to where you opened it from
 
+The `B` picker also manages presets and saves changes to `config.json`:
+
+- `enter`: run the selected preset
+- `e`: edit its skill, model, budget, and extra prompt. `tab` completes skills
+  found in `~/.claude/skills`, installed plugins (`plugin:skill`), the
+  project's `.claude/skills`, and `~/.codex/skills`.
+- `n`: new preset (pick claude or codex, then name it)
+- `d`: make it the default
+- `x` / `D`: delete it, after asking (the last preset stays). A deleted
+  built-in is saved as `null`.
+
 Configure it in `config.json` (all keys optional):
 
 ```json

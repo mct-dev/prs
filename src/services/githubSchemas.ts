@@ -81,6 +81,22 @@ export const RawPullRequestSummaryNodeSchema = Schema.Struct({
 	statusCheckRollup: Schema.optionalKey(Schema.NullOr(RawStatusCheckRollupSchema)),
 })
 
+// Reviewer data, fetched by the per-PR detail query only (never the list search).
+const RawReviewerActorSchema = Schema.NullOr(
+	Schema.Struct({
+		__typename: Schema.optionalKey(Schema.String),
+		login: Schema.optionalKey(Schema.String),
+		combinedSlug: Schema.optionalKey(Schema.String),
+		isViewer: Schema.optionalKey(Schema.Boolean),
+	}),
+)
+const RawReviewRequestsSchema = Schema.Struct({
+	nodes: Schema.Array(Schema.NullOr(Schema.Struct({ asCodeOwner: Schema.Boolean, requestedReviewer: RawReviewerActorSchema }))),
+})
+const RawLatestReviewsSchema = Schema.Struct({
+	nodes: Schema.Array(Schema.NullOr(Schema.Struct({ state: Schema.String, author: RawReviewerActorSchema }))),
+})
+
 export const RawPullRequestNodeSchema = Schema.Struct({
 	...RawPullRequestSummaryFields,
 	body: Schema.String,
@@ -89,6 +105,10 @@ export const RawPullRequestNodeSchema = Schema.Struct({
 	deletions: Schema.Number,
 	changedFiles: Schema.Number,
 	statusCheckRollup: Schema.optionalKey(Schema.NullOr(RawStatusCheckRollupSchema)),
+	reviewRequests: Schema.optionalKey(Schema.NullOr(RawReviewRequestsSchema)),
+	latestOpinionatedReviews: Schema.optionalKey(Schema.NullOr(RawLatestReviewsSchema)),
+	latestReviews: Schema.optionalKey(Schema.NullOr(RawLatestReviewsSchema)),
+	baseRef: Schema.optionalKey(Schema.NullOr(Schema.Struct({ refUpdateRule: Schema.NullOr(Schema.Struct({ requiredApprovingReviewCount: Schema.NullOr(Schema.Number) })) }))),
 })
 
 // ---------------------------------------------------------------------------
@@ -345,6 +365,13 @@ const SUMMARY_FIELDS_FRAGMENT = `
         viewerLatestReview { state commit { oid } }
 		repository { nameWithOwner defaultBranchRef { name } }`
 
+// `refUpdateRule` (not `branchProtectionRule`) is readable without admin rights.
+const REVIEWERS_FRAGMENT = `
+		reviewRequests(first: 20) { nodes { asCodeOwner requestedReviewer { __typename ... on User { login isViewer } ... on Team { combinedSlug } ... on Bot { login } ... on Mannequin { login } } } }
+		latestOpinionatedReviews(first: 20) { nodes { state author { login ... on User { isViewer } } } }
+		latestReviews(first: 20) { nodes { state author { login ... on User { isViewer } } } }
+		baseRef { refUpdateRule { requiredApprovingReviewCount } }`
+
 // Compose detail from summary — keeps the two in lock-step on field renames.
 const DETAIL_FIELDS_FRAGMENT = `${SUMMARY_FIELDS_FRAGMENT}
 		body
@@ -353,14 +380,22 @@ const DETAIL_FIELDS_FRAGMENT = `${SUMMARY_FIELDS_FRAGMENT}
 		changedFiles
 		labels(first: 20) { nodes { name color } }${STATUS_CHECK_FRAGMENT}`
 
-export const pullRequestDetailQuery = `
+const detailQuery = (fields: string) => `
 query PullRequest($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {${DETAIL_FIELDS_FRAGMENT}
+    pullRequest(number: $number) {${fields}
     }
   }
 }
 `
+
+export const pullRequestDetailQuery = detailQuery(`${DETAIL_FIELDS_FRAGMENT}${REVIEWERS_FRAGMENT}`)
+
+/**
+ * The detail query without reviewers. Team reviewers need `read:org`, so tokens
+ * without it can fail the full query; the service retries with this one.
+ */
+export const pullRequestDetailQueryWithoutReviewers = detailQuery(DETAIL_FIELDS_FRAGMENT)
 
 export const pullRequestSummarySearchQuery = `
 query PullRequests($searchQuery: String!, $first: Int!, $after: String) {
