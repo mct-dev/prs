@@ -12,6 +12,7 @@ import {
 	type IssueItem,
 	pullRequestQueueModes,
 	pullRequestStates,
+	reviewerStates,
 	reviewStatuses,
 	type PullRequestItem,
 	type RepositoryDetails,
@@ -67,6 +68,19 @@ const CachedCheckItemSchema = Schema.Struct({
 	conclusion: Schema.NullOr(CheckConclusionSchema),
 })
 
+const CachedReviewersSchema = Schema.Struct({
+	reviewers: Schema.Array(
+		Schema.Struct({
+			kind: Schema.Literals(["user", "team"]),
+			login: Schema.String,
+			state: Schema.Literals(reviewerStates),
+			codeOwner: Schema.Boolean,
+			isViewer: Schema.Boolean,
+		}),
+	),
+	requiredApprovals: Schema.NullOr(Schema.Number),
+})
+
 const CachedPullRequestItemSchema = Schema.Struct({
 	repository: Schema.String,
 	author: Schema.String,
@@ -93,6 +107,7 @@ const CachedPullRequestItemSchema = Schema.Struct({
 	closedAt: Schema.NullOr(Schema.String),
 	url: Schema.String,
 	viewerLatestReviewOid: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	reviewers: Schema.optionalKey(CachedReviewersSchema),
 })
 
 const CachedPullRequestViewSchema = Schema.Union([
@@ -234,6 +249,7 @@ const cachedPullRequestToDomain = (cached: CachedPullRequestItem): PullRequestIt
 		closedAt,
 		url: cached.url,
 		...(cached.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: cached.viewerLatestReviewOid } : {}),
+		...(cached.reviewers !== undefined ? { reviewers: cached.reviewers } : {}),
 	}
 }
 
@@ -297,6 +313,7 @@ const encodePullRequest = (pullRequest: PullRequestItem): CachedPullRequestItem 
 	closedAt: pullRequest.closedAt?.toISOString() ?? null,
 	url: pullRequest.url,
 	...(pullRequest.viewerLatestReviewOid !== undefined ? { viewerLatestReviewOid: pullRequest.viewerLatestReviewOid } : {}),
+	...(pullRequest.reviewers !== undefined ? { reviewers: pullRequest.reviewers } : {}),
 })
 
 const repositoryDetailsToDomain = (cached: CachedRepositoryDetails): RepositoryDetails | null => {

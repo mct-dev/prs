@@ -8,6 +8,9 @@ import {
 	type PullRequestItem,
 	type PullRequestMergeInfo,
 	type PullRequestReviewComment,
+	type PullRequestReviewer,
+	type PullRequestReviewers,
+	type ReviewerState,
 	type RepositoryDetails,
 	type RepositoryMergeMethods,
 	type ReviewStatus,
@@ -199,8 +202,65 @@ export const parsePullRequestSummary = (item: RawPullRequestSummaryNode): PullRe
 	}
 }
 
+const reviewStateFromRaw = (state: string): ReviewerState | null => {
+	switch (state) {
+		case "APPROVED":
+			return "approved"
+		case "CHANGES_REQUESTED":
+			return "changes"
+		case "COMMENTED":
+			return "commented"
+		case "DISMISSED":
+			return "dismissed"
+		case "PENDING":
+			return "pending"
+		default:
+			return null
+	}
+}
+
+/**
+ * Folds requests and latest reviews into one row per reviewer. An approval or
+ * change request outranks a later plain comment, and an open request (a
+ * re-request after reviewing) outranks both, since it is what is outstanding.
+ * Returns `undefined` when the response carried no reviewer fields at all.
+ */
+export const parseReviewers = (item: RawPullRequestNode): PullRequestReviewers | undefined => {
+	if (item.reviewRequests === undefined && item.latestReviews === undefined && item.latestOpinionatedReviews === undefined) return undefined
+	const byLogin = new Map<string, PullRequestReviewer>()
+	const put = (reviewer: PullRequestReviewer) => {
+		byLogin.delete(reviewer.login)
+		byLogin.set(reviewer.login, reviewer)
+	}
+	const reviewNodes = (connection: RawPullRequestNode["latestReviews"]) => (connection?.nodes ?? []).flatMap((node) => (node ? [node] : []))
+	for (const review of reviewNodes(item.latestReviews)) {
+		const state = reviewStateFromRaw(review.state)
+		const login = review.author?.login
+		if (!state || !login) continue
+		put({ kind: "user", login, state, codeOwner: false, isViewer: review.author?.isViewer === true })
+	}
+	for (const review of reviewNodes(item.latestOpinionatedReviews)) {
+		const state = reviewStateFromRaw(review.state)
+		const login = review.author?.login
+		if (!state || !login) continue
+		const existing = byLogin.get(login)
+		if (existing && existing.state !== "commented") continue
+		byLogin.set(login, { kind: "user", login, state, codeOwner: false, isViewer: review.author?.isViewer === true })
+	}
+	for (const request of item.reviewRequests?.nodes ?? []) {
+		const actor = request?.requestedReviewer
+		if (!request || !actor) continue
+		const team = actor.__typename === "Team"
+		const login = team ? actor.combinedSlug : actor.login
+		if (!login) continue
+		put({ kind: team ? "team" : "user", login, state: "requested", codeOwner: request.asCodeOwner, isViewer: actor.isViewer === true })
+	}
+	return { reviewers: [...byLogin.values()], requiredApprovals: item.baseRef?.refUpdateRule?.requiredApprovingReviewCount ?? null }
+}
+
 export const parsePullRequest = (item: RawPullRequestNode): PullRequestItem => {
 	const checkInfo = getCheckInfoFromContexts(item.statusCheckRollup?.contexts.nodes ?? [])
+	const reviewers = parseReviewers(item)
 	return {
 		...parsePullRequestSummary(item),
 		body: item.body,
@@ -215,6 +275,7 @@ export const parsePullRequest = (item: RawPullRequestNode): PullRequestItem => {
 		checkSummary: checkInfo.checkSummary,
 		checks: checkInfo.checks,
 		detailLoaded: true,
+		...(reviewers !== undefined ? { reviewers } : {}),
 	}
 }
 

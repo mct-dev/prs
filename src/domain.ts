@@ -163,6 +163,27 @@ export interface PullRequestItem {
 	 * data was not fetched; `null` means the viewer has not reviewed.
 	 */
 	readonly viewerLatestReviewOid?: string | null
+	/** Requested and past reviewers. `undefined` means the detail query has not filled it yet. */
+	readonly reviewers?: PullRequestReviewers
+}
+
+export const reviewerStates = ["approved", "changes", "commented", "requested", "dismissed", "pending"] as const
+export type ReviewerState = (typeof reviewerStates)[number]
+
+export interface PullRequestReviewer {
+	readonly kind: "user" | "team"
+	/** A user login, or `org/team` for a team. */
+	readonly login: string
+	readonly state: ReviewerState
+	/** Requested because of CODEOWNERS. */
+	readonly codeOwner: boolean
+	readonly isViewer: boolean
+}
+
+export interface PullRequestReviewers {
+	readonly reviewers: readonly PullRequestReviewer[]
+	/** From the base branch's rules; `null` when there is no rule or it is not readable. */
+	readonly requiredApprovals: number | null
 }
 
 // === Workflow runs (GitHub Actions) ===
