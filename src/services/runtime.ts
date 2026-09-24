@@ -3,6 +3,7 @@ import * as Atom from "effect/unstable/reactivity/Atom"
 import { config } from "../config.js"
 import { detectCurrentGitHubRepository } from "../gitRemotes.js"
 import { Observability } from "../observability.js"
+import { initialPullRequestView, type PullRequestView, sectionsView } from "../pullRequestViews.js"
 import { AgentRunner } from "./AgentRunner.js"
 import { BrowserOpener } from "./BrowserOpener.js"
 import { CacheService } from "./CacheService.js"
@@ -20,6 +21,15 @@ const parseOptionalPositiveInt = (value: string | undefined, fallback: number | 
 export const mockPrCount = parseOptionalPositiveInt(process.env.GHUI_MOCK_PR_COUNT, null)
 export const mockRepository = process.env.GHUI_MOCK_REPOSITORY?.trim() || null
 export const detectedRepository = mockPrCount === null ? detectCurrentGitHubRepository() : mockRepository
+// Home view: sections outside a git repo, the authored queue inside one.
+// Mock mode keeps the queue so fixtures stay stable. `PRS_DEFAULT_VIEW`
+// (`sections` or `queue`) overrides either way.
+export const homePullRequestView: PullRequestView = (() => {
+	const override = process.env.PRS_DEFAULT_VIEW?.trim().toLowerCase()
+	if (override === "sections") return sectionsView
+	if (override === "queue") return initialPullRequestView(null)
+	return mockPrCount === null && detectedRepository === null ? sectionsView : initialPullRequestView(null)
+})()
 export const mockUsername = process.env.GHUI_MOCK_USERNAME?.trim() || (mockPrCount !== null ? "kitlangton" : undefined)
 
 export const mockWorkspacePreferencesPath = (() => {

@@ -4,31 +4,46 @@ import { type ItemListInput, itemQueryCacheKey, pullRequestQueryToListInput, typ
 export type PullRequestView =
 	| { readonly _tag: "Repository"; readonly repository: string }
 	| { readonly _tag: "Queue"; readonly mode: PullRequestUserQueueMode; readonly repository: string | null }
+	// Config-driven sections (`~/.config/prs/sections.yaml`); always global.
+	| { readonly _tag: "Sections"; readonly repository: null }
+
+export const sectionsView: PullRequestView = { _tag: "Sections", repository: null }
+export const SECTIONS_VIEW_CACHE_KEY = "pullRequest:sections:_"
 
 export const initialPullRequestView = (repository: string | null = null): PullRequestView =>
 	repository ? { _tag: "Repository", repository } : { _tag: "Queue", mode: "authored", repository: null }
 
-export const viewMode = (view: PullRequestView): PullRequestQueueMode => (view._tag === "Repository" ? "repository" : view.mode)
+export const viewMode = (view: PullRequestView): PullRequestQueueMode | "sections" =>
+	view._tag === "Repository" ? "repository" : view._tag === "Sections" ? "sections" : view.mode
 
 export const viewRepository = (view: PullRequestView) => view.repository
 
 // Convert a view into the new unified service input. `_tag: "Repository"` is
 // the user-facing "all PRs in this repo" view → server-side `mode: "all"`.
+// Sections run their own compiled searches (see `sections/load.ts`) and never
+// page through the list input; they map to the authored queue only so this
+// stays total.
 export const viewToPullRequestQuery = (view: PullRequestView): PullRequestQuery =>
-	view._tag === "Repository" ? { mode: "all", repository: view.repository, textFilter: "" } : { mode: view.mode, repository: view.repository, textFilter: "" }
+	view._tag === "Repository"
+		? { mode: "all", repository: view.repository, textFilter: "" }
+		: view._tag === "Sections"
+			? { mode: "authored", repository: null, textFilter: "" }
+			: { mode: view.mode, repository: view.repository, textFilter: "" }
 
 export const viewToListInput = (view: PullRequestView, cursor: string | null, pageSize: number): ItemListInput<"pullRequest"> =>
 	pullRequestQueryToListInput(viewToPullRequestQuery(view), cursor, pageSize)
 
 // Cache key is the only thing the rest of the app needs from a view; it's
 // derived through the same `itemQueryCacheKey` the service seam uses.
-export const viewCacheKey = (view: PullRequestView) => itemQueryCacheKey("pullRequest", viewToPullRequestQuery(view))
+export const viewCacheKey = (view: PullRequestView) => (view._tag === "Sections" ? SECTIONS_VIEW_CACHE_KEY : itemQueryCacheKey("pullRequest", viewToPullRequestQuery(view)))
 
 export const viewEquals = (left: PullRequestView, right: PullRequestView) => left._tag === right._tag && viewMode(left) === viewMode(right) && left.repository === right.repository
 
+// Tab-cycle order. Sections lead the global cycle; a repository scope keeps
+// the original Repository + queue cycle.
 export const activePullRequestViews = (view: PullRequestView): readonly PullRequestView[] => {
 	const repository = viewRepository(view)
-	return [...(repository ? [{ _tag: "Repository" as const, repository }] : []), ...pullRequestQueueModes.map((mode) => ({ _tag: "Queue" as const, mode, repository }))]
+	return [...(repository ? [{ _tag: "Repository" as const, repository }] : [sectionsView]), ...pullRequestQueueModes.map((mode) => ({ _tag: "Queue" as const, mode, repository }))]
 }
 
 export const nextView = (view: PullRequestView, views: readonly PullRequestView[], delta: 1 | -1) => {
@@ -39,7 +54,7 @@ export const nextView = (view: PullRequestView, views: readonly PullRequestView[
 	return views[(index + delta + views.length) % views.length]!
 }
 
-export const viewLabel = (view: PullRequestView) => (view._tag === "Repository" ? view.repository : pullRequestQueueLabels[view.mode])
+export const viewLabel = (view: PullRequestView) => (view._tag === "Repository" ? view.repository : view._tag === "Sections" ? "sections" : pullRequestQueueLabels[view.mode])
 
 export const parseRepositoryInput = (input: string) => {
 	const trimmed = input.trim()

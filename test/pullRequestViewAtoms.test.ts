@@ -231,4 +231,66 @@ describe("item view atoms", () => {
 		const stdout = await runIsolatedProbe(probe)
 		expect(stdout).toBe("closed|0")
 	})
+	test("sections view loads every section, groups first-match, and hides collapsed sections", async () => {
+		const probe = `
+			import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"
+			import * as AtomRegistry from "effect/unstable/reactivity/AtomRegistry"
+			import { activeViewAtom, collapsedSectionsAtom, pullRequestsAtom, sectionGroupsAtom, sectionStatesAtom, sectionsConfigErrorAtom, visibleGroupsAtom } from "./src/ui/pullRequests/atoms.ts"
+			import { filterQueryAtom } from "./src/ui/filter/atoms.ts"
+			const registry = AtomRegistry.make()
+			const unmount = registry.mount(visibleGroupsAtom)
+			const waitFor = (atom) => new Promise((resolve, reject) => {
+				const settle = (result) => {
+					if (result.waiting) return false
+					if (AsyncResult.isFailure(result)) reject(result.cause)
+					else if (AsyncResult.isSuccess(result)) resolve(result.value)
+					else return false
+					return true
+				}
+				if (settle(registry.get(atom))) return
+				let unsubscribe = () => {}
+				unsubscribe = registry.subscribe(atom, (result) => {
+					if (settle(result)) unsubscribe()
+				})
+			})
+			await waitFor(pullRequestsAtom)
+			const states = registry.get(sectionStatesAtom)
+			const groups = registry.get(sectionGroupsAtom)
+			const visible = registry.get(visibleGroupsAtom)
+			const urls = visible.flatMap(([id, prs]) => prs.map((pr) => pr.url))
+			registry.set(collapsedSectionsAtom, { [visible[0][0]]: true })
+			const afterCollapse = registry.get(visibleGroupsAtom).map(([id]) => id)
+			registry.set(filterQueryAtom, "-author:nobody-matches-this zzzz-no-title")
+			const filtered = registry.get(visibleGroupsAtom).length
+			console.log(JSON.stringify({
+				view: registry.get(activeViewAtom)._tag,
+				error: registry.get(sectionsConfigErrorAtom),
+				ids: groups.map((group) => group.id),
+				settled: states.every((state) => state.status !== "loading"),
+				someRows: urls.length > 0,
+				unique: new Set(urls).size === urls.length,
+				botsHidden: !visible.some(([id]) => id === "bots"),
+				collapsedHidden: !afterCollapse.includes(visible[0][0]),
+				filtered,
+			}))
+			unmount()
+		`
+		const stdout = await runIsolatedProbe(probe, {
+			GHUI_MOCK_PR_COUNT: "40",
+			GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off",
+			PRS_DEFAULT_VIEW: "sections",
+			PRS_SECTIONS_PATH: "/nonexistent/prs-test/sections.yaml",
+		})
+		expect(JSON.parse(stdout)).toEqual({
+			view: "Sections",
+			error: null,
+			ids: ["needs-me", "rereview", "team", "mine", "bots"],
+			settled: true,
+			someRows: true,
+			unique: true,
+			botsHidden: true,
+			collapsedHidden: true,
+			filtered: 0,
+		})
+	})
 })
