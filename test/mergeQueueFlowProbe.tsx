@@ -1,5 +1,5 @@
 import { RegistryContext } from "@effect/atom-react"
-import { createDispatcher, parseKey } from "@ghui/keymap"
+import { createDispatcher, parseKey } from "@prs/keymap"
 import { createTestRenderer } from "@opentui/core/testing"
 import { createRoot } from "@opentui/react"
 import { Effect, Layer } from "effect"

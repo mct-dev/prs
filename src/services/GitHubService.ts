@@ -132,7 +132,7 @@ export class GitHubService extends Context.Service<
 		readonly addIssueLabel: (repository: string, number: number, label: string) => Effect.Effect<void, CommandError>
 		readonly removeIssueLabel: (repository: string, number: number, label: string) => Effect.Effect<void, CommandError>
 	}
->()("ghui/GitHubService") {
+>()("prs/GitHubService") {
 	static readonly layerNoDeps = Layer.effect(
 		GitHubService,
 		Effect.gen(function* () {

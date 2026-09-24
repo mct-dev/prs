@@ -1,7 +1,7 @@
 import type { KeyEvent } from "@opentui/core"
 import { useKeyboard } from "@opentui/react"
-import type { ParsedStroke } from "@ghui/keymap"
-import type { KeySubscribe } from "@ghui/keymap/react"
+import type { ParsedStroke } from "@prs/keymap"
+import type { KeySubscribe } from "@prs/keymap/react"
 import { useMemo, useRef } from "react"
 
 const normalizeKeyName = (name: string) => {
@@ -10,7 +10,7 @@ const normalizeKeyName = (name: string) => {
 }
 
 /**
- * Map an opentui KeyEvent into @ghui/keymap's ParsedStroke.
+ * Map an opentui KeyEvent into @prs/keymap's ParsedStroke.
  * `option` (alt key on Linux/Windows) is folded into `meta` to keep one
  * cross-platform modifier surface.
  */
@@ -24,7 +24,7 @@ export const normalizeOpenTuiKey = (event: KeyEvent): ParsedStroke => ({
 /**
  * React hook that returns a stable `KeySubscribe` driven by opentui's keyboard.
  *
- * Multiple subscribers (e.g. the `@ghui/keymap` dispatcher and any text-input
+ * Multiple subscribers (e.g. the `@prs/keymap` dispatcher and any text-input
  * fallback) can each register their own handler. Internally we attach a single
  * `useKeyboard` and fan out to every registered handler, so we don't accidentally
  * stack two `useKeyboard` listeners on the same component.

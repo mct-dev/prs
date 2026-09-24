@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createDispatcher, parseKey } from "@ghui/keymap"
+import { createDispatcher, parseKey } from "@prs/keymap"
 import { type CommentsViewCtx, commentsViewKeymap } from "../src/keymap/commentsView.ts"
 import { resolveCommentDiffTarget } from "../src/ui/comments/commentDiffTarget.ts"
 import { buildStackedDiffFiles, getStackedDiffCommentAnchors, splitPatchFiles, type DiffThreadPlacement } from "../src/ui/diff.ts"

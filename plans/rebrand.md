@@ -29,7 +29,7 @@ Every line mentioning `ghui` (case-insensitive) on `main` at 652cc34, outside
 | Config / env | 35 | `GHUI_*` reads in `index.tsx`, `config.ts`, `devLog.ts`, `observability.ts`, `themeStore.ts`, `runtime.ts`, `mockFixtures.ts`; `GHUI_BIN_PATH`; `package.json` scripts; `.env.example`; dev scripts | Now `PRS_*` with `GHUI_*` fallback |
 | Internal, renamed | 6 | `addGhUiParsers`, `ghui.command.runProcess` span, `.ghui/` dev path, `flake.nix` description, a dev comment | Renamed |
 | Internal, kept | 20 | service tags, link scheme, migrations table, theme id, mock repo | Left alone (see below) |
-| `@ghui/keymap` package | 67 | package files and imports | Left alone (see below) |
+| `@prs/keymap` package | 67 | package files and imports | Left alone (see below) |
 | Tests | 61 | `GHUI_*` env setup, theme id, fixtures | Left alone; they now cover the fallback |
 | Attribution | 4 | README credits, CHANGELOG fork note, `AGENTS.md` (plus `LICENSE`) | Kept on purpose |
 
@@ -55,7 +55,7 @@ exits 1. It never resets, stashes or discards anything.
 
 ## What remains (deliberately)
 
-- `@ghui/keymap` workspace package and its imports (32 files). Renaming would
+- `@prs/keymap` workspace package and its imports (32 files). Renaming would
   touch every keymap file and conflict with parallel work.
 - `ghui/*` Effect service tags (`CommandRunner`, `CacheService`, …). Internal
   only; rename in a quiet week.

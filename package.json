@@ -67,7 +67,7 @@
 	},
 	"devDependencies": {
 		"@effect/language-service": "0.86.2",
-		"@ghui/keymap": "workspace:*",
+		"@prs/keymap": "workspace:*",
 		"@types/bun": "1.3.14",
 		"@types/react": "19.2.17",
 		"oxfmt": "0.56.0",

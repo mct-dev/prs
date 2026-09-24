@@ -39,7 +39,7 @@ const assertInstalledPackage = async (projectDir: string) => {
 	}
 
 	assert(packageJson.version === rootPackageJson.version, `Expected installed version ${rootPackageJson.version}, got ${packageJson.version}`)
-	assert(!packageJson.dependencies?.["@ghui/keymap"], "Published package must not depend on private workspace @ghui/keymap")
+	assert(!packageJson.dependencies?.["@prs/keymap"], "Published package must not depend on private workspace @prs/keymap")
 	assert(binaryPackageName && packageJson.optionalDependencies?.[binaryPackageName] === rootPackageJson.version, `Published package must depend on ${binaryPackageName}`)
 	assert(binaryPackageDir && (await Bun.file(join(binaryPackageDir, "bin", "prs")).exists()), "Installed package must include the platform binary package")
 	assert(!(await Bun.file(join(packageDir, "src", "index.tsx")).exists()), "Published package must not rely on src/index.tsx")

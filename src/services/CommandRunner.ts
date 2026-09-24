@@ -70,7 +70,7 @@ export class CommandRunner extends Context.Service<
 			args: readonly string[],
 		) => Effect.Effect<S["Type"], CommandError | JsonParseError | Schema.SchemaError, S["DecodingServices"]>
 	}
->()("ghui/CommandRunner") {
+>()("prs/CommandRunner") {
 	static readonly layer = Layer.effect(
 		CommandRunner,
 		Effect.gen(function* () {

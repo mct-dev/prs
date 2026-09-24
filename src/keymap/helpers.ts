@@ -1,4 +1,4 @@
-import type { CommandConfig } from "@ghui/keymap"
+import type { CommandConfig } from "@prs/keymap"
 
 const MAX_COUNT_PREFIX = 99
 

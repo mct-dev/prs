@@ -11,7 +11,7 @@ export interface InlineSegmentOptions {
 	readonly issueReferenceRepository?: string | null | undefined
 }
 
-const ISSUE_REFERENCE_PREFIX = "ghui://issue-ref/"
+const ISSUE_REFERENCE_PREFIX = "prs://issue-ref/"
 
 export const issueReferenceUrl = (repository: string, number: number) => `${ISSUE_REFERENCE_PREFIX}${encodeURIComponent(repository)}/${number}`
 

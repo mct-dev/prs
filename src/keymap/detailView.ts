@@ -1,4 +1,4 @@
-import { context, type Scrollable, scrollCommands } from "@ghui/keymap"
+import { context, type Scrollable, scrollCommands } from "@prs/keymap"
 
 export interface DetailViewCtx extends Scrollable {
 	readonly closeDetail: () => void

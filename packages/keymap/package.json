@@ -1,5 +1,5 @@
 {
-	"name": "@ghui/keymap",
+	"name": "@prs/keymap",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",

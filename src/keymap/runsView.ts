@@ -1,4 +1,4 @@
-import { context } from "@ghui/keymap"
+import { context } from "@prs/keymap"
 import { countedVerticalBindings } from "./helpers.ts"
 
 // The runs view has two sub-modes that share one keymap layer:

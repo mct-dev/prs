@@ -16,7 +16,7 @@
       },
       "devDependencies": {
         "@effect/language-service": "0.86.2",
-        "@ghui/keymap": "workspace:*",
+        "@prs/keymap": "workspace:*",
         "@types/bun": "1.3.14",
         "@types/react": "19.2.17",
         "oxfmt": "0.56.0",
@@ -25,7 +25,7 @@
       },
     },
     "packages/keymap": {
-      "name": "@ghui/keymap",
+      "name": "@prs/keymap",
       "version": "0.0.0",
       "peerDependencies": {
         "react": "*",
@@ -38,8 +38,6 @@
     "@effect/language-service": ["@effect/language-service@0.86.2", "", { "bin": { "effect-language-service": "cli.js" } }, "sha512-SaPln+8srOqDJDUwNTDmP5e+IYpEDr9+1epGznnsLqu8xvo6VnxyWARdeLpqvZJlb0Pgy9ca7ppqvvdWbHPXAg=="],
 
     "@effect/sql-sqlite-bun": ["@effect/sql-sqlite-bun@4.0.0-beta.90", "", { "peerDependencies": { "effect": "^4.0.0-beta.90" } }, "sha512-Rb9bencgrIfC6yKSHfW8stvDMSl5X2qfiNT6rRykZzfiCbfpAiEzoytjToqVT1PXZZO5pw0koMe7GM6B4XLcyg=="],
-
-    "@ghui/keymap": ["@ghui/keymap@workspace:packages/keymap"],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-LCkGo6JDfaBhgST7UpPWgNgLINpcpabaHfyz5OBx75nUYxBsaEPxjnyNjWpeb/xBup/682QnBfRBy2/LvPutZQ=="],
 
@@ -148,6 +146,8 @@
     "@oxlint/binding-win32-ia32-msvc": ["@oxlint/binding-win32-ia32-msvc@1.71.0", "", { "os": "win32", "cpu": "ia32" }, "sha512-W4HvOHGzVLHcrmFu+bMrJlho+/yrlX5ZNdJZqGe8MEldkQG+RHYhxxad9P4jvWAYFmIqUA5i9DQ8QsJqSU9GIw=="],
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.71.0", "", { "os": "win32", "cpu": "x64" }, "sha512-D2kyEIPHk/G/wiZLnwTVC/sVst+T/lKldVOjAFpgTIBUAOlry72e5OiapDbDBF4LfJLkN5ypJb/8Eu6yJzkveQ=="],
+
+    "@prs/keymap": ["@prs/keymap@workspace:packages/keymap"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

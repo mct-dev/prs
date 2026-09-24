@@ -1015,7 +1015,7 @@ export class CacheService extends Context.Service<
 		readonly markInterruptedAgentReviews: () => Effect.Effect<void>
 		readonly prune: () => Effect.Effect<void>
 	}
->()("ghui/CacheService") {
+>()("prs/CacheService") {
 	static readonly disabledLayer = Layer.succeed(
 		CacheService,
 		CacheService.of({

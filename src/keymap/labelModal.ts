@@ -1,4 +1,4 @@
-import { context } from "@ghui/keymap"
+import { context } from "@prs/keymap"
 import { selectionModalBindings } from "./helpers.js"
 
 export interface LabelModalCtx {

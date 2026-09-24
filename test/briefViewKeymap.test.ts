@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createDispatcher, parseKey } from "@ghui/keymap"
+import { createDispatcher, parseKey } from "@prs/keymap"
 import { type BriefViewCtx, briefViewKeymap } from "../src/keymap/briefView.ts"
 
 describe("brief view keymap", () => {

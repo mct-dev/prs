@@ -1,4 +1,4 @@
-import { context } from "@ghui/keymap"
+import { context } from "@prs/keymap"
 import { countedVerticalBindings } from "./helpers.ts"
 
 // The full brief view: ↑↓ walks focus areas (or scrolls when there are none),

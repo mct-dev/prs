@@ -74,7 +74,7 @@ export class EditorOpener extends Context.Service<
 		/** Open a local file in `$VISUAL` / `$EDITOR`, suspending the TUI until it exits. */
 		readonly editFile: (path: string) => Effect.Effect<void, CommandError>
 	}
->()("ghui/EditorOpener") {
+>()("prs/EditorOpener") {
 	static readonly layerNoDeps = Layer.effect(
 		EditorOpener,
 		Effect.gen(function* () {

@@ -1,4 +1,4 @@
-import { context } from "@ghui/keymap"
+import { context } from "@prs/keymap"
 import { countedVerticalBindings } from "./helpers.ts"
 
 export type DiffSide = "LEFT" | "RIGHT"

@@ -60,7 +60,7 @@ export class AgentRunner extends Context.Service<
 		/** Current index followed by every change. */
 		readonly changes: Stream.Stream<ReviewIndex>
 	}
->()("ghui/AgentRunner") {
+>()("prs/AgentRunner") {
 	static readonly layerWith = (options: AgentRunnerOptions): Layer.Layer<AgentRunner, never, CacheService> =>
 		Layer.effect(
 			AgentRunner,

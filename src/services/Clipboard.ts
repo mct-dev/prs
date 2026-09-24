@@ -20,7 +20,7 @@ export class Clipboard extends Context.Service<
 	{
 		readonly copy: (text: string) => Effect.Effect<void, ClipboardError>
 	}
->()("ghui/Clipboard") {
+>()("prs/Clipboard") {
 	static readonly layerNoDeps = Layer.effect(
 		Clipboard,
 		Effect.gen(function* () {

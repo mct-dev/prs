@@ -1,9 +1,9 @@
 # Real-app comparison: ghui
 
 Side-by-side translations of actual ghui keyboard layers from `src/App.tsx`
-into the `@ghui/keymap` API. Code on the left is *what's shipping today*
+into the `@prs/keymap` API. Code on the left is *what's shipping today*
 (`@opentui/keymap` + a custom `useScopedBindings` wrapper). Code on the right
-is the same behavior re-expressed against `@ghui/keymap`.
+is the same behavior re-expressed against `@prs/keymap`.
 
 ---
 
@@ -24,11 +24,11 @@ useScopedBindings({
 })
 ```
 
-**With `@ghui/keymap`**:
+**With `@prs/keymap`**:
 
 ```ts
 // src/keymap/closeModal.ts — separate file, importable, testable
-import { command, Keymap } from "@ghui/keymap"
+import { command, Keymap } from "@prs/keymap"
 
 export interface CloseModalCtx {
   readonly closeModal: () => void
@@ -43,7 +43,7 @@ export const closeModalKeymap: Keymap<CloseModalCtx> = Keymap.union(
 
 **Diff in shape:**
 
-| | Today | With `@ghui/keymap` |
+| | Today | With `@prs/keymap` |
 |---|---|---|
 | Where the bindings live | Inside `App` component body | Importable module, top-level |
 | What state they see | All of `App`'s closure | Just `CloseModalCtx` |
@@ -76,11 +76,11 @@ useScopedBindings({
 })
 ```
 
-**With `@ghui/keymap`**:
+**With `@prs/keymap`**:
 
 ```ts
 // src/keymap/mergeModal.ts
-import { command, Keymap } from "@ghui/keymap"
+import { command, Keymap } from "@prs/keymap"
 
 export interface MergeModalCtx {
   readonly availableActionCount: number
@@ -156,11 +156,11 @@ Both layers reference component-local helpers (`scrollDiffBy`,
 inline boolean expressions. The relationship between the two modes is
 implicit — you have to know to read both `when` conditions.
 
-**With `@ghui/keymap`**:
+**With `@prs/keymap`**:
 
 ```ts
 // src/keymap/diff.ts — defined over the diff's own state shape
-import { command, Keymap, scrollCommands } from "@ghui/keymap"
+import { command, Keymap, scrollCommands } from "@prs/keymap"
 
 export interface DiffCtx {
   readonly hasOpenPullRequest: boolean
@@ -191,7 +191,7 @@ export const diffViewKeymap: Keymap<DiffCtx> = Keymap.union(
 
 
 // src/keymap/diffComment.ts — the sub-mode's OWN keymap, OWN context
-import { command, Keymap } from "@ghui/keymap"
+import { command, Keymap } from "@prs/keymap"
 
 export interface DiffCommentCtx {
   readonly halfPage: number
@@ -235,7 +235,7 @@ sub-keymaps don't know about each other or about `AppCtx`:
 
 ```ts
 // src/keymap/all.ts
-import { Keymap } from "@ghui/keymap"
+import { Keymap } from "@prs/keymap"
 import { diffViewKeymap, type DiffCtx } from "./diff.ts"
 import { diffCommentKeymap, type DiffCommentCtx } from "./diffComment.ts"
 import type { AppCtx } from "./state.ts"
@@ -255,7 +255,7 @@ export const appKeymap: Keymap<AppCtx> = Keymap.union(
 
 ### What the diff bought us
 
-| | Today | With `@ghui/keymap` |
+| | Today | With `@prs/keymap` |
 |---|---|---|
 | Sub-mode types | None — both layers see all of App | `DiffCtx` and `DiffCommentCtx` are independent |
 | Where mode-exclusive logic lives | Inline `when` boolean | At the projection site, isolated |
@@ -282,7 +282,7 @@ you grep for `"r":` across nine separate `useScopedBindings` blocks.
 
 ```tsx
 // src/App.tsx
-import { useKeymap } from "@ghui/keymap/react"
+import { useKeymap } from "@prs/keymap/react"
 import { appKeymap } from "./keymap/all.ts"
 import type { AppCtx } from "./keymap/state.ts"
 
@@ -315,7 +315,7 @@ you call `pureDispatch(closeModalKeymap, initialDispatchState, parseKey("escape"
 
 For ghui's actual keyboard surface (~12 layers, ~100 bindings):
 
-| Metric | Today | With `@ghui/keymap` (estimated) |
+| Metric | Today | With `@prs/keymap` (estimated) |
 |---|---|---|
 | Lines of keyboard code in `App.tsx` | ~370 | ~5 (one `useKeymap` call + a `ctx` object literal) |
 | Lines of importable keyboard code | 0 | ~250 (split across 8 files) |

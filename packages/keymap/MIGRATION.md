@@ -1,4 +1,4 @@
-# Migration sketch — ghui using @ghui/keymap
+# Migration sketch — ghui using @prs/keymap
 
 A concrete before/after for ghui's modal + global layers. Demonstrates that the
 library's primary value is _organizational_: bindings move out of the component
@@ -42,7 +42,7 @@ This works (it's what we just shipped) but the bindings live inside the
 component's render function. They can't be tested without React, can't be
 imported by a palette, and their gating conditions are scattered.
 
-## After — using @ghui/keymap
+## After — using @prs/keymap
 
 Bindings become an importable value. State becomes a single shape passed once.
 The component is JSX + state + one `useKeymap` call.
@@ -64,7 +64,7 @@ export interface AppState {
 
 ```ts
 // src/keymap/closeModal.ts
-import { defineCommand, scope } from "@ghui/keymap"
+import { defineCommand, scope } from "@prs/keymap"
 import type { AppState } from "./state.ts"
 
 export const closeModalCommands = scope<AppState>(
@@ -88,7 +88,7 @@ export const closeModalCommands = scope<AppState>(
 
 ```ts
 // src/keymap/diffView.ts
-import { defineCommand, scope } from "@ghui/keymap"
+import { defineCommand, scope } from "@prs/keymap"
 
 const scrollBindings = (axis: "diff" | "detail"): readonly Command<AppState>[] => [
   defineCommand({ id: `${axis}.up`, title: "Scroll up", keys: ["k", "up"], run: (s) => s.scrollDiffBy(-1) }),
@@ -123,7 +123,7 @@ export const allCommands = [
 
 ```tsx
 // src/App.tsx
-import { useKeymap } from "@ghui/keymap/react"
+import { useKeymap } from "@prs/keymap/react"
 import { allCommands } from "./keymap/all.ts"
 
 const App = () => {

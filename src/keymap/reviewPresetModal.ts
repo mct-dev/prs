@@ -1,4 +1,4 @@
-import { context } from "@ghui/keymap"
+import { context } from "@prs/keymap"
 import type { ReviewPresetModalMode } from "../ui/modals/types.js"
 import { defaultVerticalKeys } from "./helpers.js"
 

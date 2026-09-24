@@ -1,10 +1,10 @@
-# @ghui/keymap
+# @prs/keymap
 
 A small, opinionated keymap library where **bindings are values you compose**,
 **state is input**, and **dispatch is a pure function**.
 
 ```ts
-import { context, scrollCommands } from "@ghui/keymap"
+import { context, scrollCommands } from "@prs/keymap"
 
 interface DiffState {
 	halfPage: number
@@ -58,7 +58,7 @@ That means:
 - **Replay, time-travel, snapshot** all become possible because runtime state is just data.
 
 ```ts
-import { initialDispatchState, pureDispatch } from "@ghui/keymap"
+import { initialDispatchState, pureDispatch } from "@prs/keymap"
 
 const { state, decision } = pureDispatch(km, initialDispatchState, parseKey("g"), ctx, now)
 // decision: { kind: "ran" | "pending" | "disabled" | "no-match", ... }
@@ -132,7 +132,7 @@ The dispatcher accepts an injectable `Clock` for deterministic tests.
 ## Type narrowing
 
 ```ts
-import { isCommand, type Command } from "@ghui/keymap"
+import { isCommand, type Command } from "@prs/keymap"
 
 const all = km.bindings              // Binding<C>[] — meta is optional
 const cmds = all.filter(isCommand)   // Command<C>[] — meta.id, meta.title required
