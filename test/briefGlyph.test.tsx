@@ -8,6 +8,8 @@ import type { BriefStatus } from "../src/review/briefStatus.ts"
 import { colors } from "../src/ui/colors.ts"
 import { getRowLayout, PullRequestList } from "../src/ui/PullRequestList.tsx"
 import { briefGlyph } from "../src/ui/review/briefDisplay.ts"
+import { BriefSpinner } from "../src/ui/review/BriefSpinner.tsx"
+import { SPINNER_INTERVAL_MS } from "../src/ui/spinner.ts"
 
 // @ts-expect-error — globalThis.IS_REACT_ACT_ENVIRONMENT
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -44,13 +46,13 @@ const pullRequest = (number: number): PullRequestItem => ({
 
 describe("brief glyph", () => {
 	test("one marker per brief state", () => {
-		expect(briefGlyph({ _tag: "idle" }, "⠋")).toEqual({ text: " ", fg: colors.muted })
-		expect(briefGlyph({ _tag: "running", startedAt: new Date(0), runId: "r" }, "⠋")).toEqual({ text: "⠋", fg: colors.status.pending })
-		expect(briefGlyph({ _tag: "error", message: "boom", stale: false }, "⠋")).toEqual({ text: "!", fg: colors.status.failing })
-		expect(briefGlyph(done("low"), "⠋")).toEqual({ text: "●", fg: colors.status.passing })
-		expect(briefGlyph(done("medium"), "⠋")).toEqual({ text: "●", fg: colors.status.pending })
-		expect(briefGlyph(done("high"), "⠋")).toEqual({ text: "●", fg: colors.status.failing })
-		expect(briefGlyph(done("high", true), "⠋")).toEqual({ text: "○", fg: colors.muted })
+		expect(briefGlyph({ _tag: "idle" })).toEqual({ text: " ", fg: colors.muted })
+		expect(briefGlyph({ _tag: "running", startedAt: new Date(0), runId: "r" })).toEqual({ text: "⠋", fg: colors.status.pending })
+		expect(briefGlyph({ _tag: "error", message: "boom", stale: false })).toEqual({ text: "!", fg: colors.status.failing })
+		expect(briefGlyph(done("low"))).toEqual({ text: "●", fg: colors.status.passing })
+		expect(briefGlyph(done("medium"))).toEqual({ text: "●", fg: colors.status.pending })
+		expect(briefGlyph(done("high"))).toEqual({ text: "●", fg: colors.status.failing })
+		expect(briefGlyph(done("high", true))).toEqual({ text: "○", fg: colors.muted })
 	})
 
 	test("the glyph column is taken from the title, not added past the row", () => {
@@ -108,4 +110,27 @@ describe("brief glyph", () => {
 			for (const line of lines) expect(line.length).toBeLessThanOrEqual(width)
 		})
 	}
+
+	test("the running spinner animates on its own interval", async () => {
+		const setup = await createTestRenderer({ width: 4, height: 1 })
+		const root = createRoot(setup.renderer)
+		act(() => {
+			root.render(
+				<text>
+					<BriefSpinner fg={colors.status.pending} width={2} />
+				</text>,
+			)
+		})
+		await setup.renderOnce()
+		const first = setup.captureCharFrame()
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, SPINNER_INTERVAL_MS * 2.5))
+		})
+		await setup.renderOnce()
+		const later = setup.captureCharFrame()
+		act(() => root.unmount())
+		setup.renderer.destroy()
+		expect(first).toContain(" ⠋")
+		expect(later).not.toContain("⠋")
+	})
 })

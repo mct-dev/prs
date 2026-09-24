@@ -49,7 +49,7 @@ import { useDiffViewState } from "./useDiffViewState.js"
 import { useViewModeState } from "./useViewModeState.js"
 import { useFilterModal } from "../ui/filter/useFilterModal.js"
 import { DIFF_FILE_PANEL_AUTO_THRESHOLD, diffFilePanelOverrideAtom, selectedDiffKeyAtom, selectedDiffStateAtom } from "../ui/diff/atoms.js"
-import { anyAgentReviewRunningAtom, selectedBriefStatusAtom } from "../ui/review/atoms.js"
+import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { briefFullViewAtom } from "../ui/review/briefViewAtoms.js"
 import { useBriefDiffTarget } from "../ui/review/useBriefDiffTarget.js"
 import { useBriefView } from "./useBriefView.js"
@@ -596,9 +596,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [diffFullView])
 	const selectedPullRequestDetailKey = selectedPullRequest ? pullRequestDetailKey(selectedPullRequest) : null
-	const agentReviewRunning = useAtomValue(anyAgentReviewRunningAtom)
 	const { selectedPullRequestDetailError, isActiveSurfaceLoading, loadingFrame, loadingIndicator } = useLoadingStatus({
-		agentReviewRunning,
 		selectedPullRequestDetailKey,
 		detailHydrationState,
 		pullRequestResult,

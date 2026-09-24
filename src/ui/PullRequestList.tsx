@@ -7,6 +7,7 @@ import { SelectableRow, useHoverState } from "./listSelection/SelectableRow.js"
 import { fitCell, MatchedCell, PlainLine, SectionTitle, TextLine } from "./primitives.js"
 import { pullRequestRowDisplay, repoColor, reviewIcon } from "./pullRequests.js"
 import { briefGlyph } from "./review/briefDisplay.js"
+import { BriefSpinner } from "./review/BriefSpinner.js"
 
 export type PullRequestGroups = Array<[string, PullRequestItem[]]>
 
@@ -207,7 +208,6 @@ const PullRequestRow = ({
 	compact,
 	showRepository,
 	briefStatus,
-	spinnerFrame,
 	onSelect,
 	onHoverChange,
 }: {
@@ -221,7 +221,6 @@ const PullRequestRow = ({
 	compact: boolean
 	showRepository: boolean
 	briefStatus: BriefStatus | null
-	spinnerFrame: string
 	onSelect: () => void
 	onHoverChange: (hovered: boolean) => void
 }) => {
@@ -229,7 +228,7 @@ const PullRequestRow = ({
 	const title = pullRequest.title.trim()
 	const { reviewWidth, checkWidth, ageWidth, numberWidth, titleWidth, briefWidth } = getRowLayout(contentWidth, numWidth, ageColWidth, briefStatus !== null)
 	const rowWidth = reviewWidth + 1 + numberWidth + 1 + titleWidth + checkWidth + ageWidth + briefWidth
-	const glyph = briefStatus ? briefGlyph(briefStatus, spinnerFrame) : null
+	const glyph = briefStatus ? briefGlyph(briefStatus) : null
 	const fillerWidth = Math.max(0, contentWidth - rowWidth)
 	const metaIndentWidth = reviewWidth + 1
 	const metaWidth = Math.max(8, contentWidth - metaIndentWidth)
@@ -259,7 +258,13 @@ const PullRequestRow = ({
 						</span>
 						<span fg={colors.muted}>{fitCell(ageText, ageWidth, "right")}</span>
 						<span fg={display.checkFg}>{fitCell(display.checkText, checkWidth, "right")}</span>
-						{glyph ? <span fg={glyph.fg}>{fitCell(glyph.text, briefWidth, "right")}</span> : null}
+						{glyph ? (
+							briefStatus?._tag === "running" ? (
+								<BriefSpinner fg={glyph.fg} width={briefWidth} />
+							) : (
+								<span fg={glyph.fg}>{fitCell(glyph.text, briefWidth, "right")}</span>
+							)
+						) : null}
 						{fillerWidth > 0 ? <span>{" ".repeat(fillerWidth)}</span> : null}
 					</TextLine>
 					{compact ? null : (
@@ -379,7 +384,6 @@ export const PullRequestList = ({
 						compact={row.compact}
 						showRepository={row.showRepository ?? false}
 						briefStatus={briefStatusOf ? briefStatusOf(row.pullRequest) : null}
-						spinnerFrame={loadingIndicator}
 						onSelect={() => onSelectPullRequest(pullRequestUrl)}
 						onHoverChange={onHoverChange(pullRequestUrl)}
 					/>

@@ -216,7 +216,6 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 				scrollTop={briefView.scrollTop}
 				contentWidth={fullscreenContentWidth}
 				height={wideBodyHeight}
-				loadingIndicator={loadingIndicator}
 				onClickFocus={briefView.clickFocus}
 			/>
 		)

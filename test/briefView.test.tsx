@@ -80,7 +80,7 @@ const renderPane = async (entry: ReviewEntry, width = 90, height = 48) => {
 	const setup = await createTestRenderer({ width, height })
 	const root = createRoot(setup.renderer)
 	act(() => {
-		root.render(<BriefPane pullRequest={pullRequest} status={status} rows={rows} focusIndex={0} scrollTop={0} contentWidth={width - 2} height={height} loadingIndicator="⠋" />)
+		root.render(<BriefPane pullRequest={pullRequest} status={status} rows={rows} focusIndex={0} scrollTop={0} contentWidth={width - 2} height={height} />)
 	})
 	await setup.renderOnce()
 	const frame = setup.captureCharFrame()

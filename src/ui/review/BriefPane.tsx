@@ -4,6 +4,7 @@ import type { BriefStatus } from "../../review/briefStatus.js"
 import { colors } from "../colors.js"
 import { Divider, Filler, fitCell, PaddedRow, TextLine } from "../primitives.js"
 import { shortRepoName } from "../pullRequests.js"
+import { BriefSpinner } from "./BriefSpinner.js"
 import type { BriefViewRow } from "./briefViewRows.js"
 
 export interface BriefPaneProps {
@@ -14,16 +15,15 @@ export interface BriefPaneProps {
 	readonly scrollTop: number
 	readonly contentWidth: number
 	readonly height: number
-	readonly loadingIndicator: string
 	readonly onClickFocus?: (index: number) => void
 }
 
-const statusLabel = (status: BriefStatus, loadingIndicator: string): { readonly text: string; readonly fg: string } => {
+const statusLabel = (status: BriefStatus): { readonly text: string; readonly fg: string } => {
 	switch (status._tag) {
 		case "idle":
 			return { text: "no review", fg: colors.muted }
 		case "running":
-			return { text: `${loadingIndicator} running`, fg: colors.status.pending }
+			return { text: "⠋ running", fg: colors.status.pending }
 		case "error":
 			return { text: "failed", fg: colors.status.failing }
 		case "done":
@@ -36,11 +36,11 @@ const statusLabel = (status: BriefStatus, loadingIndicator: string): { readonly 
  * rows (one terminal row each), so the hook's scroll math is exact and the
  * pane never needs a scrollbox. Chrome: header + subline + divider = 3 rows.
  */
-export const BriefPane = ({ pullRequest, status, rows, focusIndex, scrollTop, contentWidth, height, loadingIndicator, onClickFocus }: BriefPaneProps) => {
+export const BriefPane = ({ pullRequest, status, rows, focusIndex, scrollTop, contentWidth, height, onClickFocus }: BriefPaneProps) => {
 	const bodyHeight = Math.max(1, height - 3)
 	const paneWidth = contentWidth + 2
 	const title = `${shortRepoName(pullRequest.repository)} #${pullRequest.number} · agent review`
-	const right = statusLabel(status, loadingIndicator)
+	const right = statusLabel(status)
 	const gap = Math.max(1, contentWidth - title.length - right.text.length)
 	const visible = rows.slice(scrollTop, scrollTop + bodyHeight)
 	const more = rows.length - (scrollTop + visible.length)
@@ -53,7 +53,7 @@ export const BriefPane = ({ pullRequest, status, rows, focusIndex, scrollTop, co
 						{title}
 					</span>
 					<span>{" ".repeat(gap)}</span>
-					<span fg={right.fg}>{right.text}</span>
+					{status._tag === "running" ? <BriefSpinner fg={right.fg} suffix=" running" /> : <span fg={right.fg}>{right.text}</span>}
 				</TextLine>
 			</PaddedRow>
 			<PaddedRow>
