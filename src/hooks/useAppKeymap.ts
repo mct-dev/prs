@@ -7,12 +7,14 @@ import type {
 	LabelModalState,
 	MergeModalState,
 	OpenRepositoryModalState,
+	ReviewPresetModalState,
 	SubmitReviewModalState,
 	ThemeModalState,
 } from "../ui/modals/types.js"
 import { canEditComment } from "../ui/comments/useCommentMutations.js"
 import type { RunsViewCtx } from "../keymap/runsView.js"
 import type { BriefViewCtx } from "../keymap/briefView.js"
+import type { ReviewPresetModalCtx } from "../keymap/reviewPresetModal.js"
 import type { WorkspaceSurface } from "../workspaceSurfaces.js"
 import { useKeymapWiring } from "./useKeymapWiring.js"
 import { useFilterPopoverControls } from "../ui/filter/useFilterPopover.js"
@@ -73,7 +75,9 @@ export interface UseAppKeymapInput {
 	readonly moveChangedFileSelection: (delta: -1 | 1) => void
 	readonly applySelectedFilter: () => void
 	readonly moveFilterSelection: (delta: -1 | 1) => void
-	readonly moveReviewPresetSelection: (delta: -1 | 1) => void
+	readonly reviewPresetModal: ReviewPresetModalState
+	readonly reviewPresetModalCtx: ReviewPresetModalCtx
+	readonly editReviewPresetText: (transform: (value: string) => string) => void
 	readonly setSubmitReviewModal: (next: SubmitReviewModalState | ((prev: SubmitReviewModalState) => SubmitReviewModalState)) => void
 	readonly confirmSubmitReview: () => void
 	readonly editSubmitReview: (transform: (value: CommentEditorValue) => CommentEditorValue) => void
@@ -221,6 +225,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 					i.changedFilesModalActive ||
 					i.submitReviewModalActive ||
 					i.labelModalActive ||
+					(i.reviewPresetModalActive && (i.reviewPresetModal.mode === "name" || i.reviewPresetModal.mode === "edit")) ||
 					i.filterMode ||
 					(i.themeModalActive && i.themeModal.filterMode),
 			},
@@ -245,11 +250,7 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 				moveChangedFileSelection: i.moveChangedFileSelection,
 			},
 			filterModal: { closeActiveModal: i.closeActiveModal, applySelected: i.applySelectedFilter, moveSelection: i.moveFilterSelection },
-			reviewPresetModal: {
-				closeModal: i.closeActiveModal,
-				runSelected: () => i.runCommandById("pull.agent-review-preset-run"),
-				moveSelection: i.moveReviewPresetSelection,
-			},
+			reviewPresetModal: i.reviewPresetModalCtx,
 			submitReviewModal: {
 				submitReviewModal: i.submitReviewModal,
 				closeActiveModal: i.closeActiveModal,
@@ -378,6 +379,9 @@ export const useAppKeymap = (i: UseAppKeymapInput): void => {
 		textInput: {
 			commandPaletteActive: i.commandPaletteActive,
 			openRepositoryModalActive: i.openRepositoryModalActive,
+			reviewPresetModalActive: i.reviewPresetModalActive,
+			reviewPresetModal: i.reviewPresetModal,
+			editReviewPresetText: i.editReviewPresetText,
 			themeModalActive: i.themeModalActive,
 			commentModalActive: i.commentModalActive,
 			submitReviewModalActive: i.submitReviewModalActive,

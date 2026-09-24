@@ -92,10 +92,11 @@ describe("agent review commands", () => {
 
 	test("preset options summarize each configured preset, default first", () => {
 		const options = reviewPresetOptions(parseReviewConfig({ presets: { deep: { agent: "claude", model: "opus", maxBudgetUsd: 5, extraPrompt: "Focus on auth." } } }))
-		expect(options).toEqual([
+		expect(options.map(({ preset: _preset, ...rest }) => rest)).toEqual([
 			{ id: "claude", detail: "claude · skill review · ≤ $3", isDefault: true },
 			{ id: "codex", detail: "codex", isDefault: false },
 			{ id: "deep", detail: "claude · model opus · ≤ $5 · +prompt", isDefault: false },
 		])
+		expect(options[2]?.preset).toMatchObject({ agent: "claude", model: "opus", maxBudgetUsd: 5 })
 	})
 })

@@ -52,6 +52,12 @@ describe("mergeCachedDetails", () => {
 		expect(merged.detailLoaded).toBe(true)
 	})
 
+	test("carries reviewers from the detail so a summary refresh keeps the row", () => {
+		const reviewers = { reviewers: [{ kind: "user" as const, login: "alice", state: "approved" as const, codeOwner: false, isViewer: false }], requiredApprovals: null }
+		expect(mergePullRequestDetail(pullRequest(), pullRequest({ detailLoaded: true, reviewers })).reviewers).toEqual(reviewers)
+		expect(mergePullRequestDetail(pullRequest(), pullRequest({ detailLoaded: true })).reviewers).toBeUndefined()
+	})
+
 	test("preserves cached checks because the summary fragment never carries a real rollup", () => {
 		// The list query omits `statusCheckRollup` for cost; a fresh "summary" PR
 		// always lands with checkStatus = "none". Merging the cached detail's

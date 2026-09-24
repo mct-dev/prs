@@ -1297,7 +1297,8 @@ const cursorColors: ColorPalette = {
 
 export const themeDefinitions: readonly ThemeDefinition[] = [
 	{ id: "system", name: "System", description: "Use the terminal foreground, background, and ANSI palette", tone: "dark", colors: systemColors },
-	{ id: "ghui", name: "GHUI", description: "Warm parchment accents on a deep slate background", tone: "dark", colors: ghuiColors },
+	// The id stays "ghui" so configs saved before the rebrand still load; users only see the name.
+	{ id: "ghui", name: "prs", description: "Warm parchment accents on a deep slate background", tone: "dark", colors: ghuiColors },
 	{ id: "tokyo-night", name: "Tokyo Night", description: "Cool indigo surfaces with neon editor accents", tone: "dark", colors: tokyoNightColors },
 	{ id: "catppuccin", name: "Catppuccin", description: "Mocha lavender, peach, and soft pastel contrast", tone: "dark", colors: catppuccinColors },
 	{ id: "catppuccin-latte", name: "Catppuccin Latte", description: "Light frothy cream with pastel lavender and peach", tone: "light", colors: catppuccinLatteColors },

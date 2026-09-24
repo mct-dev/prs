@@ -5,6 +5,7 @@ import { createRoot, useRenderer, useTerminalDimensions } from "@opentui/react"
 import { Effect } from "effect"
 import { appendFile } from "node:fs/promises"
 import { useEffect, useState } from "react"
+import { envVar } from "./env.js"
 import { errorMessage } from "./errors.js"
 import { createSystemThemeReloader, type SystemThemeReloadEvent } from "./systemThemeReload.js"
 import { setTuiSuspender } from "./tuiSuspension.js"
@@ -15,7 +16,7 @@ import { SPINNER_INTERVAL_MS } from "./ui/spinner.js"
 
 process.env.OTUI_USE_ALTERNATE_SCREEN = "true"
 
-const addGhUiParsers = () =>
+const addPrsParsers = () =>
 	addDefaultParsers([
 		{
 			filetype: "bash",
@@ -39,7 +40,7 @@ type AppBundle = {
 let notifySystemThemeReload = () => {}
 
 const SYSTEM_THEME_READ_TIMEOUT_MS = 500
-const SYSTEM_THEME_DEBUG_LOG_PATH = process.env.GHUI_DEBUG_THEME_RELOAD_LOG ?? null
+const SYSTEM_THEME_DEBUG_LOG_PATH = envVar("DEBUG_THEME_RELOAD_LOG") ?? null
 
 const logReloadEvent = (event: SystemThemeReloadEvent) => {
 	if (SYSTEM_THEME_DEBUG_LOG_PATH === null) return
@@ -119,7 +120,7 @@ process.on("SIGUSR2", () => {
 
 const Bootstrap = () => {
 	const [appBundle, setAppBundle] = useState<AppBundle | null>(null)
-	const [bootHint, setBootHint] = useState("Starting ghui")
+	const [bootHint, setBootHint] = useState("Starting prs")
 	const [systemThemeGeneration, setSystemThemeGeneration] = useState(0)
 
 	useEffect(() => {
@@ -127,13 +128,13 @@ const Bootstrap = () => {
 		notifySystemThemeReload = () => setSystemThemeGeneration((current) => current + 1)
 		const timer = globalThis.setTimeout(() => {
 			setBootHint("Registering syntax parsers")
-			addGhUiParsers()
+			addPrsParsers()
 
-			setBootHint("Loading ghui app")
+			setBootHint("Loading prs app")
 			void Promise.all([import("@effect/atom-react"), import("./App.js")]).then(
 				([{ RegistryProvider }, { App }]) => {
 					if (cancelled) return
-					setBootHint("Mounting ghui app")
+					setBootHint("Mounting prs app")
 					setAppBundle({ RegistryProvider, App })
 				},
 				(error) => {
@@ -163,7 +164,7 @@ const Bootstrap = () => {
 }
 
 process.stdout.write(FOCUS_REPORTING_ENABLE)
-if (process.env.GHUI_FORCE_FULL_REPAINT_ON_START === "1") {
+if (envVar("FORCE_FULL_REPAINT_ON_START") === "1") {
 	process.stdout.write(FULL_SCREEN_REPAINT)
 	renderer.requestRender()
 }

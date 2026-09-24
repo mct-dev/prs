@@ -1,13 +1,14 @@
 import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/unstable/observability"
+import { envConfig } from "./env.js"
 
 const observabilityConfig = Config.all({
-	endpoint: Config.string("GHUI_OTLP_ENDPOINT").pipe(
+	endpoint: envConfig(Config.string, "OTLP_ENDPOINT").pipe(
 		Config.withDefault(""),
 		Config.map((value) => value.trim()),
 	),
-	motelPort: Config.string("GHUI_MOTEL_PORT").pipe(
+	motelPort: envConfig(Config.string, "MOTEL_PORT").pipe(
 		Config.withDefault(""),
 		Config.map((value) => value.trim()),
 	),

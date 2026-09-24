@@ -12,6 +12,7 @@ import { DiffStats } from "./diffStats.js"
 import { collectUrlPositions, findUrlAt, inlineSegments, type InlinePalette } from "./inlineSegments.js"
 import { LabelChips, labelChipRows } from "./LabelChips.js"
 import { centerCell, Divider, Filler, fitCell, PaddedRow, PlainLine, TextLine, trimCell } from "./primitives.js"
+import { type ReviewerRow, reviewerRows as computeReviewerRows } from "./reviewerRows.js"
 import { SubjectMetaLine } from "./SubjectMetaLine.js"
 
 const inlinePalette = (): InlinePalette => ({ text: colors.text, inlineCode: colors.inlineCode, link: colors.link, count: colors.count })
@@ -511,6 +512,7 @@ interface DetailHeaderLayout {
 	readonly titleLines: number
 	readonly uniqueChecks: readonly CheckItem[]
 	readonly labelRows: readonly (readonly PullRequestLabel[])[]
+	readonly reviewerRows: readonly ReviewerRow[]
 	readonly hasChecks: boolean
 	readonly checkRowsCount: number
 	readonly checksHeight: number
@@ -525,23 +527,25 @@ interface DetailHeaderLayout {
 const computeDetailHeaderLayout = (pullRequest: PullRequestItem, paneWidth: number, showChecks: boolean, brief: BriefStatus | null = null): DetailHeaderLayout => {
 	const titleLines = wrapText(pullRequest.title, Math.max(1, paneWidth - 2)).length
 	const labelRows = pullRequest.detailLoaded ? labelChipRows(pullRequest.labels, Math.max(1, paneWidth - 2)) : []
+	const reviewerRows = computeReviewerRows(pullRequest, Math.max(1, paneWidth - 2))
 	const uniqueChecks = deduplicateChecks(pullRequest.checks)
 	const hasChecks = showChecks && (uniqueChecks.length > 0 || pullRequest.detailLoaded)
 	const checkRowsCount = uniqueChecks.length > 0 ? Math.ceil(uniqueChecks.length / 2) : 1
 	const checksHeight = hasChecks ? checkRowsCount + 1 : 0
 	const bottomDividerHeight = hasChecks ? 1 : 0
-	const headerDividerRow = titleLines + 2 + labelRows.length
+	const headerDividerRow = titleLines + 2 + labelRows.length + reviewerRows.length
 	const bottomDividerRow = bottomDividerHeight === 1 ? headerDividerRow + checksHeight + 1 : -1
 	// The brief block sits below checks (or directly under the header divider
 	// when checks are hidden) and closes with its own divider.
 	const briefRows = brief ? riskBriefRows(brief, Math.max(1, paneWidth - 2)) : []
 	const briefDividerRow = briefRows.length > 0 ? headerDividerRow + checksHeight + bottomDividerHeight + briefRows.length + 1 : -1
 	const briefHeight = briefRows.length > 0 ? briefRows.length + 1 : 0
-	const headerHeight = titleLines + 3 + labelRows.length + checksHeight + bottomDividerHeight + briefHeight
+	const headerHeight = titleLines + 3 + labelRows.length + reviewerRows.length + checksHeight + bottomDividerHeight + briefHeight
 	return {
 		titleLines,
 		uniqueChecks,
 		labelRows,
+		reviewerRows,
 		hasChecks,
 		checkRowsCount,
 		checksHeight,
@@ -640,7 +644,7 @@ export const DetailHeader = ({
 }) => {
 	const wrappedTitle = wrapText(pullRequest.title, Math.max(1, paneWidth - 2))
 	const layout = computeDetailHeaderLayout(pullRequest, paneWidth, showChecks, brief)
-	const { hasChecks, checkRowsCount, bottomDividerHeight, labelRows, briefRows } = layout
+	const { hasChecks, checkRowsCount, bottomDividerHeight, labelRows, reviewerRows, briefRows } = layout
 	const statsText = diffStatText(pullRequest, loadingIndicator)
 	const commentsText = commentsStatus === "ready" && comments.length > 0 ? commentCountText(comments.length) : null
 	const opened = formatRelativeDate(pullRequest.createdAt)
@@ -675,6 +679,11 @@ export const DetailHeader = ({
 					</TextLine>
 				</PaddedRow>
 			))}
+			{reviewerRows.length > 0 ? (
+				<box height={reviewerRows.length} paddingLeft={1} paddingRight={1}>
+					<RiskBriefSection rows={reviewerRows} />
+				</box>
+			) : null}
 			<Divider width={paneWidth} />
 			{hasChecks ? (
 				<box height={checkRowsCount + 1} paddingLeft={1} paddingRight={1}>

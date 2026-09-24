@@ -4,6 +4,9 @@ import type { ThemeConfig, ThemeMode } from "../../themeConfig.js"
 import type { ThemeId, ThemeTone } from "../colors.js"
 import type { WorkspaceSurface } from "../../workspaceSurfaces.js"
 import type { ViewerTeam } from "../../sections/teams.js"
+import type { ReviewAgentKind, ReviewPreset } from "../../review/config.js"
+import type { PresetFormField, PresetFormValues } from "../../review/presetEdits.js"
+import type { LocalSkill } from "../../review/skills.js"
 
 export interface LabelModalState {
 	readonly repository: string | null
@@ -116,11 +119,34 @@ export interface ReviewPresetOption {
 	/** One-line summary: agent, skill, model, budget. */
 	readonly detail: string
 	readonly isDefault: boolean
+	readonly preset: ReviewPreset
+}
+
+/** list → pick/run; edit → inline form; pickAgent → name → edit for `n`; confirmDelete for `x`. */
+export type ReviewPresetModalMode = "list" | "edit" | "pickAgent" | "name" | "confirmDelete"
+
+export interface ReviewPresetFormState {
+	readonly presetId: string
+	readonly agent: ReviewAgentKind
+	readonly isNew: boolean
+	readonly field: PresetFormField
+	readonly values: PresetFormValues
+	/** Highlighted autocomplete row for the skill/model field. */
+	readonly suggestionIndex: number
+	/** What was typed before tab completion started; null when not completing. */
+	readonly completionQuery: string | null
 }
 
 export interface ReviewPresetModalState {
 	readonly presets: readonly ReviewPresetOption[]
 	readonly selectedIndex: number
+	readonly mode: ReviewPresetModalMode
+	readonly form: ReviewPresetFormState | null
+	readonly newAgent: ReviewAgentKind
+	readonly newName: string
+	readonly error: string | null
+	/** Local skills for autocomplete, loaded when a form opens. */
+	readonly skills: readonly LocalSkill[]
 }
 
 export interface TeamsModalState {
@@ -243,6 +269,12 @@ export const initialFilterModalState: FilterModalState = {
 export const initialReviewPresetModalState: ReviewPresetModalState = {
 	presets: [],
 	selectedIndex: 0,
+	mode: "list",
+	form: null,
+	newAgent: "claude",
+	newName: "",
+	error: null,
+	skills: [],
 }
 
 export const initialTeamsModalState: TeamsModalState = {

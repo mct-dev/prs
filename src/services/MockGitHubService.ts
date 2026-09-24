@@ -8,6 +8,7 @@ import type {
 	PullRequestItem,
 	PullRequestMergeInfo,
 	PullRequestQueueMode,
+	PullRequestReviewers,
 	PullRequestReviewComment,
 	ReviewStatus,
 } from "../domain.js"
@@ -31,6 +32,21 @@ export interface MockOptions {
 const REVIEW_CYCLE: readonly ReviewStatus[] = ["approved", "changes", "review", "none", "draft"]
 const MERGEABLE_CYCLE: readonly Mergeable[] = ["mergeable", "conflicting", "unknown"]
 const MOCK_REPOSITORIES = ["mock-org/repo-0", "mock-org/repo-1", "mock-org/repo-2", "mock-org/repo-3"] as const
+
+/** A reviewer mix that follows the PR's review status, so the details pane has something to show. */
+const mockReviewers = (index: number, review: ReviewStatus, repository: string): PullRequestReviewers => {
+	const first = mockAuthor(index + 1)
+	const second = mockAuthor(index + 2)
+	const lead = review === "approved" ? "approved" : review === "changes" ? "changes" : review === "none" ? "commented" : "requested"
+	return {
+		reviewers: [
+			{ kind: "user", login: first, state: lead, codeOwner: false, isViewer: false },
+			...(second === first ? [] : [{ kind: "user" as const, login: second, state: "requested" as const, codeOwner: false, isViewer: false }]),
+			{ kind: "team", login: `${repository.split("/")[0]}/reviewers`, state: "requested", codeOwner: index % 2 === 0, isViewer: false },
+		],
+		requiredApprovals: index % 3 === 0 ? null : 1,
+	}
+}
 
 const mockRepository = (index: number, primaryRepository: string | null) =>
 	index === 0 && primaryRepository ? primaryRepository : (MOCK_REPOSITORIES[index % MOCK_REPOSITORIES.length] ?? `mock-org/repo-${index}`)
@@ -73,6 +89,7 @@ const buildPullRequest = (index: number, options: Required<MockOptions>): PullRe
 		state: "open",
 		reviewStatus: review,
 		...synthCheckSummary(passed, total),
+		reviewers: mockReviewers(index, review, repository),
 		autoMergeEnabled: index % 11 === 0,
 		detailLoaded: true,
 		createdAt,

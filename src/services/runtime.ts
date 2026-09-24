@@ -1,6 +1,7 @@
 import { Layer } from "effect"
 import * as Atom from "effect/unstable/reactivity/Atom"
 import { config } from "../config.js"
+import { envVar } from "../env.js"
 import { detectCurrentGitHubRepository } from "../gitRemotes.js"
 import { Observability } from "../observability.js"
 import { initialPullRequestView, type PullRequestView, sectionsView } from "../pullRequestViews.js"
@@ -18,20 +19,20 @@ const parseOptionalPositiveInt = (value: string | undefined, fallback: number | 
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-export const mockPrCount = parseOptionalPositiveInt(process.env.GHUI_MOCK_PR_COUNT, null)
-export const mockRepository = process.env.GHUI_MOCK_REPOSITORY?.trim() || null
+export const mockPrCount = parseOptionalPositiveInt(envVar("MOCK_PR_COUNT"), null)
+export const mockRepository = envVar("MOCK_REPOSITORY")?.trim() || null
 export const detectedRepository = mockPrCount === null ? detectCurrentGitHubRepository() : mockRepository
 // Home view: sections, everywhere (in a repo and in mock mode too). The
 // repository and queue views stay reachable from the tab cycle, repository
 // picker and palette. `PRS_DEFAULT_VIEW=queue` starts in the authored queue.
 export const homePullRequestView: PullRequestView = process.env.PRS_DEFAULT_VIEW?.trim().toLowerCase() === "queue" ? initialPullRequestView(null) : sectionsView
-export const mockUsername = process.env.GHUI_MOCK_USERNAME?.trim() || (mockPrCount !== null ? "kitlangton" : undefined)
+export const mockUsername = envVar("MOCK_USERNAME")?.trim() || (mockPrCount !== null ? "kitlangton" : undefined)
 
 export const mockWorkspacePreferencesPath = (() => {
 	if (mockPrCount === null) return null
-	const value = process.env.GHUI_MOCK_WORKSPACE_PREFERENCES_PATH?.trim()
+	const value = envVar("MOCK_WORKSPACE_PREFERENCES_PATH")?.trim()
 	if (value === "off" || value === "0" || value === "false") return null
-	return value && value.length > 0 ? value : ".ghui/mock-workspace-preferences.json"
+	return value && value.length > 0 ? value : ".prs/mock-workspace-preferences.json"
 })()
 
 export const mockRepositoryCatalog =
@@ -46,13 +47,13 @@ export const mockRepositoryCatalog =
 
 export const initialRecentRepositories = mockRepositoryCatalog.length > 0 ? mockRepositoryCatalog.map((repo) => repo.repository) : detectedRepository ? [detectedRepository] : []
 
-export const pullRequestPageSize = Math.min(100, parseOptionalPositiveInt(process.env.GHUI_PR_PAGE_SIZE, config.prPageSize) ?? config.prPageSize)
+export const pullRequestPageSize = Math.min(100, parseOptionalPositiveInt(envVar("PR_PAGE_SIZE"), config.prPageSize) ?? config.prPageSize)
 
 const githubServiceLayer =
 	mockPrCount !== null
 		? (await import("./MockGitHubService.js")).MockGitHubService.layer({
 				prCount: mockPrCount,
-				repoCount: parseOptionalPositiveInt(process.env.GHUI_MOCK_REPO_COUNT, 4) ?? 4,
+				repoCount: parseOptionalPositiveInt(envVar("MOCK_REPO_COUNT"), 4) ?? 4,
 				repository: mockRepository,
 				repositories: mockRepositoryCatalog.map((repo) => repo.repository),
 				...(mockUsername ? { username: mockUsername } : {}),

@@ -1,19 +1,22 @@
+import { resolve } from "node:path"
 import packageJson from "../package.json" with { type: "json" }
+import { runUpgrade } from "./upgrade.js"
 
-const help = `ghui ${packageJson.version}
+const help = `prs ${packageJson.version}
 
-Terminal UI for GitHub pull requests.
+Agent-assisted PR review in your terminal.
 
 Usage:
-  ghui              Start the TUI
-  ghui -v, --version
-                    Print the installed version
-  ghui -h, --help   Show this help message
+  prs              Start the TUI
+  prs upgrade      Update a clean source checkout (git pull --ff-only)
+  prs -v, --version
+                   Print the installed version
+  prs -h, --help   Show this help message
 `
 
 const args = Bun.argv.slice(2)
 const command = args[0]
-const commands = ["help", "version"]
+const commands = ["help", "version", "upgrade"]
 
 const editDistance = (a: string, b: string) => {
 	const distances = Array.from({ length: a.length + 1 }, (_, i) => [i])
@@ -39,16 +42,16 @@ if (command === "-v" || command === "--version" || command === "version") {
 }
 
 if (command === "upgrade") {
-	console.error("Use your package manager to upgrade ghui, for example `brew upgrade ghui`.")
-	process.exit(1)
+	// A compiled binary resolves this inside its virtual filesystem, so it never looks like a checkout.
+	process.exit(runUpgrade(resolve(import.meta.dir, "..")))
 }
 
 if (typeof command === "string") {
 	const unknownCommand = command
 	const suggestion = commands.find((name) => editDistance(unknownCommand, name) <= 2)
 	console.error(`Unknown command: ${unknownCommand}`)
-	if (suggestion) console.error(`Did you mean: ghui ${suggestion}?`)
-	console.error("Run `ghui --help` for usage.")
+	if (suggestion) console.error(`Did you mean: prs ${suggestion}?`)
+	console.error("Run `prs --help` for usage.")
 	process.exit(1)
 }
 
