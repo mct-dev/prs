@@ -20,23 +20,30 @@ still `GHUI_*`. That tells users they are running someone else's tool.
 
 ## Audit
 
-Every `ghui` mention on `main` at 652cc34, by category.
+Every line mentioning `ghui` (case-insensitive) on `main` at 652cc34, outside
+`plans/` and `bun.lock`: 212 lines.
 
-| Category | Examples | Action |
-| --- | --- | --- |
-| User-visible | boot hints, "Quit ghui", palette search hint, CLI help and did-you-mean, theme name, wordmark logo, debug log header | Changed to prs |
-| Config / env | `GHUI_*` reads in `index.tsx`, `config.ts`, `devLog.ts`, `observability.ts`, `themeStore.ts`, `runtime.ts`, `mockFixtures.ts`; `GHUI_BIN_PATH`; `package.json` scripts; `.env.example`; dev scripts | Now `PRS_*` with `GHUI_*` fallback |
-| Internal, renamed | `addGhUiParsers`, `ghui.command.runProcess` span, `.ghui/` dev paths | Renamed |
-| Internal, kept | see below | Left alone |
-| Attribution | README credits, `LICENSE`, CHANGELOG fork note, `AGENTS.md` | Kept on purpose |
+| Category | Lines | Examples | Action |
+| --- | --: | --- | --- |
+| User-visible | 19 | boot hints, "Quit ghui", palette search hint, CLI help and did-you-mean, theme name, wordmark logo, debug log header, README config path | Changed to prs (0 left) |
+| Config / env | 35 | `GHUI_*` reads in `index.tsx`, `config.ts`, `devLog.ts`, `observability.ts`, `themeStore.ts`, `runtime.ts`, `mockFixtures.ts`; `GHUI_BIN_PATH`; `package.json` scripts; `.env.example`; dev scripts | Now `PRS_*` with `GHUI_*` fallback |
+| Internal, renamed | 6 | `addGhUiParsers`, `ghui.command.runProcess` span, `.ghui/` dev path, `flake.nix` description, a dev comment | Renamed |
+| Internal, kept | 20 | service tags, link scheme, migrations table, theme id, mock repo | Left alone (see below) |
+| `@ghui/keymap` package | 67 | package files and imports | Left alone (see below) |
+| Tests | 61 | `GHUI_*` env setup, theme id, fixtures | Left alone; they now cover the fallback |
+| Attribution | 4 | README credits, CHANGELOG fork note, `AGENTS.md` (plus `LICENSE`) | Kept on purpose |
+
+Older plans hold another 43 lines across 14 files. They are history and stay as
+they are.
 
 ## Env var mapping
 
 Any `GHUI_<NAME>` becomes `PRS_<NAME>`. When both are set, `PRS_` wins. That
 includes `PRS_BIN_PATH` (the launcher's binary override), `PRS_CONFIG_DIR`,
 `PRS_CACHE_PATH`, `PRS_PR_FETCH_LIMIT`, `PRS_DEBUG_LOG` and the `PRS_MOCK_*`
-family. New, with no legacy name: `PRS_NO_ANIMATION=1` (still loading picture)
-and `PRS_LOADING_ART=contours|plasma|torus` (for trying the art variants).
+family. Two new ones, read the same way (so the `GHUI_` spelling works too):
+`PRS_NO_ANIMATION=1` (still loading picture) and
+`PRS_LOADING_ART=contours|plasma|torus` (for trying the art variants).
 
 ## Upgrade behavior
 
