@@ -19,6 +19,14 @@ import { reviewPresetOptions } from "../ui/modals/ReviewPresetModal.js"
 import { initialCommandPaletteState, initialCommentModalState, initialOpenRepositoryModalState, Modal } from "../ui/modals/types.js"
 import { noticeAtom } from "../ui/notice/atoms.js"
 import { briefStatusFor } from "../ui/review/atoms.js"
+import {
+	briefFocusIndexAtom,
+	briefFullViewAtom,
+	briefReturnToDetailAtom,
+	briefScrollTopAtom,
+	pendingBriefDiffTargetAtom,
+	selectedReviewEntryAtom,
+} from "../ui/review/briefViewAtoms.js"
 import type { PullRequestItem, PullRequestUserQueueMode } from "../domain.js"
 import { pullRequestQueueModes } from "../domain.js"
 import { issueMetadataText, pullRequestMetadataText } from "../ui/pullRequests.js"
@@ -66,6 +74,7 @@ import {
 	repositoryViewSubtitleAtom,
 	repositoryViewTitleAtom,
 	runsCloseDisabledReasonAtom,
+	briefCloseDisabledReasonAtom,
 	sectionsViewAlreadyActiveReasonAtom,
 	sectionsViewInactiveReasonAtom,
 	sectionsViewSubtitleAtom,
@@ -125,6 +134,7 @@ function switchWorkspaceSurfaceEffect(surface: WorkspaceSurface) {
 		yield* Atom.set(detailFullViewAtom, false)
 		yield* Atom.set(diffFullViewAtom, false)
 		yield* Atom.set(commentsViewActiveAtom, false)
+		yield* Atom.set(briefFullViewAtom, false)
 		yield* Atom.set(diffCommentRangeStartIndexAtom, null)
 		yield* Atom.set(filterModeAtom, false)
 		const query = yield* Atom.get(filterQueryAtom)
@@ -215,6 +225,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 		shortcut: "enter",
 		disabledReason: noSelectedItemReasonAtom,
 		run: Effect.gen(function* () {
+			yield* Atom.set(briefFullViewAtom, false)
 			yield* Atom.set(detailFullViewAtom, true)
 			yield* Atom.set(detailScrollOffsetAtom, 0)
 		}),
@@ -307,6 +318,7 @@ export const globalCommands: readonly CommandDefinition[] = [
 			yield* Atom.set(diffFullViewAtom, false)
 			yield* Atom.set(detailFullViewAtom, false)
 			yield* Atom.set(commentsViewActiveAtom, false)
+			yield* Atom.set(briefFullViewAtom, false)
 			yield* Atom.set(runsFullViewAtom, true)
 		}),
 	}),
@@ -335,6 +347,82 @@ export const globalCommands: readonly CommandDefinition[] = [
 			yield* Atom.refresh(pullRequestRunsFor(runsKey(pr)))
 		}),
 	}),
+	// === Brief cluster (full agent review brief view) ===
+	defineCommand({
+		id: "brief.open",
+		title: "Open agent review brief",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		shortcut: "v",
+		keywords: ["agent", "ai", "brief", "risk", "review", "focus"],
+		disabledReason: noPullRequestReasonAtom,
+		run: Effect.gen(function* () {
+			const pr = yield* Atom.get(selectedPullRequestAtom)
+			if (!pr) return
+			yield* Atom.set(briefReturnToDetailAtom, yield* Atom.get(detailFullViewAtom))
+			yield* Atom.set(briefFocusIndexAtom, 0)
+			yield* Atom.set(briefScrollTopAtom, 0)
+			yield* Atom.set(diffFullViewAtom, false)
+			yield* Atom.set(detailFullViewAtom, false)
+			yield* Atom.set(commentsViewActiveAtom, false)
+			yield* Atom.set(runsFullViewAtom, false)
+			yield* Atom.set(selectedRunIdAtom, null)
+			yield* Atom.set(pendingBriefDiffTargetAtom, null)
+			yield* Atom.set(briefFullViewAtom, true)
+		}),
+	}),
+	defineCommand({
+		id: "brief.close",
+		title: "Close agent review brief",
+		scope: "Pull request",
+		subtitle: "Return to the pull request",
+		shortcut: "esc",
+		disabledReason: briefCloseDisabledReasonAtom,
+		run: Effect.gen(function* () {
+			yield* Atom.set(briefFullViewAtom, false)
+			if (yield* Atom.get(briefReturnToDetailAtom)) {
+				yield* Atom.set(detailFullViewAtom, true)
+				yield* Atom.set(detailScrollOffsetAtom, 0)
+			}
+			yield* Atom.set(briefReturnToDetailAtom, false)
+		}),
+	}),
+	defineCommand({
+		id: "brief.open-focus",
+		title: "Open diff at focus area",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		keywords: ["agent", "brief", "focus", "diff"],
+		when: briefFullViewAtom,
+		disabledReason: briefCloseDisabledReasonAtom,
+		run: Effect.gen(function* () {
+			const entry = yield* Atom.get(selectedReviewEntryAtom)
+			const area = entry?.brief?.focus_areas[yield* Atom.get(briefFocusIndexAtom)]
+			if (!area) return
+			yield* Atom.set(pendingBriefDiffTargetAtom, { file: area.file, lines: area.lines ?? null })
+			yield* Atom.set(briefFullViewAtom, false)
+			yield* Atom.set(briefReturnToDetailAtom, false)
+			yield* Effect.sync(() => invokeHandoff("openDiffView"))
+		}),
+	}),
+	defineCommand({
+		id: "brief.open-log",
+		title: "Open agent review log",
+		scope: "Pull request",
+		subtitle: selectedPullRequestLabelAtom,
+		keywords: ["agent", "brief", "log", "pager", "transcript"],
+		disabledReason: noPullRequestReasonAtom,
+		run: Effect.gen(function* () {
+			const logPath = (yield* Atom.get(selectedReviewEntryAtom))?.record.logPath ?? null
+			if (!logPath) {
+				yield* Atom.set(noticeAtom, "No agent review log for this pull request.")
+				return
+			}
+			// Fall back to showing the path when the pager can't run.
+			yield* EditorOpener.use((opener) => opener.pageFile(logPath)).pipe(Effect.catch(() => Atom.set(noticeAtom, `Agent log: ${logPath}`)))
+		}),
+	}),
+
 	// === Modal openers (selection-seeded) ===
 	defineCommand({
 		id: "repository.open",
@@ -731,7 +819,10 @@ export const globalCommands: readonly CommandDefinition[] = [
 		shortcut: "c",
 		keywords: ["conversation", "discussion", "review"],
 		disabledReason: noSelectedItemReasonAtom,
-		run: Effect.sync(() => invokeHandoff("openCommentsView")),
+		run: Effect.gen(function* () {
+			yield* Atom.set(briefFullViewAtom, false)
+			yield* Effect.sync(() => invokeHandoff("openCommentsView"))
+		}),
 	}),
 	defineCommand({
 		id: "diff.open",
@@ -741,7 +832,10 @@ export const globalCommands: readonly CommandDefinition[] = [
 		shortcut: "d",
 		disabledReason: noPullRequestReasonAtom,
 		keywords: ["files", "patch"],
-		run: Effect.sync(() => invokeHandoff("openDiffView")),
+		run: Effect.gen(function* () {
+			yield* Atom.set(briefFullViewAtom, false)
+			yield* Effect.sync(() => invokeHandoff("openDiffView"))
+		}),
 	}),
 
 	// === View switches ===

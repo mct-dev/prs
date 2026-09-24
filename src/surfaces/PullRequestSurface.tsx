@@ -26,6 +26,8 @@ import { briefStatusFor } from "../review/briefStatus.js"
 import { agentReviewIndexAtom, selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { PullRequestRunsPane } from "../ui/runs/RunsPane.js"
 import type { RunsViewModel } from "../hooks/useRunsView.js"
+import type { BriefViewModel } from "../hooks/useBriefView.js"
+import { BriefPane } from "../ui/review/BriefPane.js"
 import type { DiffFilePanelBundle } from "./WorkspaceContent.js"
 
 export interface PullRequestSurfaceProps {
@@ -70,6 +72,7 @@ export interface PullRequestSurfaceProps {
 	readonly commentSubject: IssueItem | PullRequestItem | null
 	readonly diffFullView: boolean
 	readonly runsView: RunsViewModel
+	readonly briefView: BriefViewModel
 	readonly displayedDiffState: PullRequestDiffState | undefined
 	readonly stackedDiffFiles: readonly StackedDiffFilePatch[]
 	readonly diffScrollTop: number
@@ -139,6 +142,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 		commentSubject,
 		diffFullView,
 		runsView,
+		briefView,
 		displayedDiffState,
 		stackedDiffFiles,
 		diffScrollTop,
@@ -198,6 +202,22 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 				height={wideBodyHeight}
 				loadingIndicator={loadingIndicator}
 				showScrollbar={showScrollbars}
+			/>
+		)
+	}
+
+	if (briefView.briefFullView && selectedPullRequest) {
+		return (
+			<BriefPane
+				pullRequest={selectedPullRequest}
+				status={briefView.status}
+				rows={briefView.rows}
+				focusIndex={briefView.focusIndex}
+				scrollTop={briefView.scrollTop}
+				contentWidth={fullscreenContentWidth}
+				height={wideBodyHeight}
+				loadingIndicator={loadingIndicator}
+				onClickFocus={briefView.clickFocus}
 			/>
 		)
 	}

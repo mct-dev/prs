@@ -69,6 +69,7 @@ export const listNavKeymap = List(
 	{ id: "list.diff", title: "Open diff", keys: ["d"], when: pullRequestsActive, run: (s) => s.runCommandById("diff.open") },
 	{ id: "list.runs", title: "Open workflow runs", keys: ["a"], when: pullRequestsActive, run: (s) => s.runCommandById("runs.open") },
 	{ id: "list.agent-review", title: "Run agent review", keys: ["b"], when: pullRequestsActive, run: (s) => s.runCommandById("pull.agent-review") },
+	{ id: "list.brief", title: "Open agent review brief", keys: ["v"], when: pullRequestsActive, run: (s) => s.runCommandById("brief.open") },
 	{ id: "list.agent-review-preset", title: "Run agent review with preset", keys: ["shift+b"], when: pullRequestsActive, run: (s) => s.runCommandById("pull.agent-review-preset") },
 	{ id: "list.comments", title: "Open comments", keys: ["c"], enabled: itemSelected, run: (s) => s.runCommandById("comments.open") },
 	{ id: "list.review", title: "Review pull request", keys: ["shift+r"], when: pullRequestsActive, run: (s) => s.runCommandById("pull.submit-review") },

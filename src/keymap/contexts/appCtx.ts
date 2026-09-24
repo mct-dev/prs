@@ -8,6 +8,7 @@ import { buildDetailViewCtx, type BuildDetailViewCtxInput } from "./detailViewCt
 import { buildDiffViewCtx, type BuildDiffViewCtxInput } from "./diffViewCtx.ts"
 import type { ReviewPresetModalCtx } from "../reviewPresetModal.ts"
 import type { RunsViewCtx } from "../runsView.ts"
+import type { BriefViewCtx } from "../briefView.ts"
 import { buildFilterModeCtx, type BuildFilterModeCtxInput } from "./filterModeCtx.ts"
 import { buildListNavCtx, type BuildListNavCtxInput } from "./listNavCtx.ts"
 import { buildMergeModalCtx, type BuildMergeModalCtxInput } from "./mergeModalCtx.ts"
@@ -65,6 +66,7 @@ export interface BuildAppCtxFlags {
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
+	readonly briefFullView: boolean
 	readonly detailFullView: boolean
 	readonly commentsViewActive: boolean
 	readonly textInputActive: boolean
@@ -89,6 +91,7 @@ export interface BuildAppCtxInput {
 	readonly filterModeCtx: BuildFilterModeCtxInput
 	readonly diff: BuildDiffViewCtxInput
 	readonly runs: RunsViewCtx
+	readonly brief: BriefViewCtx
 	readonly detail: BuildDetailViewCtxInput
 	readonly commentsView: BuildCommentsViewCtxInput
 	readonly listNav: BuildListNavCtxInput
@@ -123,6 +126,7 @@ export const buildAppCtx = (input: BuildAppCtxInput): AppCtx => ({
 	filterModeCtx: buildFilterModeCtx(input.filterModeCtx),
 	diff: buildDiffViewCtx(input.diff),
 	runs: input.runs,
+	brief: input.brief,
 	detail: buildDetailViewCtx(input.detail),
 	commentsView: buildCommentsViewCtx(input.commentsView),
 	listNav: buildListNavCtx(input.listNav),

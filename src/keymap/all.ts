@@ -17,6 +17,7 @@ import { openRepositoryModalKeymap, type OpenRepositoryModalCtx } from "./openRe
 import { pullRequestStateModalKeymap, type PullRequestStateModalCtx } from "./pullRequestStateModal.ts"
 import { reviewPresetModalKeymap, type ReviewPresetModalCtx } from "./reviewPresetModal.ts"
 import { runsViewKeymap, type RunsViewCtx } from "./runsView.ts"
+import { briefViewKeymap, type BriefViewCtx } from "./briefView.ts"
 import { submitReviewModalKeymap, type SubmitReviewModalCtx } from "./submitReviewModal.ts"
 import { themeModalKeymap, type ThemeModalCtx } from "./themeModal.ts"
 
@@ -39,6 +40,7 @@ export interface AppCtx {
 	readonly filterMode: boolean
 	readonly diffFullView: boolean
 	readonly runsFullView: boolean
+	readonly briefFullView: boolean
 	readonly detailFullView: boolean
 	readonly commentsViewActive: boolean
 
@@ -64,6 +66,7 @@ export interface AppCtx {
 	readonly filterModeCtx: FilterModeCtx
 	readonly diff: DiffViewCtx
 	readonly runs: RunsViewCtx
+	readonly brief: BriefViewCtx
 	readonly detail: DetailViewCtx
 	readonly commentsView: CommentsViewCtx
 	readonly listNav: ListNavCtx
@@ -91,7 +94,7 @@ const modalActive = (a: AppCtx): boolean =>
 	a.deleteCommentModalActive ||
 	a.commandPaletteActive
 
-const inListMode = (a: AppCtx): boolean => !modalActive(a) && !a.filterMode && !a.diffFullView && !a.runsFullView && !a.detailFullView && !a.commentsViewActive
+const inListMode = (a: AppCtx): boolean => !modalActive(a) && !a.filterMode && !a.diffFullView && !a.runsFullView && !a.briefFullView && !a.detailFullView && !a.commentsViewActive
 
 export const appKeymap = App(
 	// Always-on: command palette opener
@@ -133,6 +136,7 @@ export const appKeymap = App(
 	// Full-view layers (only when no modal is on top)
 	diffViewKeymap.scope((a) => a.diffFullView && !modalActive(a) && a.diff),
 	runsViewKeymap.scope((a) => a.runsFullView && !modalActive(a) && a.runs),
+	briefViewKeymap.scope((a) => a.briefFullView && !modalActive(a) && a.brief),
 	detailViewKeymap.scope((a) => a.detailFullView && !modalActive(a) && a.detail),
 	commentsViewKeymap.scope((a) => a.commentsViewActive && !modalActive(a) && a.commentsView),
 

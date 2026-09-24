@@ -25,6 +25,8 @@ const fallbackCommand = (repoPath: string | null): string | null => {
 
 const editorError = (detail: string, cause?: unknown) => new CommandError({ command: "editor", args: [], detail, cause: cause ?? detail })
 
+const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`
+
 const runInShell = async (command: string): Promise<void> => {
 	const shell = process.env.SHELL || "/bin/sh"
 	const proc = Bun.spawn({
@@ -41,6 +43,8 @@ export class EditorOpener extends Context.Service<
 	EditorOpener,
 	{
 		readonly openPullRequest: (pullRequest: PullRequestItem) => Effect.Effect<void, CommandError>
+		/** Page a local file (e.g. an agent review log) in `$PAGER`, suspending the TUI. */
+		readonly pageFile: (path: string) => Effect.Effect<void, CommandError>
 	}
 >()("ghui/EditorOpener") {
 	static readonly layerNoDeps = Layer.effect(
@@ -67,7 +71,15 @@ export class EditorOpener extends Context.Service<
 				})
 			})
 
-			return EditorOpener.of({ openPullRequest })
+			const pageFile = Effect.fn("EditorOpener.pageFile")(function* (path: string) {
+				const pager = (process.env.PAGER || "less").trim()
+				yield* Effect.tryPromise({
+					try: () => withTuiSuspended(() => runInShell(`${pager} ${shellQuote(path)}`)),
+					catch: (cause) => editorError(cause instanceof Error ? cause.message : "Failed to launch pager", cause),
+				})
+			})
+
+			return EditorOpener.of({ openPullRequest, pageFile })
 		}),
 	)
 
@@ -78,6 +90,7 @@ export class EditorOpener extends Context.Service<
 		EditorOpener,
 		EditorOpener.of({
 			openPullRequest: () => Effect.void,
+			pageFile: () => Effect.void,
 		}),
 	)
 }
