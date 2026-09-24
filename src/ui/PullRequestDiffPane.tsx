@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react"
 import type { DiffRenderable, MouseEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useMemo, type Ref } from "react"
 import type { DiffCommentSide, PullRequestItem, PullRequestReviewComment } from "../domain.js"
@@ -22,7 +23,9 @@ import {
 } from "./diff.js"
 import { LoadingPane, StatusCard } from "./DetailsPane.js"
 import { DiffStats } from "./diffStats.js"
+import { diffCommentBadge } from "./diff/commentBadge.js"
 import { DiffThreadBlock } from "./diff/DiffThreadBlock.js"
+import { diffThreadCountsAtom } from "./diff/threadAtoms.js"
 import { diffThreadWidth } from "./diff/threads.js"
 import { Divider, fitCell, PaddedRow, PlainLine, TextLine } from "./primitives.js"
 import { shortRepoName } from "./pullRequests.js"
@@ -72,11 +75,13 @@ const FileHeader = ({
 	const counter = `${index + 1}/${count}`
 	const stats = diffFileStats(file)
 	const statsText = diffFileStatsText(stats)
-	const nameWidth = Math.max(1, width - counter.length - statsText.length - suffix.length - 5)
+	const badge = diffCommentBadge(useAtomValue(diffThreadCountsAtom).get(file.name) ?? 0)
+	const nameWidth = Math.max(1, width - counter.length - statsText.length - suffix.length - (badge ? badge.length + 1 : 0) - 5)
 	return (
 		<TextLine>
 			<span fg={colors.muted}>{counter} </span>
 			<span fg={colors.text}>{fitCell(file.name, nameWidth)}</span>
+			{badge ? <span fg={colors.accent}>{` ${badge}`}</span> : null}
 			{statsText ? <span fg={colors.muted}> </span> : null}
 			<FileStats stats={stats} />
 			{suffix ? <span fg={suffixColor}>{suffix}</span> : null}
