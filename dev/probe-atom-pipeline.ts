@@ -98,7 +98,7 @@ const sample = (label: string) => {
 const unsubDisplayed = registry.subscribe(displayedPullRequestsAtom, () => {})
 const unsubVisible = registry.subscribe(visiblePullRequestsAtom, () => {})
 
-// 1. Start in Queue authored global (the initial-view state ghui boots into).
+// 1. Start in Queue authored global (the initial-view state prs boots into).
 const globalAuthored: PullRequestView = { _tag: "Queue", mode: "authored", repository: null }
 console.log(">> Setting activeView to Queue(authored, global)")
 registry.set(activeViewAtom, globalAuthored)
