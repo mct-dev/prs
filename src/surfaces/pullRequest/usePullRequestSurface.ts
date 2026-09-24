@@ -40,7 +40,15 @@ import {
 	visiblePullRequestsAtom,
 } from "../../ui/pullRequests/atoms.js"
 import { describeFilterQuery } from "../../filter/parse.js"
-import { focusedSectionHeaderId, type SectionNavGroup, type SectionNavResult, stepSection, toggleAllSectionsAt, toggleSectionAt } from "../../sections/cursor.js"
+import {
+	focusedSectionHeaderId,
+	type SectionNavGroup,
+	type SectionNavResult,
+	type SectionSelection,
+	stepSection,
+	toggleAllSectionsAt,
+	toggleSectionAt,
+} from "../../sections/cursor.js"
 import { buildPullRequestListRows, pullRequestListRowIndex, type PullRequestGroups, type PullRequestListRow, type PullRequestSections } from "../../ui/PullRequestList.js"
 import { useScrollFollowSelected } from "../../ui/useScrollFollowSelected.js"
 import { useScrollPersistence } from "../../ui/useScrollPersistence.js"
@@ -221,7 +229,11 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		() => sectionGroups.map((group) => ({ id: group.id, collapsed: group.collapsed, urls: group.pullRequests.map((pullRequest) => pullRequest.url) })),
 		[sectionGroups],
 	)
-	const focusedSectionId = focusedSectionHeaderId(sectionNavGroups, sectionCursor, selectedPullRequest?.url ?? null)
+	const sectionSelection = useMemo<SectionSelection | null>(
+		() => (selectedPullRequest ? { url: selectedPullRequest.url, index: selectedIndex } : null),
+		[selectedPullRequest, selectedIndex],
+	)
+	const focusedSectionId = focusedSectionHeaderId(sectionNavGroups, sectionCursor, sectionSelection)
 	const pullRequestSections = useMemo<PullRequestSections | null>(
 		() =>
 			activeView._tag === "Sections"
@@ -256,7 +268,8 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		const listChanged = previous.cacheKey !== currentQueueCacheKey || previous.visiblePullRequests !== visiblePullRequests
 		const filterEnded = previous.cacheKey === currentQueueCacheKey && previous.filterActive && !filterActive
 		const rememberedUrl = selectedUrlRef.current?.cacheKey === currentQueueCacheKey ? selectedUrlRef.current.url : null
-		if (!filterActive && rememberedUrl && (listChanged || filterEnded)) {
+		// The current row may already hold the url (e.g. a duplicate in a later section); keep it then.
+		if (!filterActive && rememberedUrl && (listChanged || filterEnded) && visiblePullRequests[selectedIndex]?.url !== rememberedUrl) {
 			const rememberedIndex = visiblePullRequests.findIndex((pullRequest) => pullRequest.url === rememberedUrl)
 			if (rememberedIndex >= 0 && rememberedIndex !== selectedIndex) {
 				setSelectedIndex(rememberedIndex)
@@ -395,22 +408,21 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 		},
 		[currentQueueCacheKey, setCollapsedSections, setQueueSelection, setSectionCursor, setSelectedIndex],
 	)
-	const selectedUrl = selectedPullRequest?.url ?? null
 	const toggleSection = useCallback(
-		(id: string) => applySectionNav(toggleSectionAt(sectionNavGroups, sectionCursor, selectedUrl, id)),
-		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+		(id: string) => applySectionNav(toggleSectionAt(sectionNavGroups, sectionCursor, sectionSelection, id)),
+		[applySectionNav, sectionNavGroups, sectionCursor, sectionSelection],
 	)
 	const toggleSelectedSection = useCallback(
-		() => applySectionNav(toggleSectionAt(sectionNavGroups, sectionCursor, selectedUrl)),
-		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+		() => applySectionNav(toggleSectionAt(sectionNavGroups, sectionCursor, sectionSelection)),
+		[applySectionNav, sectionNavGroups, sectionCursor, sectionSelection],
 	)
 	const toggleAllSections = useCallback(
-		() => applySectionNav(toggleAllSectionsAt(sectionNavGroups, sectionCursor, selectedUrl)),
-		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+		() => applySectionNav(toggleAllSectionsAt(sectionNavGroups, sectionCursor, sectionSelection)),
+		[applySectionNav, sectionNavGroups, sectionCursor, sectionSelection],
 	)
 	const stepSectionBy = useCallback(
-		(delta: 1 | -1) => applySectionNav(stepSection(sectionNavGroups, sectionCursor, selectedUrl, delta)),
-		[applySectionNav, sectionNavGroups, sectionCursor, selectedUrl],
+		(delta: 1 | -1) => applySectionNav(stepSection(sectionNavGroups, sectionCursor, sectionSelection, delta)),
+		[applySectionNav, sectionNavGroups, sectionCursor, sectionSelection],
 	)
 
 	// `isFullscreen` is provisionally `false` for the PR Surface here — the
