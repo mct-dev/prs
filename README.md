@@ -297,7 +297,7 @@ While typing after `/`, a popover suggests field names, then values (authors, re
 - `left` / `right`: choose the deleted or added side while in split diff comment mode
 - `[` / `]`: switch files while viewing or commenting on a diff
 - `s`: toggle draft or ready-for-review state
-- `m`: merge
+- `m`: merge (merge now, enable or disable auto-merge, pick squash/merge/rebase)
 - `x`: close with confirmation
 - `t`: choose a fixed theme, including `System` to match your terminal colors; press `m` in the theme picker to follow the OS light/dark appearance with separate theme choices
 - `l`: manage labels

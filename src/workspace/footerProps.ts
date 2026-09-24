@@ -73,6 +73,7 @@ export const computeFooterProps = (input: ComputeFooterPropsInput): WorkspaceFoo
 	canCycleScopeFilter: input.selectedRepository !== null && (input.activeWorkspaceSurface === "pullRequests" || input.activeWorkspaceSurface === "issues"),
 	canOpenDiff: input.activeWorkspaceSurface === "pullRequests" && input.selectedPullRequest !== null,
 	canOpenComments: input.selectedCommentSubject !== null,
+	canMergeOrClose: input.activeWorkspaceSurface === "pullRequests" && input.selectedPullRequest?.state === "open",
 	hasError:
 		(input.activeWorkspaceSurface === "pullRequests" && input.pullRequestStatus === "error") || (input.activeWorkspaceSurface === "issues" && input.issuesStatus === "error"),
 	isLoading: input.isActiveSurfaceLoading || input.closeModal.running || input.pullRequestStateModal.running || input.mergeModal.running || input.submitReviewModal.running,

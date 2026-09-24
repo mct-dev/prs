@@ -36,6 +36,7 @@ interface HintsContext {
 	readonly canCycleScopeFilter: boolean
 	readonly canOpenDiff: boolean
 	readonly canOpenComments: boolean
+	readonly canMergeOrClose: boolean
 	readonly hasError: boolean
 	readonly isLoading: boolean
 	readonly loadingIndicator: string
@@ -90,6 +91,8 @@ const detailFullViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "d", label: "diff", when: ctx.canOpenDiff },
 	{ key: "b/B", label: "agent review", when: ctx.canOpenDiff },
 	{ key: "v", label: "brief", when: ctx.canOpenDiff },
+	{ key: "m", label: "merge", when: ctx.canMergeOrClose },
+	{ key: "x", label: "close", when: ctx.canMergeOrClose },
 ]
 
 const briefViewHints = (ctx: HintsContext): readonly HintItem[] => [
@@ -157,6 +160,8 @@ const defaultHints = (ctx: HintsContext): readonly HintItem[] => {
 		{ key: "d", label: "diff", when: ctx.canOpenDiff },
 		{ key: "b", label: "review", when: ctx.canOpenDiff },
 		{ key: "v", label: "brief", when: ctx.canOpenDiff },
+		{ key: "m", label: "merge", when: ctx.canMergeOrClose },
+		{ key: "x", label: "close", when: ctx.canMergeOrClose },
 		{ key: "?", label: "legend", when: ctx.canOpenDetails },
 		{ key: "ctrl-p", label: "commands" },
 	]
