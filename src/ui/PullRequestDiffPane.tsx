@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react"
 import type { DiffRenderable, MouseEvent, ScrollBoxRenderable } from "@opentui/core"
 import { useMemo, type Ref } from "react"
 import type { DiffCommentSide, PullRequestItem, PullRequestReviewComment } from "../domain.js"
@@ -10,6 +11,7 @@ import {
 	diffFileStats,
 	diffFileStatsText,
 	diffStatText,
+	diffSegmentKey,
 	stackedDiffFileIndexAtLine,
 	type DiffFileStats,
 	type DiffView,
@@ -21,6 +23,10 @@ import {
 } from "./diff.js"
 import { LoadingPane, StatusCard } from "./DetailsPane.js"
 import { DiffStats } from "./diffStats.js"
+import { diffCommentBadge } from "./diff/commentBadge.js"
+import { DiffThreadBlock } from "./diff/DiffThreadBlock.js"
+import { diffThreadCountsAtom } from "./diff/threadAtoms.js"
+import { diffThreadWidth } from "./diff/threads.js"
 import { Divider, fitCell, PaddedRow, PlainLine, TextLine } from "./primitives.js"
 import { shortRepoName } from "./pullRequests.js"
 
@@ -69,11 +75,13 @@ const FileHeader = ({
 	const counter = `${index + 1}/${count}`
 	const stats = diffFileStats(file)
 	const statsText = diffFileStatsText(stats)
-	const nameWidth = Math.max(1, width - counter.length - statsText.length - suffix.length - 5)
+	const badge = diffCommentBadge(useAtomValue(diffThreadCountsAtom).get(file.name) ?? 0)
+	const nameWidth = Math.max(1, width - counter.length - statsText.length - suffix.length - (badge ? badge.length + 1 : 0) - 5)
 	return (
 		<TextLine>
 			<span fg={colors.muted}>{counter} </span>
 			<span fg={colors.text}>{fitCell(file.name, nameWidth)}</span>
+			{badge ? <span fg={colors.accent}>{` ${badge}`}</span> : null}
 			{statsText ? <span fg={colors.muted}> </span> : null}
 			<FileStats stats={stats} />
 			{suffix ? <span fg={suffixColor}>{suffix}</span> : null}
@@ -113,7 +121,7 @@ export const PullRequestDiffPane = ({
 	height: number
 	loadingIndicator: string
 	scrollRef: Ref<ScrollBoxRenderable>
-	setDiffRef: (index: number, diff: DiffRenderable | null) => void
+	setDiffRef: (segmentKey: string, diff: DiffRenderable | null) => void
 	selectedCommentAnchor: StackedDiffCommentAnchor | null
 	selectedCommentLabel: string | null
 	selectedCommentThread: readonly PullRequestReviewComment[]
@@ -224,30 +232,39 @@ export const PullRequestDiffPane = ({
 							<FileHeader file={stackedFile.file} index={stackedFile.index} count={readyFiles.length} width={paneWidth} />
 						</PaddedRow>
 						<Divider width={paneWidth} />
-						<diff
-							ref={(diff: DiffRenderable | null) => setDiffRef(stackedFile.index, diff)}
-							diff={stackedFile.file.patch}
-							view={view}
-							syncScroll
-							filetype={stackedFile.file.filetype ?? "text"}
-							syntaxStyle={syntaxStyle}
-							fg={colors.text}
-							showLineNumbers
-							wrapMode={wrapMode}
-							addedBg={colors.diff.addedBg}
-							removedBg={colors.diff.removedBg}
-							contextBg={colors.diff.contextBg}
-							addedSignColor={colors.status.passing}
-							removedSignColor={colors.status.failing}
-							lineNumberFg={diffLineNumberFg}
-							lineNumberBg={colors.diff.lineNumberBg}
-							addedLineNumberBg={colors.diff.addedLineNumberBg}
-							removedLineNumberBg={colors.diff.removedLineNumberBg}
-							selectionBg={colors.selectedBg}
-							selectionFg={colors.selectedText}
-							height={stackedFile.diffHeight}
-							style={{ flexShrink: 0 }}
-						/>
+						{stackedFile.sections.map((section) =>
+							section.kind === "diff" ? (
+								<diff
+									key={`diff-${section.segmentIndex}`}
+									ref={(diff: DiffRenderable | null) => setDiffRef(diffSegmentKey(stackedFile.index, section.segmentIndex), diff)}
+									diff={section.patch}
+									view={view}
+									syncScroll
+									filetype={stackedFile.file.filetype ?? "text"}
+									syntaxStyle={syntaxStyle}
+									fg={colors.text}
+									showLineNumbers
+									wrapMode={wrapMode}
+									addedBg={colors.diff.addedBg}
+									removedBg={colors.diff.removedBg}
+									contextBg={colors.diff.contextBg}
+									addedSignColor={colors.status.passing}
+									removedSignColor={colors.status.failing}
+									lineNumberFg={diffLineNumberFg}
+									lineNumberBg={colors.diff.lineNumberBg}
+									addedLineNumberBg={colors.diff.addedLineNumberBg}
+									removedLineNumberBg={colors.diff.removedLineNumberBg}
+									selectionBg={colors.selectedBg}
+									selectionFg={colors.selectedText}
+									height={section.height}
+									style={{ flexShrink: 0 }}
+								/>
+							) : (
+								<box key={`threads-${section.keys.join("\u0001")}`} height={section.height} flexShrink={0} flexDirection="column">
+									<DiffThreadBlock keys={section.keys} width={diffThreadWidth(paneWidth)} />
+								</box>
+							),
+						)}
 					</box>
 				))}
 			</scrollbox>

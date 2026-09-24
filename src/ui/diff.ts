@@ -2,6 +2,7 @@ import { parseColor, pathToFiletype, SyntaxStyle } from "@opentui/core"
 import { Data, Schema } from "effect"
 import type { DiffCommentSide, PullRequestItem, PullRequestReviewComment } from "../domain.js"
 import { colors } from "./colors.js"
+import { segmentPatch } from "./diff/segments.js"
 
 export const DiffView = Schema.Literals(["unified", "split"])
 export type DiffView = Schema.Schema.Type<typeof DiffView>
@@ -26,12 +27,29 @@ export interface DiffFileStats {
 	readonly deletions: number
 }
 
+// A comment thread to lay out inside a file's body. `line <= 0` (or a line
+// the patch doesn't contain) goes in the block under the file header.
+export interface DiffThreadPlacement {
+	readonly key: string
+	readonly side: DiffCommentSide
+	readonly line: number
+	readonly height: number
+}
+
+// One row range of a file's body, in stacked (scrollbox) lines. A file with
+// no threads is a single diff section holding the original patch.
+export type DiffFileSection =
+	| { readonly kind: "diff"; readonly segmentIndex: number; readonly patch: string; readonly top: number; readonly height: number }
+	| { readonly kind: "threads"; readonly placement: "file" | "line"; readonly keys: readonly string[]; readonly top: number; readonly height: number }
+
 export interface StackedDiffFilePatch {
 	readonly file: DiffFilePatch
 	readonly index: number
 	readonly headerLine: number
 	readonly diffStartLine: number
+	// Whole body: every diff segment plus every thread row.
 	readonly diffHeight: number
+	readonly sections: readonly DiffFileSection[]
 }
 
 export interface DiffCommentAnchor {
@@ -46,8 +64,12 @@ export interface DiffCommentAnchor {
 
 export type StackedDiffCommentAnchor = DiffCommentAnchor & {
 	readonly fileIndex: number
+	readonly segmentIndex: number
+	// Line inside the anchor's own diff segment.
 	readonly localRenderLine: number
 }
+
+export const diffSegmentKey = (fileIndex: number, segmentIndex: number) => `${fileIndex}:${segmentIndex}`
 
 export type PullRequestDiffState = Data.TaggedEnum<{
 	Loading: {}
@@ -327,20 +349,89 @@ export const pullRequestDiffKey = (pullRequest: PullRequestItem) => `${pullReque
 
 export const safeDiffFileIndex = (files: readonly DiffFilePatch[], index: number) => (files.length > 0 ? Math.max(0, Math.min(index, files.length - 1)) : 0)
 
-export const buildStackedDiffFiles = (files: readonly DiffFilePatch[], view: DiffView, wrapMode: DiffWrapMode, width: number): readonly StackedDiffFilePatch[] => {
+const threadsSection = (placement: "file" | "line", threads: readonly DiffThreadPlacement[], top: number): DiffFileSection => ({
+	kind: "threads",
+	placement,
+	keys: threads.map((thread) => thread.key),
+	top,
+	height: threads.reduce((total, thread) => total + thread.height, 0),
+})
+
+const fileBodySections = (file: DiffFilePatch, threads: readonly DiffThreadPlacement[], view: DiffView, wrapMode: DiffWrapMode, width: number, top: number) => {
+	const lineThreads = threads.filter((thread) => thread.line > 0)
+	const { patches, placements } = segmentPatch(file.patch, lineThreads, view)
+	const fileLevel = [...threads.filter((thread) => thread.line <= 0), ...lineThreads.filter((_, index) => placements[index] === null)]
+	const sections: DiffFileSection[] = []
+	let offset = top
+	const push = (section: DiffFileSection) => {
+		if (section.height <= 0) return
+		sections.push(section)
+		offset += section.height
+	}
+	if (fileLevel.length > 0) push(threadsSection("file", fileLevel, offset))
+	patches.forEach((patch, segmentIndex) => {
+		push({ kind: "diff", segmentIndex, patch, top: offset, height: patchRenderableLineCount(patch, view, wrapMode, width) })
+		const after = lineThreads.filter((_, index) => placements[index] === segmentIndex)
+		if (after.length > 0) push(threadsSection("line", after, offset))
+	})
+	return { sections, height: offset - top }
+}
+
+interface FileBody {
+	readonly sections: readonly DiffFileSection[]
+	readonly height: number
+}
+
+// Toggling one thread changes only that file's placements, so each file's
+// segmented body is memoized on (view, wrap, width, its own placements) and
+// merely re-offset when an earlier file grows or shrinks.
+const FILE_BODY_CACHE_LIMIT = 8
+const fileBodyCache = new WeakMap<DiffFilePatch, Map<string, { body: FileBody; top: number; placed: readonly DiffFileSection[] }>>()
+
+const cachedFileBody = (file: DiffFilePatch, threads: readonly DiffThreadPlacement[], view: DiffView, wrapMode: DiffWrapMode, width: number, top: number): FileBody => {
+	const key = `${view}\u0001${wrapMode}\u0001${width}\u0001${threads.map((thread) => `${thread.key}\u0002${thread.side}\u0002${thread.line}\u0002${thread.height}`).join("\u0001")}`
+	let perFile = fileBodyCache.get(file)
+	if (!perFile) {
+		perFile = new Map()
+		fileBodyCache.set(file, perFile)
+	}
+	let hit = perFile.get(key)
+	if (hit) {
+		if (hit.top !== top) {
+			hit = { body: hit.body, top, placed: hit.body.sections.map((section) => ({ ...section, top: section.top + top })) }
+			perFile.set(key, hit)
+		}
+		return { sections: hit.placed, height: hit.body.height }
+	}
+	const body = fileBodySections(file, threads, view, wrapMode, width, 0)
+	if (perFile.size >= FILE_BODY_CACHE_LIMIT) perFile.delete(perFile.keys().next().value!)
+	const placed = body.sections.map((section) => ({ ...section, top: section.top + top }))
+	perFile.set(key, { body, top, placed })
+	return { sections: placed, height: body.height }
+}
+
+export const buildStackedDiffFiles = (
+	files: readonly DiffFilePatch[],
+	view: DiffView,
+	wrapMode: DiffWrapMode,
+	width: number,
+	threadsForFile: (file: DiffFilePatch, index: number) => readonly DiffThreadPlacement[] = () => [],
+): readonly StackedDiffFilePatch[] => {
 	let offset = 0
 	return files.map((file, index) => {
-		const diffHeight = patchRenderableLineCount(file.patch, view, wrapMode, width)
 		const separatorBefore = index === 0 ? 0 : 1
 		const headerLine = offset + separatorBefore
+		const diffStartLine = headerLine + 2
+		const body = cachedFileBody(file, threadsForFile(file, index), view, wrapMode, width, diffStartLine)
 		const stackedFile = {
 			file,
 			index,
 			headerLine,
-			diffStartLine: headerLine + 2,
-			diffHeight,
+			diffStartLine,
+			diffHeight: body.height,
+			sections: body.sections,
 		} satisfies StackedDiffFilePatch
-		offset += separatorBefore + 2 + diffHeight
+		offset += separatorBefore + 2 + body.height
 		return stackedFile
 	})
 }
@@ -542,12 +633,17 @@ export const getStackedDiffCommentAnchors = (
 	width = 120,
 ): readonly StackedDiffCommentAnchor[] =>
 	stackedFiles.flatMap((stackedFile) =>
-		getDiffCommentAnchors(stackedFile.file, view, wrapMode, width).map((anchor) => ({
-			...anchor,
-			fileIndex: stackedFile.index,
-			localRenderLine: anchor.renderLine,
-			renderLine: stackedFile.diffStartLine + anchor.renderLine,
-		})),
+		stackedFile.sections.flatMap((section) =>
+			section.kind === "diff"
+				? getDiffCommentAnchors({ ...stackedFile.file, patch: section.patch }, view, wrapMode, width).map((anchor) => ({
+						...anchor,
+						fileIndex: stackedFile.index,
+						segmentIndex: section.segmentIndex,
+						localRenderLine: anchor.renderLine,
+						renderLine: section.top + anchor.renderLine,
+					}))
+				: [],
+		),
 	)
 
 export const verticalDiffAnchor = <Anchor extends Pick<DiffCommentAnchor, "renderLine" | "side">>(

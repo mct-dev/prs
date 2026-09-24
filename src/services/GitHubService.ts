@@ -25,6 +25,7 @@ import {
 	fallbackReplyComment,
 	itemPage,
 	parseIssueComment,
+	markResolvedComments,
 	parseIssueComments,
 	parseIssueSearchNode,
 	parsePullRequest,
@@ -43,6 +44,9 @@ import {
 } from "./githubNormalize.js"
 import {
 	CommentsResponseSchema,
+	parseResolvedThreadRoots,
+	ReviewThreadResolutionResponseSchema,
+	reviewThreadResolutionQuery,
 	issueSearchQuery,
 	MergeInfoResponseSchema,
 	PullRequestAdminMergeResponseSchema,
@@ -398,18 +402,41 @@ export class GitHubService extends Context.Service<
 					Effect.map(parsePullRequestComments),
 				)
 
+			// Best effort: resolution state is decoration, so any failure means
+			// "unknown" rather than failing the comment load.
+			const listResolvedThreadRoots = (repository: string, number: number): Effect.Effect<ReadonlySet<string>> => {
+				const repo = repositoryParts(repository)
+				if (!repo) return Effect.succeed(new Set<string>())
+				return ghJson("listResolvedReviewThreads", ReviewThreadResolutionResponseSchema, [
+					"api",
+					"graphql",
+					"-f",
+					`query=${reviewThreadResolutionQuery}`,
+					"-F",
+					`owner=${repo.owner}`,
+					"-F",
+					`name=${repo.name}`,
+					"-F",
+					`number=${number}`,
+				]).pipe(
+					Effect.map(parseResolvedThreadRoots),
+					Effect.catchCause(() => Effect.succeed(new Set<string>())),
+				)
+			}
+
 			const listPullRequestComments = Effect.fn("GitHubService.listPullRequestComments")(function* (repository: string, number: number) {
-				const [issueComments, reviewComments] = yield* Effect.all(
+				const [issueComments, reviewComments, resolvedRoots] = yield* Effect.all(
 					[
 						ghJson("listPullRequestIssueComments", CommentsResponseSchema, ["api", "--paginate", "--slurp", `repos/${repository}/issues/${number}/comments`]).pipe(
 							Effect.map(parseIssueComments),
 						),
-						listPullRequestReviewComments(repository, number).pipe(Effect.map((comments) => comments.map(reviewCommentAsComment))),
+						listPullRequestReviewComments(repository, number),
+						listResolvedThreadRoots(repository, number),
 					],
 					{ concurrency: "unbounded" },
 				)
 
-				return sortComments([...issueComments, ...reviewComments])
+				return sortComments([...issueComments, ...markResolvedComments(reviewComments, resolvedRoots).map(reviewCommentAsComment)])
 			})
 
 			const listIssueComments = (repository: string, number: number) =>

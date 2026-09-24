@@ -25,6 +25,7 @@ interface HintsContext {
 	readonly briefRunning: boolean
 	readonly commentsViewActive: boolean
 	readonly commentsViewOnRealComment: boolean
+	readonly commentsViewOnReviewComment: boolean
 	readonly commentsViewCanEditSelected: boolean
 	readonly commentsViewCount: number
 	readonly hasSelection: boolean
@@ -76,6 +77,7 @@ const diffViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "↑↓", label: ctx.diffRangeActive ? "range" : "line" },
 	{ key: "enter", label: ctx.diffRangeActive ? "comment" : "open" },
 	{ key: "v", label: ctx.diffRangeActive ? "clear" : "range" },
+	{ key: "c/C", label: "thread/all" },
 	{ key: "w", label: "wrap" },
 	{ key: "[]", label: "files" },
 	{ key: "r", label: "reload" },
@@ -102,7 +104,11 @@ const briefViewHints = (ctx: HintsContext): readonly HintItem[] => [
 
 const commentsViewHints = (ctx: HintsContext): readonly HintItem[] => [
 	{ key: "↑↓", label: "move", disabled: ctx.commentsViewCount <= 1 },
-	{ key: "enter", label: ctx.commentsViewOnRealComment ? "reply" : "new" },
+	{ key: "enter", label: ctx.commentsViewOnReviewComment ? "diff" : ctx.commentsViewOnRealComment ? "reply" : "new" },
+	...(ctx.commentsViewOnReviewComment ? [{ key: "R", label: "reply" }] : []),
+	{ key: "space", label: "fold", disabled: !ctx.commentsViewOnRealComment },
+	{ key: "t", label: "details", disabled: !ctx.commentsViewOnRealComment },
+	{ key: "1-9", label: "link", disabled: !ctx.commentsViewOnRealComment },
 	{ key: "a", label: "new" },
 	{ key: "e", label: "edit", disabled: !ctx.commentsViewCanEditSelected },
 	{ key: "x", label: "delete", disabled: !ctx.commentsViewCanEditSelected },

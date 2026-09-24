@@ -15,6 +15,7 @@ import {
 	type PullRequestDiffState as PullRequestDiffStateType,
 } from "../ui/diff.js"
 import { diffCommentRangeContains, diffCommentRangeLabel, diffCommentRangeSelection, diffCommentThreadMapKey } from "../ui/diff/comments.js"
+import { diffThreadPlacements, diffThreadsByPath, diffThreadWidth, type DiffThread } from "../ui/diff/threads.js"
 
 export interface UseDiffCommentDerivationsInput {
 	readonly selectedDiffState: PullRequestDiffStateType | undefined
@@ -33,6 +34,7 @@ export interface UseDiffCommentDerivationsInput {
 	readonly diffCommentRangeStartIndex: number | null
 	readonly selectedDiffKey: string | null
 	readonly diffCommentThreads: Record<string, readonly PullRequestReviewComment[]>
+	readonly diffThreadToggled: ReadonlySet<string>
 }
 
 export interface DiffCommentDerivations {
@@ -49,6 +51,7 @@ export interface DiffCommentDerivations {
 	readonly selectedDiffCommentThread: readonly PullRequestReviewComment[]
 	readonly diffLineColorContextKey: string | null
 	readonly diffCommentThreadAnchors: readonly StackedDiffCommentAnchor[]
+	readonly diffThreads: ReadonlyMap<string, readonly DiffThread[]>
 }
 
 export const useDiffCommentDerivations = (input: UseDiffCommentDerivationsInput): DiffCommentDerivations => {
@@ -64,6 +67,7 @@ export const useDiffCommentDerivations = (input: UseDiffCommentDerivationsInput)
 		diffCommentRangeStartIndex,
 		selectedDiffKey,
 		diffCommentThreads,
+		diffThreadToggled,
 	} = input
 
 	const displayedDiffState = useMemo(
@@ -71,9 +75,13 @@ export const useDiffCommentDerivations = (input: UseDiffCommentDerivationsInput)
 			selectedDiffState?._tag === "Ready" ? PullRequestDiffState.Ready({ patch: readyDiffFiles.map((file) => file.patch).join("\n"), files: readyDiffFiles }) : selectedDiffState,
 		[selectedDiffState, readyDiffFiles],
 	)
+	const diffThreads = useMemo(() => diffThreadsByPath(selectedDiffKey, diffCommentThreads), [selectedDiffKey, diffCommentThreads])
 	const stackedDiffFiles = useMemo(
-		() => buildStackedDiffFiles(readyDiffFiles, effectiveDiffRenderView, diffWrapMode, diffPaneWidth),
-		[readyDiffFiles, effectiveDiffRenderView, diffWrapMode, diffPaneWidth],
+		() =>
+			buildStackedDiffFiles(readyDiffFiles, effectiveDiffRenderView, diffWrapMode, diffPaneWidth, (file) =>
+				diffThreadPlacements(diffThreads.get(file.name) ?? [], diffThreadToggled, diffThreadWidth(diffPaneWidth)),
+			),
+		[readyDiffFiles, effectiveDiffRenderView, diffWrapMode, diffPaneWidth, diffThreads, diffThreadToggled],
 	)
 	const diffCommentAnchors = useMemo(
 		() => (diffFullView ? getStackedDiffCommentAnchors(stackedDiffFiles, effectiveDiffRenderView, diffWrapMode, diffPaneWidth) : []),
@@ -126,5 +134,6 @@ export const useDiffCommentDerivations = (input: UseDiffCommentDerivationsInput)
 		selectedDiffCommentThread,
 		diffLineColorContextKey,
 		diffCommentThreadAnchors,
+		diffThreads,
 	}
 }

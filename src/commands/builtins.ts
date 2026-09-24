@@ -981,6 +981,32 @@ export const globalCommands: readonly CommandDefinition[] = [
 		run: Effect.sync(() => invokeHandoff("moveDiffCommentThreadNext")),
 	}),
 	defineCommand({
+		id: "diff.toggle-thread",
+		title: "Expand / collapse diff thread",
+		scope: "Diff",
+		subtitle: "The thread at the cursor, or the nearest one in the file",
+		shortcut: "c",
+		disabledReason: diffOpenRequiredReasonAtom,
+		keywords: ["review", "comment", "thread", "fold", "expand", "collapse"],
+		run: Effect.sync(() => {
+			invokeHandoff("preserveDiffLocation")
+			invokeHandoff("toggleDiffThread")
+		}),
+	}),
+	defineCommand({
+		id: "diff.toggle-all-threads",
+		title: "Expand / collapse all diff threads",
+		scope: "Diff",
+		subtitle: "Collapse all if any are open, else expand all",
+		shortcut: "shift-c",
+		disabledReason: diffOpenRequiredReasonAtom,
+		keywords: ["review", "comment", "thread", "fold", "expand", "collapse"],
+		run: Effect.sync(() => {
+			invokeHandoff("preserveDiffLocation")
+			invokeHandoff("toggleAllDiffThreads")
+		}),
+	}),
+	defineCommand({
 		id: "diff.previous-thread",
 		title: "Previous diff thread",
 		scope: "Diff",
@@ -998,6 +1024,17 @@ export const globalCommands: readonly CommandDefinition[] = [
 		disabledReason: selectedDiffLineReasonAtom,
 		keywords: ["review", "reply"],
 		run: Effect.sync(() => invokeHandoff("openDiffCommentModal")),
+	}),
+
+	defineCommand({
+		id: "comments.open-in-diff",
+		title: "Show comment in diff",
+		scope: "Comments",
+		subtitle: "Open the diff at the comment's file and line",
+		shortcut: "d",
+		disabledReason: selectedCommentReasonAtom,
+		keywords: ["review", "file", "thread", "jump"],
+		run: Effect.sync(() => invokeHandoff("openSelectedCommentInDiff")),
 	}),
 
 	// === Comment mutations ===

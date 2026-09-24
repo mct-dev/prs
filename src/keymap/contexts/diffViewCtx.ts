@@ -36,6 +36,8 @@ export const buildDiffViewCtx = ({
 	reload: () => runCommandById("diff.reload"),
 	nextThread: () => runCommandById("diff.next-thread"),
 	previousThread: () => runCommandById("diff.previous-thread"),
+	toggleThread: () => runCommandById("diff.toggle-thread"),
+	toggleAllThreads: () => runCommandById("diff.toggle-all-threads"),
 	moveAnchor: moveDiffCommentAnchor,
 	moveAnchorToBoundary: moveDiffCommentToBoundary,
 	alignAnchor: alignSelectedDiffCommentAnchor,

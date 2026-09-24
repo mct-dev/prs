@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react"
+import type { ComponentProps } from "react"
 import type { AppCommand } from "../commands.js"
 import type { PullRequestLabel, PullRequestReviewComment } from "../domain.js"
 import { CommandPalette } from "../ui/CommandPalette.js"
@@ -20,6 +22,7 @@ import {
 	ThemeModal,
 } from "../ui/modals.js"
 import { Modal, type ModalTag } from "../ui/modals/types.js"
+import { diffThreadCountsAtom } from "../ui/diff/threadAtoms.js"
 
 export interface ModalLayout {
 	readonly width: number
@@ -59,6 +62,11 @@ const layoutToProps = (layout: ModalLayout) => ({
 	offsetTop: layout.top,
 })
 
+// Reads the ◆ counts here so the modal module stays free of atom imports.
+const ChangedFilesModalWithBadges = (props: Omit<ComponentProps<typeof ChangedFilesModal>, "threadCounts">) => (
+	<ChangedFilesModal {...props} threadCounts={useAtomValue(diffThreadCountsAtom)} />
+)
+
 export const WorkspaceModals = (props: WorkspaceModalsProps) =>
 	Modal.$match(props.activeModal, {
 		None: () => null,
@@ -81,7 +89,7 @@ export const WorkspaceModals = (props: WorkspaceModalsProps) =>
 		),
 		ChangedFiles: (state) =>
 			props.suppressChangedFilesModal ? null : (
-				<ChangedFilesModal state={state} results={props.changedFileResults} totalCount={props.readyDiffFileCount} {...layoutToProps(props.layouts.ChangedFiles)} />
+				<ChangedFilesModalWithBadges state={state} results={props.changedFileResults} totalCount={props.readyDiffFileCount} {...layoutToProps(props.layouts.ChangedFiles)} />
 			),
 		Filter: (state) => <FilterModal state={state} {...layoutToProps(props.layouts.Filter)} />,
 		ReviewPreset: (state) => <ReviewPresetModal state={state} {...layoutToProps(props.layouts.ReviewPreset)} />,

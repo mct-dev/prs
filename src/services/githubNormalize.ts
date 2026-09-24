@@ -424,24 +424,49 @@ export const restCommentId = (comment: RawPullRequestComment): string | null => 
 	return null
 }
 
-const rawCommentFields = (comment: RawPullRequestComment, fallbackId: string) => ({
-	id: restCommentId(comment) ?? comment.node_id ?? fallbackId,
-	author: comment.user?.login ?? "unknown",
-	body: comment.body ?? "",
-	createdAt: comment.created_at ? new Date(comment.created_at) : null,
-	url: comment.html_url ?? comment.url ?? null,
-})
+// Edits within this window of creation are treated as part of posting.
+const EDITED_THRESHOLD_MS = 60_000
+
+export const isBotAuthor = (login: string | null | undefined, type: string | null | undefined) => type === "Bot" || (login ?? "").endsWith("[bot]")
+
+const commentEditedAt = (comment: RawPullRequestComment): Date | null => {
+	if (!comment.created_at || !comment.updated_at) return null
+	const created = new Date(comment.created_at).getTime()
+	const updated = new Date(comment.updated_at).getTime()
+	return Number.isFinite(created) && Number.isFinite(updated) && updated - created > EDITED_THRESHOLD_MS ? new Date(updated) : null
+}
+
+const rawCommentFields = (comment: RawPullRequestComment, fallbackId: string) => {
+	const editedAt = commentEditedAt(comment)
+	return {
+		id: restCommentId(comment) ?? comment.node_id ?? fallbackId,
+		author: comment.user?.login ?? "unknown",
+		body: comment.body ?? "",
+		createdAt: comment.created_at ? new Date(comment.created_at) : null,
+		url: comment.html_url ?? comment.url ?? null,
+		...(isBotAuthor(comment.user?.login, comment.user?.type) ? { authorIsBot: true } : {}),
+		...(editedAt ? { editedAt } : {}),
+	}
+}
 
 export const parsePullRequestComment = (comment: RawPullRequestComment): PullRequestReviewComment | null => {
-	const line = comment.line ?? comment.original_line
-	if (!comment.path || !line || (comment.side !== "LEFT" && comment.side !== "RIGHT")) return null
+	if (!comment.path) return null
+	const side = comment.side === "LEFT" ? "LEFT" : "RIGHT"
+	const isFile = comment.subject_type === "file"
+	const line = isFile ? 0 : (comment.line ?? comment.original_line)
+	if (!isFile && (!line || (comment.side !== "LEFT" && comment.side !== "RIGHT"))) return null
 	const inReplyTo = comment.in_reply_to_id != null ? String(comment.in_reply_to_id) : null
+	// GitHub nulls `line` once the anchored code changes; `original_line`
+	// still points at the commit the comment was written against.
+	const outdated = !isFile && comment.line == null && comment.original_line != null
 	return {
-		...rawCommentFields(comment, `${comment.path}:${comment.side}:${line}:${comment.created_at ?? ""}:${comment.body ?? ""}`),
+		...rawCommentFields(comment, `${comment.path}:${side}:${line}:${comment.created_at ?? ""}:${comment.body ?? ""}`),
 		path: comment.path,
-		line,
-		side: comment.side,
+		line: line ?? 0,
+		side,
 		inReplyTo,
+		...(isFile ? { subjectType: "file" as const } : {}),
+		...(outdated ? { outdated: true } : {}),
 	}
 }
 
@@ -462,6 +487,11 @@ export const parseIssueComment = (comment: RawPullRequestComment): PullRequestCo
 
 export const parseIssueComments = (response: Schema.Schema.Type<typeof CommentsResponseSchema>): readonly PullRequestComment[] =>
 	flattenSlurpedPages(response).map(parseIssueComment)
+
+export const markResolvedComments = (comments: readonly PullRequestReviewComment[], resolvedRoots: ReadonlySet<string>): readonly PullRequestReviewComment[] =>
+	resolvedRoots.size === 0
+		? comments
+		: comments.map((comment) => (resolvedRoots.has(comment.id) || (comment.inReplyTo !== null && resolvedRoots.has(comment.inReplyTo)) ? { ...comment, resolved: true } : comment))
 
 export const reviewCommentAsComment = (comment: PullRequestReviewComment): PullRequestComment => ({
 	_tag: "review-comment",

@@ -1,7 +1,10 @@
+import { useAtomValue } from "@effect/atom-react"
 import type { MouseEvent } from "@opentui/core"
 import { colors } from "../colors.js"
 import { type DiffFilePatch, diffFileStats, diffFileStatsText } from "../diff.js"
 import type { ChangedFileSearchResult } from "../modals/shared.js"
+import { diffCommentBadge } from "./commentBadge.js"
+import { diffThreadCountsAtom } from "./threadAtoms.js"
 import { Divider, fitCell, HintRow, MatchedCell, PaddedRow, PlainLine, TextLine } from "../primitives.js"
 
 interface DiffFilePanelProps {
@@ -52,6 +55,7 @@ const truncatePath = (path: string, width: number): string => {
 // by passing `pickerActive` + the matching slice of state.
 export const DiffFilePanel = ({ files, currentFileIndex, width, height, pickerActive, pickerQuery, pickerSelectedIndex, pickerResults, onSelectFile }: DiffFilePanelProps) => {
 	const innerWidth = Math.max(8, width - 2)
+	const threadCounts = useAtomValue(diffThreadCountsAtom)
 	// Rows used by chrome: title + divider, optional query + divider, hint row.
 	const chromeRows = (pickerActive ? 4 : 2) + 1
 	const visibleRows = Math.max(1, height - chromeRows)
@@ -106,7 +110,8 @@ export const DiffFilePanel = ({ files, currentFileIndex, width, height, pickerAc
 				visibleSlice.map((row) => {
 					const stats = diffFileStatsText(diffFileStats(row.file)) || "0"
 					const statsWidth = Math.min(10, Math.max(3, stats.length))
-					const nameWidth = Math.max(1, innerWidth - statsWidth - 1)
+					const badge = diffCommentBadge(threadCounts.get(row.file.name) ?? 0)
+					const nameWidth = Math.max(1, innerWidth - statsWidth - 1 - (badge ? badge.length + 1 : 0))
 					const isSelected = row.index === (pickerActive ? rows[selectedRow]?.index : currentFileIndex)
 					const handleMouseDown = function (this: unknown, event: MouseEvent) {
 						if (event.button !== 0) return
@@ -132,6 +137,7 @@ export const DiffFilePanel = ({ files, currentFileIndex, width, height, pickerAc
 								) : (
 									<span fg={isSelected ? colors.selectedText : colors.text}>{fitCell(truncated, nameWidth)}</span>
 								)}
+								{badge ? <span fg={isSelected ? colors.selectedText : colors.accent}>{` ${badge}`}</span> : null}
 								<span fg={colors.muted}> {fitCell(stats, statsWidth, "right")}</span>
 							</TextLine>
 						</box>

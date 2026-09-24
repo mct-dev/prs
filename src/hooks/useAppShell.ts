@@ -7,6 +7,8 @@ import { parseRepositoryInput } from "../pullRequestViews.js"
 
 import { colors } from "../ui/colors.js"
 import { workspaceSurfaceAtom } from "../workspace/atoms.js"
+import { diffThreadToggledAtom } from "../ui/diff/threadAtoms.js"
+import { useDiffThreadToggles } from "../ui/diff/useDiffThreadToggles.js"
 import { useRepoSurface } from "../surfaces/repo/useRepoSurface.js"
 import { usePullRequestSurface } from "../surfaces/pullRequest/usePullRequestSurface.js"
 import { computeLayout, diffFilePanelWidthFor, isTerminalTooSmall } from "../workspace/layout.js"
@@ -30,6 +32,7 @@ import { useImperativeActions } from "./useImperativeActions.js"
 import { useScrollRefs } from "./useScrollRefs.js"
 import { useCommentsLoader } from "./useCommentsLoader.js"
 import { useCommentsViewActions } from "./useCommentsViewActions.js"
+import { useCommentCardActions } from "../ui/comments/useCommentCardActions.js"
 import { useDiffLoader } from "./useDiffLoader.js"
 import { useRunsView } from "./useRunsView.js"
 import { useLinkNavigation } from "./useLinkNavigation.js"
@@ -52,6 +55,7 @@ import { DIFF_FILE_PANEL_AUTO_THRESHOLD, diffFilePanelOverrideAtom, selectedDiff
 import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { briefFullViewAtom } from "../ui/review/briefViewAtoms.js"
 import { useBriefDiffTarget } from "../ui/review/useBriefDiffTarget.js"
+import { useCommentDiffTarget } from "../ui/comments/useCommentDiffTarget.js"
 import { useBriefView } from "./useBriefView.js"
 import { runsFullViewAtom } from "../ui/runs/atoms.js"
 import { diffCommentThreadMapKey } from "../ui/diff/comments.js"
@@ -412,6 +416,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		selectedDiffCommentThread,
 		diffLineColorContextKey,
 		diffCommentThreadAnchors,
+		diffThreads,
 	} = useDiffCommentDerivations({
 		selectedDiffState,
 		readyDiffFiles,
@@ -427,7 +432,9 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		diffCommentRangeStartIndex,
 		selectedDiffKey,
 		diffCommentThreads,
+		diffThreadToggled: useAtomValue(diffThreadToggledAtom),
 	})
+	useDiffThreadToggles({ stackedDiffFiles, selectedDiffCommentAnchor, selectedDiffKey, diffThreads, flashNotice })
 	const getCurrentGroupIndex = (current: number) => groupIndexAt(groupStarts, current)
 	const { headerRight, headerLeftWidth, footerNotice, homeCrumb, breadcrumbSeparatorText, headerRepoWidth } = computeHeaderDerivations({
 		username,
@@ -737,6 +744,21 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		scrollToDiffFile: diffNav.scrollToDiffFile,
 		flashNotice,
 	})
+	useCommentDiffTarget({
+		selectedPullRequest,
+		selectedOrderedComment,
+		selectedDiffKey,
+		diffFullView,
+		stackedDiffFiles,
+		diffCommentAnchors,
+		diffThreads,
+		openDiffView,
+		setDiffFileIndex,
+		setDiffCommentAnchorIndex,
+		ensureDiffLineVisible,
+		scrollToDiffFile: diffNav.scrollToDiffFile,
+		flashNotice,
+	})
 
 	const { submitCommentModal, openNewIssueCommentModal, openReplyToSelectedComment, openEditSelectedComment, openDeleteSelectedComment, confirmDeleteComment } =
 		useCommentMutations({
@@ -783,6 +805,8 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 			openUrl,
 			flashNotice,
 		})
+
+	const commentCardActions = useCommentCardActions({ openUrl, flashNotice })
 
 	const { movePullRequestStateSelection, confirmPullRequestStateChange, confirmCloseModal, toggleLabelAtIndex, confirmSubmitReview } = useItemModalActions({
 		pullRequestStateModal,
@@ -1088,6 +1112,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		openSelectedCommentInBrowser,
 		refreshSelectedComments,
 		confirmCommentSelection,
+		commentCardActions,
 		visiblePullRequestsLength: visiblePullRequests.length,
 		issuesLength: issues.length,
 		repositoryItemsLength: repositoryItems.length,

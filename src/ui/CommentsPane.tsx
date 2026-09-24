@@ -1,23 +1,15 @@
+import { useAtomValue } from "@effect/atom-react"
 import { useEffect, useMemo, useRef } from "react"
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core"
 import type { PullRequestComment } from "../domain.js"
 import { colors } from "./colors.js"
-import {
-	commentBodyRows,
-	commentCountText,
-	commentMetaSegments,
-	CommentSegmentsLine,
-	QUOTE_HEADER_RE,
-	stripQuoteHeader,
-	type CommentDisplayLine,
-	type CommentSegment,
-} from "./comments.js"
-import { truncateConversationPath } from "./DetailsPane.js"
+import { commentCountText, CommentSegmentsLine, QUOTE_HEADER_RE, type CommentDisplayLine, type CommentSegment } from "./comments.js"
+import { CARD_BODY_INDENT, commentCard, resolveCardState } from "./comments/cards.js"
+import { commentCardDetailsAtom, commentCardToggledAtom } from "./comments/cardState.js"
 import { centerCell, Divider, Filler, PaddedRow, PlainLine, TextLine } from "./primitives.js"
 import { shortRepoName } from "./pullRequests.js"
 import { commentsHeaderStatus, commentsPaneMode, type CommentLoadState } from "./comments/loadState.js"
 
-const META_PREFIX_WIDTH = 2 // "• "
 const PLACEHOLDER_KEY = "__placeholder_new_comment"
 
 // Comments view always exposes one virtual "+ Add new comment" row at the
@@ -37,13 +29,6 @@ interface CommentBlock {
 	readonly height: number
 	readonly indent: number
 	readonly isPlaceholder: boolean
-}
-
-const reviewContextGroups = (comment: PullRequestComment, width: number): readonly (readonly { readonly text: string; readonly fg: string }[])[] => {
-	if (comment._tag !== "review-comment") return []
-	const pathLabel = `${comment.path}:${comment.line}`
-	const room = Math.max(8, width - META_PREFIX_WIDTH - comment.author.length - 16)
-	return [[{ text: truncateConversationPath(pathLabel, room), fg: colors.inlineCode }]]
 }
 
 // GitHub doesn't thread issue comments, so `issueQuoteParent` reverse-engineers
@@ -133,18 +118,14 @@ export const orderCommentsForDisplay = (comments: readonly PullRequestComment[])
 	return ordered
 }
 
-const buildBlocks = (ordered: readonly OrderedComment[], width: number): readonly CommentBlock[] =>
+const buildBlocks = (ordered: readonly OrderedComment[], width: number, toggled: ReadonlySet<string>, details: ReadonlyMap<string, boolean>): readonly CommentBlock[] =>
 	ordered.map(({ comment, indent }) => {
 		const usableWidth = Math.max(8, width - indent * REPLY_INDENT_COLS)
-		// Don't repeat the file path for replies — the thread root carries it.
-		const groups = indent > 0 ? [] : reviewContextGroups(comment, usableWidth)
-		const marker = indent > 0 ? { text: "↳", fg: colors.muted } : undefined
-		const meta: CommentDisplayLine = { key: `${comment.id}:meta`, segments: commentMetaSegments({ item: comment, groups, marker }) }
-		// When nested, the parent is right above — the quote header becomes noise.
-		const renderedBody = indent > 0 && comment._tag === "comment" ? stripQuoteHeader(comment.body) : comment.body
-		const body = commentBodyRows({ keyPrefix: comment.id, body: renderedBody, width: usableWidth })
+		const state = resolveCardState(comment, Math.max(8, usableWidth - CARD_BODY_INDENT), toggled, details)
+		const card = commentCard(comment, { indent, width: usableWidth, state })
+		const meta: CommentDisplayLine = { key: `${comment.id}:meta`, segments: card.meta }
 		// Reserve 1 spacer line between blocks for breathing room.
-		return { key: comment.id, comment, meta, body, height: 1 + body.length + 1, indent, isPlaceholder: false }
+		return { key: comment.id, comment, meta, body: card.body, height: 1 + card.body.length + 1, indent, isPlaceholder: false }
 	})
 
 const placeholderBlock: CommentBlock = {
@@ -195,7 +176,9 @@ export const CommentsPane = ({
 	themeGeneration: number
 	showScrollbar: boolean
 }) => {
-	const realBlocks = useMemo(() => buildBlocks(orderedComments, contentWidth), [orderedComments, contentWidth, themeGeneration])
+	const toggled = useAtomValue(commentCardToggledAtom)
+	const details = useAtomValue(commentCardDetailsAtom)
+	const realBlocks = useMemo(() => buildBlocks(orderedComments, contentWidth, toggled, details), [orderedComments, contentWidth, toggled, details, themeGeneration])
 	const blocks = useMemo<readonly CommentBlock[]>(() => [...realBlocks, placeholderBlock], [realBlocks])
 	const offsets = useMemo(() => blockOffsets(blocks), [blocks])
 	const scrollboxRef = useRef<ScrollBoxRenderable | null>(null)

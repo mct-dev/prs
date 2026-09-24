@@ -1,5 +1,6 @@
 import { colors } from "../colors.js"
 import { diffFileStats, diffFileStatsText } from "../diff.js"
+import { diffCommentBadge } from "../diff/commentBadge.js"
 import { centerCell, Filler, fitCell, HintRow, MatchedCell, PlainLine, searchModalDims, SearchModalFrame, TextLine } from "../primitives.js"
 import type { ChangedFileSearchResult } from "./shared.js"
 import type { ChangedFilesModalState } from "./types.js"
@@ -12,6 +13,7 @@ export const ChangedFilesModal = ({
 	modalHeight,
 	offsetLeft,
 	offsetTop,
+	threadCounts,
 }: {
 	state: ChangedFilesModalState
 	results: readonly ChangedFileSearchResult[]
@@ -20,6 +22,8 @@ export const ChangedFilesModal = ({
 	modalHeight: number
 	offsetLeft: number
 	offsetTop: number
+	// Review threads per path, for the ◆ badge.
+	threadCounts?: ReadonlyMap<string, number>
 }) => {
 	const { bodyHeight: maxVisible, rowWidth } = searchModalDims(modalWidth, modalHeight)
 	const filtered = results
@@ -63,7 +67,9 @@ export const ChangedFilesModal = ({
 					const isSelected = actualIndex === selectedIndex
 					const stats = diffFileStatsText(diffFileStats(entry.file)) || "0"
 					const statsWidth = Math.min(10, Math.max(3, stats.length))
-					const nameWidth = Math.max(1, rowWidth - statsWidth)
+					const badge = diffCommentBadge(threadCounts?.get(entry.file.name) ?? 0)
+					const badgeWidth = badge ? badge.length + 1 : 0
+					const nameWidth = Math.max(1, rowWidth - statsWidth - badgeWidth)
 					return (
 						<TextLine
 							key={`${entry.index}:${entry.file.name}`}
@@ -72,6 +78,7 @@ export const ChangedFilesModal = ({
 							fg={isSelected ? colors.selectedText : colors.text}
 						>
 							<MatchedCell text={entry.file.name} width={nameWidth} query={state.query} matchIndexes={entry.matchIndexes} />
+							{badge ? <span fg={isSelected ? colors.selectedText : colors.accent}>{fitCell(badge, badgeWidth, "left")}</span> : null}
 							<span fg={colors.muted}>{fitCell(stats, statsWidth, "right")}</span>
 						</TextLine>
 					)

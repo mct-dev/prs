@@ -1,7 +1,9 @@
 import { TextAttributes } from "@opentui/core"
 import { formatRelativeDate } from "../date.js"
 import type { DiffCommentSide } from "../domain.js"
+import { isSafeUrl } from "../safeUrl.js"
 import { colors } from "./colors.js"
+import { stripControls } from "./markdown/html.js"
 import { fitCell, TextLine } from "./primitives.js"
 
 export interface CommentSegment {
@@ -9,6 +11,8 @@ export interface CommentSegment {
 	readonly fg: string
 	readonly bold?: boolean
 	readonly underline?: boolean
+	readonly italic?: boolean
+	readonly strike?: boolean
 	readonly url?: string
 }
 
@@ -29,7 +33,7 @@ export const commentCountText = (count: number) => (count === 1 ? "1 comment" : 
 
 export const commentSideColor = (side: DiffCommentSide | null | undefined) => (side === "LEFT" ? colors.status.failing : side === "RIGHT" ? colors.status.passing : colors.count)
 
-const commentTimestamp = (date: Date | null) => {
+export const commentTimestamp = (date: Date | null) => {
 	if (!date) return ""
 	const ageMs = Date.now() - date.getTime()
 	const minuteMs = 60_000
@@ -113,7 +117,7 @@ export const COMMENT_BODY_INDENT = "  "
 const COMMENT_QUOTE_PREFIX = `${COMMENT_BODY_INDENT}▎ `
 
 export const commentBodyRows = ({ keyPrefix, body, width }: { readonly keyPrefix: string; readonly body: string; readonly width: number }): readonly CommentDisplayLine[] =>
-	wrapCommentText(body, Math.max(1, width - COMMENT_BODY_INDENT.length)).map((line, index) => ({
+	wrapCommentText(stripControls(body), Math.max(1, width - COMMENT_BODY_INDENT.length)).map((line, index) => ({
 		key: `${keyPrefix}:body:${index}`,
 		segments: line.quote
 			? [{ text: COMMENT_QUOTE_PREFIX, fg: colors.separator }, ...inlineCommentSegments(line.text, colors.muted)]
@@ -141,7 +145,7 @@ export const commentDisplayRows = ({
 const QUOTE_BODY_LIMIT = 480
 
 export const quotedReplyBody = (author: string, body: string): string => {
-	const trimmed = body.trim().slice(0, QUOTE_BODY_LIMIT)
+	const trimmed = stripControls(body).trim().slice(0, QUOTE_BODY_LIMIT)
 	const quoted =
 		trimmed.length > 0
 			? trimmed
@@ -181,11 +185,15 @@ export const CommentSegments = ({
 }) => (
 	<>
 		{segments.map((segment, index) => {
-			const attributes = (segment.bold || selected ? TextAttributes.BOLD : 0) | (segment.underline ? TextAttributes.UNDERLINE : 0)
+			const attributes =
+				(segment.bold || selected ? TextAttributes.BOLD : 0) |
+				(segment.underline ? TextAttributes.UNDERLINE : 0) |
+				(segment.italic ? TextAttributes.ITALIC : 0) |
+				(segment.strike ? TextAttributes.STRIKETHROUGH : 0)
 			const isHovered = segment.url !== undefined && segment.url === hoveredUrl
 			const fg = selected ? colors.accent : isHovered ? colors.accent : segment.fg
 			return (
-				<span key={index} fg={fg} {...(attributes !== 0 ? { attributes } : {})} {...(segment.url !== undefined ? { link: { url: segment.url } } : {})}>
+				<span key={index} fg={fg} {...(attributes !== 0 ? { attributes } : {})} {...(segment.url !== undefined && isSafeUrl(segment.url) ? { link: { url: segment.url } } : {})}>
 					{segment.text}
 				</span>
 			)
