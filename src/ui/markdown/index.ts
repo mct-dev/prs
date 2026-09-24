@@ -2,7 +2,7 @@ import { colors } from "../colors.js"
 import type { CommentSegment } from "../comments.js"
 import type { MarkdownLine, MarkdownRole, MarkdownSpan } from "./types.js"
 
-export { renderMarkdown, renderMarkdownUncached, markdownPlainText, shortenUrl, DETAILS_AUTO_OPEN_MAX_LINES } from "./render.js"
+export { renderMarkdown, renderMarkdownUncached, markdownPlainText, shortenUrl, isSectionBreak, DETAILS_AUTO_OPEN_MAX_LINES, MARKDOWN_MAX_CHARS } from "./render.js"
 export { textWidth, wrapSpans, breakByWidth } from "./wrap.js"
 export type { MarkdownLine, MarkdownLink, MarkdownOptions, MarkdownRender, MarkdownRole, MarkdownSpan } from "./types.js"
 
@@ -38,7 +38,18 @@ export const markdownRoleColor = (role: MarkdownRole): string => {
 		case "diffHunk":
 			return colors.status.review
 		case "image":
+		case "issueRef":
 			return colors.count
+		case "alertNote":
+			return colors.link
+		case "alertTip":
+			return colors.status.passing
+		case "alertImportant":
+			return colors.accent
+		case "alertWarning":
+			return colors.status.review
+		case "alertCaution":
+			return colors.status.failing
 	}
 }
 
@@ -48,7 +59,7 @@ export const markdownSpanSegment = (span: MarkdownSpan, dim = false): CommentSeg
 	...(span.bold ? { bold: true } : {}),
 	...(span.italic ? { italic: true } : {}),
 	...(span.strike ? { strike: true } : {}),
-	...(span.url !== undefined ? { url: span.url, underline: span.role === "link" } : {}),
+	...(span.url !== undefined ? { url: span.url, underline: span.role === "link" || span.role === "issueRef" } : {}),
 })
 
 export const markdownLineSegments = (line: MarkdownLine, dim = false): readonly CommentSegment[] => line.spans.map((span) => markdownSpanSegment(span, dim))

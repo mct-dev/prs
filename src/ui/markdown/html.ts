@@ -88,10 +88,28 @@ const extractDetails = (text: string, fences: readonly string[]): BodyChunk[] =>
 	return chunks
 }
 
+// `<picture>` (dark/light badge variants) collapses to its `<img>`, and a
+// link wrapping only an image is joined onto one line so it stays inline
+// instead of splitting into an HTML block with indented (code) lines.
+export const collapsePictures = (text: string) =>
+	text
+		.replace(/<picture\b[^>]*>([\s\S]*?)<\/picture>/gi, (_, inner: string) => {
+			const img = /<img\b[^>]*>/i.exec(inner)?.[0]
+			if (img) return img
+			const source = /<source\b[^>]*>/i.exec(inner)?.[0]
+			const src = source
+				? attribute(source, "srcset")
+						?.trim()
+						.split(/[\s,]+/)[0]
+				: undefined
+			return src ? `<img src="${src.replace(/"/g, "&quot;")}">` : ""
+		})
+		.replace(/(<a\b[^>]*>)\s*(<img\b[^>]*>)\s*(<\/a>)/gi, "$1$2$3")
+
 export const splitBody = (body: string): readonly BodyChunk[] => {
 	const normalized = body.replace(/\r\n?/g, "\n")
 	const { text, fences } = protectFences(normalized)
-	return extractDetails(stripHtmlComments(text), fences)
+	return extractDetails(collapsePictures(stripHtmlComments(text)), fences)
 }
 
 const NAMED_ENTITIES: Record<string, string> = {
@@ -207,6 +225,51 @@ const imageToMarkdown = (tag: string) => {
 	return src.length > 0 ? `![${alt}](${linkDestination(src)})` : alt
 }
 
+const SUPERSCRIPTS: Record<string, string> = {
+	"0": "⁰",
+	"1": "¹",
+	"2": "²",
+	"3": "³",
+	"4": "⁴",
+	"5": "⁵",
+	"6": "⁶",
+	"7": "⁷",
+	"8": "⁸",
+	"9": "⁹",
+	"+": "⁺",
+	"-": "⁻",
+	"=": "⁼",
+	"(": "⁽",
+	")": "⁾",
+}
+const SUBSCRIPTS: Record<string, string> = {
+	"0": "₀",
+	"1": "₁",
+	"2": "₂",
+	"3": "₃",
+	"4": "₄",
+	"5": "₅",
+	"6": "₆",
+	"7": "₇",
+	"8": "₈",
+	"9": "₉",
+	"+": "₊",
+	"-": "₋",
+	"=": "₌",
+	"(": "₍",
+	")": "₎",
+}
+
+// `<sup>`/`<sub>` text: Unicode super/subscripts when every character has
+// one (footnote digits), otherwise a `^`/`_` prefix when the text is glued
+// onto the previous word, otherwise plain text (a whole `<sup>` line).
+export const scriptText = (kind: "sup" | "sub", text: string, glued: boolean): string => {
+	const map = kind === "sup" ? SUPERSCRIPTS : SUBSCRIPTS
+	const chars = [...text]
+	if (chars.length > 0 && chars.every((char) => map[char] !== undefined)) return chars.map((char) => map[char]!).join("")
+	return glued && text.length > 0 ? `${kind === "sup" ? "^" : "_"}${text}` : text
+}
+
 // Convert a block of GitHub-flavored HTML into markdown. Anything outside the
 // supported subset is dropped down to its text content.
 export const htmlToMarkdown = (html: string): string => {
@@ -221,11 +284,19 @@ export const htmlToMarkdown = (html: string): string => {
 	text = text.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_, level: string, inner: string) => `\n\n${"#".repeat(Number(level))} ${inner.replace(/\s+/g, " ").trim()}\n\n`)
 	text = text.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_, attrs: string, inner: string) => {
 		const href = attribute(attrs, "href")
-		const label = inner.replace(/<img\b[^>]*>/gi, imageToMarkdown).trim()
+		const label = inner
+			.replace(/<img\b[^>]*>/gi, imageToMarkdown)
+			.replace(/<\/?(?:picture|source)\b[^>]*>/gi, "")
+			.replace(/\s+/g, " ")
+			.trim()
 		if (!href) return label
 		return `[${label.length > 0 ? label : href}](${linkDestination(href)})`
 	})
 	text = text.replace(/<img\b[^>]*>/gi, imageToMarkdown)
+	text = text.replace(
+		/(\S?)<(sup|sub)\b[^>]*>([^<]*)<\/\2>/gi,
+		(_, before: string, tag: string, inner: string) => `${before}${scriptText(tag.toLowerCase() as "sup" | "sub", inner, before.length > 0)}`,
+	)
 	text = text.replace(/<br\s*\/?>/gi, "  \n")
 	text = text.replace(/<hr\s*\/?>/gi, "\n\n---\n\n")
 	text = text.replace(/<\/?(?:p|div|ul|ol|section|center|blockquote)\b[^>]*>/gi, "\n\n")

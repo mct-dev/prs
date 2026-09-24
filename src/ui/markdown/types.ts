@@ -19,6 +19,12 @@ export type MarkdownRole =
 	| "summary"
 	| "taskDone"
 	| "taskOpen"
+	| "issueRef"
+	| "alertNote"
+	| "alertTip"
+	| "alertImportant"
+	| "alertWarning"
+	| "alertCaution"
 
 export interface MarkdownSpan {
 	readonly text: string
@@ -47,10 +53,23 @@ export interface MarkdownRender {
 	// Number of `<details>` blocks and how many are currently folded.
 	readonly detailsCount: number
 	readonly collapsedDetails: number
+	// Set when the renderer did not render markdown: "empty" for a body with
+	// no visible content, "plain" when a budget guard fell back to raw text.
+	readonly fallback?: "empty" | "plain"
 }
 
 export interface MarkdownOptions {
 	readonly width: number
 	// undefined = auto (short or `open` blocks expanded, long ones folded).
 	readonly detailsOpen?: boolean | undefined
+	// Tables wider than `width`: "auto" (default) falls back to one
+	// "header: value" line per cell; "wrap" keeps columns and wraps cells;
+	// "truncate" keeps columns and clips each cell to one line.
+	readonly tableMode?: "auto" | "wrap" | "truncate" | undefined
+	// When set, `#123` references link to that repository's issue/PR.
+	readonly issueReferenceRepository?: string | null | undefined
+	// Inline `[n]` markers pointing at the link list. Off where no list is shown.
+	readonly linkIndexes?: boolean | undefined
+	// Treat a paragraph that is only `**Bold**` as a heading (PR templates).
+	readonly boldHeadings?: boolean | undefined
 }

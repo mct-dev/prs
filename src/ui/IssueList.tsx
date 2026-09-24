@@ -199,7 +199,7 @@ export const getIssueDetailContentHeight = (issue: IssueItem | null, width: numb
 	const titleLines = wrapText(issue.title, Math.max(1, contentWidth)).length
 	const labelRows = labelChipRows(issue.labels, contentWidth).length
 	const resolvedBodyLineLimit = bodyLineLimit ?? Math.max(1, height - titleLines - labelRows - 2)
-	const bodyLines = bodyPreview(issue.body, contentWidth, resolvedBodyLineLimit, { tableMode: "truncate" }).length
+	const bodyLines = bodyPreview(issue.body, contentWidth, resolvedBodyLineLimit, { tableMode: "truncate", issueReferenceRepository: issue.repository }).length
 	return titleLines + 1 + labelRows + 1 + bodyLines
 }
 

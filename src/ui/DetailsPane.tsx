@@ -9,14 +9,13 @@ import { colors, type ThemeId } from "./colors.js"
 import { commentCountText, CommentSegmentsLine, type CommentSegment } from "./comments.js"
 import { diffStatText } from "./diff.js"
 import { DiffStats } from "./diffStats.js"
-import { collectUrlPositions, findUrlAt, inlineSegments, type InlinePalette } from "./inlineSegments.js"
+import { collectUrlPositions, findUrlAt } from "./inlineSegments.js"
 import { LabelChips, labelChipRows } from "./LabelChips.js"
 import { centerCell, Divider, Filler, fitCell, PaddedRow, PlainLine, TextLine, trimCell } from "./primitives.js"
 import { type ReviewerRow, reviewerRows as computeReviewerRows } from "./reviewerRows.js"
 import { SubjectMetaLine } from "./SubjectMetaLine.js"
 import { stripControls } from "./markdown/html.js"
-
-const inlinePalette = (): InlinePalette => ({ text: colors.text, inlineCode: colors.inlineCode, link: colors.link, count: colors.count })
+import { isSectionBreak, MARKDOWN_MAX_CHARS, markdownLineSegments, renderMarkdown, type MarkdownLine } from "./markdown/index.js"
 
 // Pixel-column conversion accounts for the body box's paddingLeft={1}.
 const BODY_PADDING_LEFT = 1
@@ -36,11 +35,6 @@ export const DETAIL_BODY_SCROLL_LIMIT = 1_000
 
 export type DetailCommentsStatus = "idle" | "loading" | "ready" | "error"
 
-const codeFencePattern = /^```\s*([a-zA-Z0-9_-]+)?/
-const codeTokenPattern =
-	/(\/\/.*|`(?:\\.|[^`])*`|"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\b(?:async|await|break|case|catch|class|const|continue|default|else|export|extends|finally|for|from|function|if|import|interface|let|new|return|switch|throw|try|type|var|while|yield)\b|\b(?:true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g
-const codeFenceLine = (line: string) => line.trim().replace(/\\`/g, "`").match(codeFencePattern)
-
 export const wrapText = (text: string, width: number): string[] => {
 	if (text.length === 0 || width <= 0) return [""]
 	const words = text.split(/\s+/)
@@ -59,251 +53,64 @@ export const wrapText = (text: string, width: number): string[] => {
 	return lines.length > 0 ? lines : [""]
 }
 
-const parseInlineSegments = (text: string, fg: string, bold = false, repository?: string | null): readonly CommentSegment[] =>
-	inlineSegments(text, fg, bold, inlinePalette(), { issueReferenceRepository: repository })
-
-const parseCodeSegments = (text: string): PreviewLine["segments"] => {
-	const segments: Array<PreviewLine["segments"][number]> = []
-	let index = 0
-	for (const match of text.matchAll(codeTokenPattern)) {
-		const start = match.index ?? 0
-		if (start > index) segments.push({ text: text.slice(index, start), fg: colors.text })
-		const token = match[0]
-		const fg = token.startsWith("//")
-			? colors.muted
-			: token.startsWith("`") || token.startsWith('"') || token.startsWith("'")
-				? colors.inlineCode
-				: /^\d/.test(token)
-					? colors.status.review
-					: token === "true" || token === "false" || token === "null" || token === "undefined"
-						? colors.status.review
-						: colors.accent
-		segments.push({ text: token, fg, bold: fg === colors.accent })
-		index = start + token.length
-	}
-	if (index < text.length) segments.push({ text: text.slice(index), fg: colors.text })
-	return segments.length > 0 ? segments : [{ text: "", fg: colors.muted }]
-}
-
-const wrapPreviewSegments = (segments: PreviewLine["segments"], width: number, indent = ""): Array<PreviewLine> => {
-	const tokens = segments.flatMap((segment) =>
-		segment.text
-			.split(/(\s+)/)
-			.filter((token) => token.length > 0)
-			.map((token) => ({ ...segment, text: token })),
-	)
-
-	const lines: Array<PreviewLine> = []
-	let current: Array<PreviewLine["segments"][number]> = []
-	let currentLength = 0
-
-	const pushLine = () => {
-		lines.push({ segments: current.length > 0 ? current : [{ text: "", fg: colors.muted }] })
-		current = indent.length > 0 ? [{ text: indent, fg: colors.muted }] : []
-		currentLength = indent.length
-	}
-
-	for (const token of tokens) {
-		const tokenLength = token.text.length
-		if (currentLength > 0 && currentLength + tokenLength > width) {
-			pushLine()
-		}
-		current.push(token)
-		currentLength += tokenLength
-	}
-
-	if (current.length > 0) {
-		lines.push({ segments: current })
-	}
-
-	return lines
-}
-
-const TABLE_SEPARATOR_CELL = /^:?-{3,}:?$/
-
-const splitTableCells = (line: string): readonly string[] | null => {
-	let text = line.trim()
-	if (!text.includes("|")) return null
-	if (text.startsWith("|")) text = text.slice(1)
-	if (text.endsWith("|")) text = text.slice(0, -1)
-	const cells = text.split("|").map((cell) => cell.trim())
-	return cells.length >= 2 ? cells : null
-}
-
-const isSeparatorCells = (cells: readonly string[] | null, columnCount: number) =>
-	cells !== null && cells.length === columnCount && cells.every((cell) => TABLE_SEPARATOR_CELL.test(cell))
-
-const markdownTableAt = (lines: readonly string[], index: number) => {
-	const headerLine = lines[index] ?? ""
-	if (!headerLine.includes("|")) return null
-	const header = splitTableCells(headerLine)
-	if (!header) return null
-	const separatorCells = splitTableCells(lines[index + 1] ?? "")
-	if (!isSeparatorCells(separatorCells, header.length)) return null
-	const rows: string[][] = [Array.from(header)]
-	let cursor = index + 2
-	while (cursor < lines.length) {
-		const cells = splitTableCells(lines[cursor] ?? "")
-		if (!cells || isSeparatorCells(cells, header.length)) break
-		const padded = cells.length === header.length ? cells.slice() : Array.from({ length: header.length }, (_, cellIndex) => cells[cellIndex] ?? "")
-		rows.push(padded)
-		cursor += 1
-	}
-	return { rows, nextIndex: cursor }
-}
-
-const segmentWidth = (segments: readonly CommentSegment[]) => segments.reduce((width, segment) => width + segment.text.length, 0)
-
-const BLANK_PREVIEW_LINE: PreviewLine = { segments: [{ text: "", fg: colors.muted }] }
-
-const padSegments = (segments: readonly CommentSegment[], width: number): readonly CommentSegment[] => {
-	const padding = Math.max(0, width - segmentWidth(segments))
-	return padding > 0 ? [...segments, { text: " ".repeat(padding), fg: colors.muted }] : segments
-}
-
-const tableColumnWidths = (rows: readonly (readonly string[])[], width: number) => {
-	const columns = rows[0]?.length ?? 0
-	const separatorWidth = Math.max(0, columns - 1) * 3
-	const available = Math.max(columns, width - separatorWidth)
-	const base = Math.max(1, Math.floor(available / columns))
-	let remainder = Math.max(0, available - base * columns)
-	return Array.from({ length: columns }, () => {
-		const extra = remainder > 0 ? 1 : 0
-		remainder -= extra
-		return base + extra
-	})
-}
-
-const tableDivider = (columnWidths: readonly number[]): PreviewLine => ({
-	segments: columnWidths.flatMap((columnWidth, index) => [
-		...(index === 0 ? [] : [{ text: "─┼─", fg: colors.separator }]),
-		{ text: "─".repeat(columnWidth), fg: colors.separator },
-	]),
-})
-
 type TableRenderMode = "wrap" | "truncate"
 
-const tableRows = (rows: readonly (readonly string[])[], width: number, mode: TableRenderMode, repository?: string | null): Array<PreviewLine> => {
-	const columnWidths = tableColumnWidths(rows, width)
-	const output: Array<PreviewLine> = []
-	rows.forEach((row, rowIndex) => {
-		const isHeader = rowIndex === 0
-		if (mode === "truncate") {
-			output.push({
-				segments: row.flatMap((cell, cellIndex) => [
-					...(cellIndex === 0 ? [] : [{ text: " │ ", fg: colors.separator }]),
-					{ text: fitCell(cell, columnWidths[cellIndex] ?? 1), fg: isHeader ? colors.count : colors.text, bold: isHeader },
-				]),
-			})
-			if (isHeader) output.push(tableDivider(columnWidths))
-			return
-		}
-		const wrappedCells = row.map((cell, cellIndex) =>
-			wrapPreviewSegments(parseInlineSegments(cell, isHeader ? colors.count : colors.text, isHeader, repository), Math.max(1, columnWidths[cellIndex] ?? 1)),
-		)
-		const rowHeight = Math.max(1, ...wrappedCells.map((cell) => cell.length))
-		for (let lineIndex = 0; lineIndex < rowHeight; lineIndex++) {
-			output.push({
-				segments: wrappedCells.flatMap((cell, cellIndex) => [
-					...(cellIndex === 0 ? [] : [{ text: " │ ", fg: colors.separator }]),
-					...padSegments(cell[lineIndex]?.segments ?? [], columnWidths[cellIndex] ?? 1),
-				]),
-			})
-		}
-		if (isHeader) output.push(tableDivider(columnWidths))
-	})
-	return output
+const BLANK_LINE: PreviewLine = { segments: [{ text: "", fg: colors.muted }] }
+const NO_DESCRIPTION: PreviewLine = { segments: [{ text: "No description.", fg: colors.muted }] }
+
+// Previews up to this many rows drop the blank lines between blocks (except
+// before headings, rules and tables) so the collapsed pane shows content.
+export const COMPACT_PREVIEW_MAX_LINES = 12
+export const DESCRIPTION_TRUNCATED_NOTE = "… description truncated"
+export const DESCRIPTION_PLAIN_TEXT_NOTE = "(description too complex to format, shown as plain text)"
+const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/
+
+// Past the renderer's size budget a body would fall back to raw text. The
+// pane never shows that much, so render the head instead: cut at the last
+// blank line under the budget and close a code fence the cut left open.
+export const clipDescription = (body: string, max = MARKDOWN_MAX_CHARS): string => {
+	if (body.length <= max) return body
+	const note = `\n\n*${DESCRIPTION_TRUNCATED_NOTE}*`
+	const head = body.slice(0, max - note.length - 8)
+	const cut = head.lastIndexOf("\n\n")
+	const clipped = cut > 0 ? head.slice(0, cut) : head
+	let open: string | null = null
+	for (const line of clipped.split("\n")) {
+		const marker = FENCE.exec(line)?.[1]
+		if (marker === undefined) continue
+		if (open === null) open = marker
+		else if (marker[0] === open[0] && marker.length >= open.length && line.trim() === marker) open = null
+	}
+	return `${clipped}${open !== null ? `\n${open}` : ""}${note}`
 }
 
+const isEmptyLine = (line: MarkdownLine) => line.spans.length === 0 || (line.spans.length === 1 && line.spans[0]!.role === "frame" && /^─+$/.test(line.spans[0]!.text))
+
+// PR and issue bodies go through the same markdown renderer as comments (and
+// its safety guards). The pane has no footnote list or details toggle, so
+// link indexes are hidden and `<details>` blocks are always expanded.
 export const bodyPreview = (
 	body: string,
 	width: number,
 	limit = DETAIL_BODY_LINES,
 	options: { readonly tableMode?: TableRenderMode; readonly issueReferenceRepository?: string | null } = {},
 ): Array<PreviewLine> => {
-	const sourceLines = stripControls(body.replace(/\r/g, "")).split("\n")
-	const preview: Array<PreviewLine> = []
-	let inCodeBlock = false
-	const tableMode = options.tableMode ?? "wrap"
-	const repository = options.issueReferenceRepository ?? null
-
-	for (let index = 0; index < sourceLines.length; index++) {
-		if (preview.length >= limit) break
-		const rawLine = sourceLines[index] ?? ""
-
-		const fence = codeFenceLine(rawLine)
-		if (fence) {
-			inCodeBlock = !inCodeBlock
-			continue
-		}
-
-		const line = inCodeBlock ? rawLine.replace(/\t/g, "  ") : rawLine.trim()
-		if (line.length === 0) continue
-
-		if (!inCodeBlock && rawLine.includes("|")) {
-			const table = markdownTableAt(sourceLines, index)
-			if (table) {
-				const previousIsBlank = segmentWidth(preview.at(-1)?.segments ?? []) === 0
-				if (preview.length > 0 && !previousIsBlank && preview.length < limit) {
-					preview.push(BLANK_PREVIEW_LINE)
-				}
-				if (preview.length >= limit) break
-				preview.push(...tableRows(table.rows, Math.max(16, width), tableMode, repository).slice(0, limit - preview.length))
-				if (preview.length < limit) {
-					preview.push(BLANK_PREVIEW_LINE)
-				}
-				index = table.nextIndex - 1
-				continue
-			}
-		}
-
-		let text = line
-		let fg: string = colors.text
-		let bold = false
-		let indent = ""
-
-		if (!inCodeBlock && /^#{1,6}\s+/.test(line)) {
-			if (preview.length > 0) {
-				preview.push(BLANK_PREVIEW_LINE)
-				if (preview.length >= limit) break
-			}
-			text = line.replace(/^#{1,6}\s+/, "")
-			fg = colors.count
-			bold = true
-		} else if (!inCodeBlock && /^[-*+]\s+\[(x|X| )\]\s+/.test(line)) {
-			const checked = /^[-*+]\s+\[(x|X)\]\s+/.test(line)
-			text = `${checked ? "☑" : "☐"} ${line.replace(/^[-*+]\s+\[(x|X| )\]\s+/, "")}`
-			fg = checked ? colors.status.passing : colors.text
-			indent = "  "
-		} else if (!inCodeBlock && /^\[(x|X| )\]\s+/.test(line)) {
-			const checked = /^\[(x|X)\]\s+/.test(line)
-			text = `${checked ? "☑" : "☐"} ${line.replace(/^\[(x|X| )\]\s+/, "")}`
-			fg = checked ? colors.status.passing : colors.text
-			indent = "  "
-		} else if (!inCodeBlock && /^[-*+]\s+/.test(line)) {
-			text = `• ${line.replace(/^[-*+]\s+/, "")}`
-			indent = "  "
-		} else if (!inCodeBlock && /^\d+\.\s+/.test(line)) {
-			text = line
-			indent = "   "
-		} else if (!inCodeBlock && /^>\s+/.test(line)) {
-			text = `> ${line.replace(/^>\s+/, "")}`
-			fg = colors.muted
-			indent = "  "
-		}
-
-		const wrapped = wrapPreviewSegments(inCodeBlock ? parseCodeSegments(text) : parseInlineSegments(text, fg, bold, repository), Math.max(16, width), indent)
-		for (const wrappedLine of wrapped) {
-			preview.push(wrappedLine)
-			if (preview.length >= limit) break
-		}
-	}
-
-	if (preview.length === 0) {
-		return [{ segments: [{ text: "No description.", fg: colors.muted }] }]
-	}
-
-	return preview.slice(0, limit)
+	if (stripControls(body).trim().length === 0) return [NO_DESCRIPTION]
+	const rendered = renderMarkdown(clipDescription(body), {
+		width: Math.max(16, width),
+		detailsOpen: true,
+		tableMode: options.tableMode ?? "wrap",
+		issueReferenceRepository: options.issueReferenceRepository ?? null,
+		linkIndexes: false,
+		boldHeadings: true,
+	})
+	// Bodies that are only HTML comments, rules or whitespace-like markup.
+	if (rendered.fallback === "empty" || rendered.lines.every(isEmptyLine)) return [NO_DESCRIPTION]
+	const all = rendered.fallback === "plain" ? [{ spans: [{ text: DESCRIPTION_PLAIN_TEXT_NOTE, role: "muted" as const }] }, ...rendered.lines.slice(1)] : rendered.lines
+	const compact = limit <= COMPACT_PREVIEW_MAX_LINES ? all.filter((line) => line.spans.length > 0 || isSectionBreak(line)) : all
+	const lines = compact.slice(0, Math.max(1, limit))
+	while (lines.length > 1 && lines.at(-1)!.spans.length === 0) lines.pop()
+	return lines.map((line) => (line.spans.length === 0 ? BLANK_LINE : { segments: markdownLineSegments(line) }))
 }
 
 const truncateFromStart = (text: string, width: number) => {
@@ -594,7 +401,7 @@ export const getDetailHeaderHeight = (
 export const getDetailBodyHeight = (pullRequest: PullRequestItem | null, contentWidth: number, bodyLines = DETAIL_BODY_LINES) => {
 	if (!pullRequest) return bodyLines
 	if (!pullRequest.detailLoaded) return bodyLines
-	return bodyPreview(pullRequest.body, contentWidth, bodyLines).length
+	return bodyPreview(pullRequest.body, contentWidth, bodyLines, { issueReferenceRepository: pullRequest.repository }).length
 }
 
 export const getScrollableDetailBodyHeight = (pullRequest: PullRequestItem | null, contentWidth: number) => {

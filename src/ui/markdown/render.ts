@@ -1,5 +1,6 @@
-import { Lexer, type Token, type Tokens } from "marked"
-import { decodeEntities, hasControls, htmlToMarkdown, stripControls, replaceEmojiShortcodes, splitBody, attribute, type BodyChunk } from "./html.js"
+import { Lexer, type Links, type Token, type Tokens } from "marked"
+import { decodeEntities, hasControls, htmlToMarkdown, stripControls, replaceEmojiShortcodes, scriptText, splitBody, attribute, type BodyChunk } from "./html.js"
+import { issueReferenceUrl } from "../inlineSegments.js"
 import type { MarkdownLine, MarkdownLink, MarkdownOptions, MarkdownRender, MarkdownRole, MarkdownSpan } from "./types.js"
 import { breakByWidth, mergeSpans, spansWidth, textWidth, wrapSpans } from "./wrap.js"
 
@@ -18,6 +19,7 @@ const MAX_MARKERS_PER_PARAGRAPH = 400
 // paragraphs, so many near-budget paragraphs cannot add up to a stall.
 const INLINE_TIME_BUDGET_MS = 60
 export const PLAIN_TEXT_NOTE = "(large comment, shown as plain text)"
+export const EMPTY_COMMENT_NOTE = "(empty comment)"
 const BULLETS = ["•", "◦", "▪"] as const
 
 interface RenderContext {
@@ -28,6 +30,13 @@ interface RenderContext {
 	htmlDepth: number
 	quoteDepth: number
 	readonly deadline: number
+	readonly tableMode: "auto" | "wrap" | "truncate"
+	readonly issueReferenceRepository: string | null
+	readonly linkIndexes: boolean
+	readonly boldHeadings: boolean
+	// Reference definitions (`[x]: url`) seen so far, shared by every nested
+	// lex so `[label][x]` resolves inside alerts and HTML blocks too.
+	readonly refLinks: Links
 }
 
 interface InlineStyle {
@@ -78,6 +87,27 @@ const plainText = (tokens: readonly Token[] | undefined): string =>
 
 const textContent = (text: string) => replaceEmojiShortcodes(decodeEntities(text))
 
+// `#123` issue/PR references in plain text. The lookbehind keeps URL
+// fragments (`/#12`), words (`abc#12`) and `##12` from matching.
+const ISSUE_REFERENCE = /(?<![\w#&/])#(\d+)(?!\w)/g
+
+const textSpans = (text: string, style: InlineStyle, context: RenderContext): MarkdownSpan[] => {
+	// Without a repository a reference could not be clicked, so it is not styled as one.
+	const repository = context.issueReferenceRepository
+	if (repository === null || style.role === "code" || style.url !== undefined || !text.includes("#")) return [span(text, style)]
+	const out: MarkdownSpan[] = []
+	let cursor = 0
+	for (const match of text.matchAll(ISSUE_REFERENCE)) {
+		if (match.index > cursor) out.push(span(text.slice(cursor, match.index), style))
+		out.push(span(match[0], { ...style, role: "issueRef", url: issueReferenceUrl(repository, Number(match[1])) }))
+		cursor = match.index + match[0].length
+	}
+	if (cursor < text.length) out.push(span(text.slice(cursor), style))
+	return out
+}
+
+const linkIndex = (context: RenderContext, index: number): MarkdownSpan[] => (context.linkIndexes ? [span(`[${index}]`, { role: "linkIndex" })] : [])
+
 // Inline HTML (`<b>`, `<br>`, `<a>`, `<img>`, ...) arrives as separate open
 // and close tag tokens, so style is tracked on a small mutable stack.
 interface HtmlInlineState {
@@ -86,13 +116,15 @@ interface HtmlInlineState {
 	strike: number
 	code: number
 	url: string | null
+	// Open `<sup>`/`<sub>`: where its text starts in `out`.
+	script: { readonly kind: "sup" | "sub"; readonly start: number; readonly out: MarkdownSpan[]; readonly glued: boolean } | null
 }
 
 const inlineSpans = (
 	tokens: readonly Token[] | undefined,
 	style: InlineStyle,
 	context: RenderContext,
-	html: HtmlInlineState = { bold: 0, italic: 0, strike: 0, code: 0, url: null },
+	html: HtmlInlineState = { bold: 0, italic: 0, strike: 0, code: 0, url: null, script: null },
 ): MarkdownSpan[] => {
 	const out: MarkdownSpan[] = []
 	const current = (): InlineStyle => ({
@@ -102,14 +134,21 @@ const inlineSpans = (
 		strike: style.strike || html.strike > 0,
 		...(html.url !== null ? { url: html.url } : style.url !== undefined ? { url: style.url } : {}),
 	})
+	const imageLabel = (alt: string) => `▣ image${alt.length > 0 ? `: ${alt}` : ""}`
 	const pushImage = (alt: string, rawUrl: string) => {
+		// An image inside a link (badges: `<a><picture><img></picture></a>`)
+		// collapses to one placeholder pointing at the link, not the image.
+		if (html.url !== null) {
+			out.push(span(imageLabel(alt), { role: "image", url: html.url }))
+			return
+		}
 		const url = cleanUrl(rawUrl)
 		if (url === null) {
-			out.push(span(`▣ image${alt.length > 0 ? `: ${alt}` : ""}`, { role: "image" }))
+			out.push(span(imageLabel(alt), { role: "image" }))
 			return
 		}
 		const index = registerLink(context, url, alt.length > 0 ? alt : "image", "image")
-		out.push(span(`▣ image${alt.length > 0 ? `: ${alt}` : ""}`, { role: "image", url }), span(`[${index}]`, { role: "linkIndex" }))
+		out.push(span(imageLabel(alt), { role: "image", url }), ...linkIndex(context, index))
 	}
 	for (const token of tokens ?? []) {
 		switch (token.type) {
@@ -117,7 +156,8 @@ const inlineSpans = (
 			case "escape": {
 				const text = token as Tokens.Text
 				if (text.tokens && text.tokens.length > 0) out.push(...inlineSpans(text.tokens, current(), context, html))
-				else out.push(span(token.type === "escape" ? text.text : textContent(text.text), current()))
+				else if (token.type === "escape") out.push(span(text.text, current()))
+				else out.push(...textSpans(textContent(text.text), current(), context))
 				break
 			}
 			case "strong":
@@ -139,12 +179,17 @@ const inlineSpans = (
 				const link = token as Tokens.Link
 				const label = plainText(link.tokens)
 				const onlyImage = link.tokens.length === 1 && link.tokens[0]!.type === "image"
+				const href = cleanUrl(link.href)
 				if (onlyImage) {
 					const image = link.tokens[0] as Tokens.Image
-					pushImage(image.text, image.href)
+					if (href === null) pushImage(image.text, image.href)
+					else
+						out.push(
+							span(imageLabel(image.text), { role: "image", url: href }),
+							...linkIndex(context, registerLink(context, href, image.text.length > 0 ? image.text : href, "link")),
+						)
 					break
 				}
-				const href = cleanUrl(link.href)
 				if (href === null) {
 					out.push(...inlineSpans(link.tokens, current(), context, html))
 					break
@@ -153,7 +198,7 @@ const inlineSpans = (
 				const index = registerLink(context, href, isBare ? shortenUrl(href) : label, "link")
 				if (isBare) out.push(span(shortenUrl(href), { ...current(), role: "link", url: href }))
 				else out.push(...inlineSpans(link.tokens, { ...current(), role: "link", url: href }, context, html))
-				out.push(span(`[${index}]`, { role: "linkIndex" }))
+				out.push(...linkIndex(context, index))
 				break
 			}
 			case "image": {
@@ -172,9 +217,24 @@ const inlineSpans = (
 				else if (name === "s" || name === "del" || name === "strike") html.strike = Math.max(0, html.strike + delta)
 				else if (name === "code" || name === "kbd") html.code = Math.max(0, html.code + delta)
 				else if (name === "br") out.push(span("\n", current()))
-				else if (name === "a") {
+				else if (name === "sup" || name === "sub") {
+					if (!closing) {
+						const previous = out.at(-1)?.text ?? ""
+						html.script = { kind: name, start: out.length, out, glued: previous.length > 0 && !/\s$/.test(previous) }
+					} else if (html.script !== null && html.script.out === out) {
+						const { kind, start, glued } = html.script
+						const parts = out.splice(start)
+						const joined = parts.map((part) => part.text).join("")
+						const text = scriptText(kind, joined, glued)
+						if (parts.length === 0 || text === joined) out.push(...parts)
+						// A `^`/`_` prefix keeps the inner spans' own styling.
+						else if (text.endsWith(joined)) out.push(span(text.slice(0, text.length - joined.length), parts[0]!), ...parts)
+						else out.push({ ...parts[0]!, text })
+						html.script = null
+					}
+				} else if (name === "a") {
 					if (closing) {
-						if (html.url !== null) out.push(span(`[${registerLink(context, html.url, html.url, "link")}]`, { role: "linkIndex" }))
+						if (html.url !== null) out.push(...linkIndex(context, registerLink(context, html.url, html.url, "link")))
 						html.url = null
 					} else html.url = cleanUrl(attribute(tag, "href"))
 				} else if (name === "img") {
@@ -184,13 +244,18 @@ const inlineSpans = (
 				break
 			}
 			default:
-				if ("text" in token && typeof token.text === "string") out.push(span(textContent(token.text), current()))
+				if ("text" in token && typeof token.text === "string") out.push(...textSpans(textContent(token.text), current(), context))
 		}
 	}
 	return out
 }
 
 const blank: MarkdownLine = { spans: [] }
+// The blank before a heading, rule or table. Same shape as `blank`, but
+// compact previews keep it while dropping other block separators.
+const sectionBlank: MarkdownLine = { spans: [] }
+export const isSectionBreak = (line: MarkdownLine) => line === sectionBlank
+const SECTION_TOKENS = new Set(["heading", "hr", "table"])
 
 const prefixLines = (lines: readonly MarkdownLine[], first: readonly MarkdownSpan[], rest: readonly MarkdownSpan[]): MarkdownLine[] =>
 	lines.map((line, index) => ({ spans: mergeSpans([...(index === 0 ? first : rest), ...line.spans]) }))
@@ -244,6 +309,7 @@ const renderTable = (token: Tokens.Table, width: number, context: RenderContext)
 		const rule: MarkdownLine = { spans: [{ text: widths.map((value) => "─".repeat(value)).join("─┼─"), role: "frame" }] }
 		return [line(header), rule, ...rows.map(line)]
 	}
+	if (context.tableMode !== "auto" && columns > 0) return renderColumnTable(header, rows, width, context.tableMode)
 	// Too wide: fall back to one "header: value" line per cell.
 	return rows.flatMap((row, rowIndex) => [
 		...(rowIndex > 0 ? [blank] : []),
@@ -251,7 +317,111 @@ const renderTable = (token: Tokens.Table, width: number, context: RenderContext)
 	])
 }
 
+// Equal-width columns across the full width, for tables that do not fit.
+const equalColumnWidths = (columns: number, width: number) => {
+	const available = Math.max(columns, width - Math.max(0, columns - 1) * 3)
+	const base = Math.max(1, Math.floor(available / columns))
+	let remainder = Math.max(0, available - base * columns)
+	return Array.from({ length: columns }, () => {
+		const extra = remainder > 0 ? 1 : 0
+		remainder -= extra
+		return base + extra
+	})
+}
+
+const truncateSpans = (spans: readonly MarkdownSpan[], width: number): MarkdownSpan[] => {
+	if (spansWidth(spans) <= width) return [...spans]
+	const out: MarkdownSpan[] = []
+	let left = Math.max(0, width - 1)
+	for (const part of spans) {
+		if (left <= 0) break
+		const piece = breakByWidth(part.text, left)[0] ?? ""
+		const pieceWidth = textWidth(piece)
+		if (pieceWidth > left) break
+		out.push({ ...part, text: piece })
+		left -= pieceWidth
+	}
+	out.push({ text: "…", role: spans[0]?.role ?? "text" })
+	return out
+}
+
+const padTo = (spans: readonly MarkdownSpan[], width: number): MarkdownSpan[] => {
+	const pad = width - spansWidth(spans)
+	return pad > 0 ? [...spans, { text: " ".repeat(pad), role: "text" }] : [...spans]
+}
+
+const renderColumnTable = (
+	header: readonly (readonly MarkdownSpan[])[],
+	rows: readonly (readonly (readonly MarkdownSpan[])[])[],
+	width: number,
+	mode: "wrap" | "truncate",
+): MarkdownLine[] => {
+	const widths = equalColumnWidths(header.length, width)
+	const separator: MarkdownSpan = { text: " │ ", role: "frame" }
+	const rule: MarkdownLine = { spans: [{ text: widths.map((value) => "─".repeat(value)).join("─┼─"), role: "frame" }] }
+	const rowLines = (cells: readonly (readonly MarkdownSpan[])[]): MarkdownLine[] => {
+		const pieces = widths.map((columnWidth, column) => {
+			const parts = cells[column] ?? []
+			return mode === "truncate" ? [truncateSpans(parts, columnWidth)] : wrapSpans(parts, columnWidth).map((line) => line.spans)
+		})
+		const height = Math.max(1, ...pieces.map((cell) => cell.length))
+		return Array.from({ length: height }, (_, lineIndex) => ({
+			spans: mergeSpans(
+				widths.flatMap((columnWidth, column) => {
+					const parts = pieces[column]?.[lineIndex] ?? []
+					return [...(column > 0 ? [separator] : []), ...(column < widths.length - 1 ? padTo(parts, columnWidth) : parts)]
+				}),
+			),
+		}))
+	}
+	return [...rowLines(header), rule, ...rows.flatMap(rowLines)]
+}
+
 const isList = (token: Token) => token.type === "list"
+
+// GitHub alert blockquotes: `> [!NOTE]` on the first line.
+const ALERT_MARKER = /^[ \t]*\[!(note|tip|important|warning|caution)\][ \t]*(?:\n|$)/i
+const ALERTS = {
+	note: { icon: "ⓘ", label: "Note", role: "alertNote" },
+	tip: { icon: "◆", label: "Tip", role: "alertTip" },
+	important: { icon: "‼", label: "Important", role: "alertImportant" },
+	warning: { icon: "⚠", label: "Warning", role: "alertWarning" },
+	caution: { icon: "⊘", label: "Caution", role: "alertCaution" },
+} as const satisfies Record<string, { readonly icon: string; readonly label: string; readonly role: MarkdownRole }>
+
+// A paragraph that is only `**Text**` (optionally with a trailing colon) is
+// used as a section heading in many PR templates.
+const boldHeading = (token: Token, context: RenderContext): readonly Token[] | null => {
+	if (!context.boldHeadings || token.type !== "paragraph") return null
+	const tokens = (token as Tokens.Paragraph).tokens
+	const [first, second] = tokens
+	if (first?.type !== "strong") return null
+	if (tokens.length === 1) return (first as Tokens.Strong).tokens
+	if (tokens.length === 2 && second?.type === "text" && /^\s*:\s*$/.test((second as Tokens.Text).text)) return (first as Tokens.Strong).tokens
+	return null
+}
+
+// Tool attribution footers ("🤖 Generated with ...", git-style trailers and
+// the bare session URL that follows) render dimmed. The emoji is required so
+// ordinary prose that starts "Generated by ..." is left alone.
+const GENERATED_LINE = /^(?:\p{Extended_Pictographic}\uFE0F?\s*)+Generated (?:with|by)\b[^\n]*$/iu
+const TRAILER_LINE = /^\s*(?:[A-Za-z]+(?:-[A-Za-z]+)+:\s+\S.*|<?https?:\/\/\S+>?)\s*$/
+const GIT_TRAILER_LINE = /^\s*(?:Co-Authored-By|Signed-off-by|Reviewed-by|Generated-by):\s+\S/i
+
+type TrailerKind = "start" | "continue" | null
+
+const trailerKind = (token: Token, afterTrailer: boolean): TrailerKind => {
+	if (token.type !== "paragraph") return null
+	const raw = (token as Tokens.Paragraph).raw.trim()
+	// A one-line paragraph only, so a footer cannot swallow real text.
+	if (GENERATED_LINE.test(raw)) return "start"
+	const lines = raw.split("\n")
+	if (lines.every((line) => GIT_TRAILER_LINE.test(line))) return "start"
+	return afterTrailer && lines.every((line) => TRAILER_LINE.test(line)) ? "continue" : null
+}
+
+const dimLines = (lines: readonly MarkdownLine[]): MarkdownLine[] =>
+	lines.map((line) => ({ spans: line.spans.map((item) => (item.role === "frame" ? item : { ...item, role: "muted" })) }))
 
 const renderList = (token: Tokens.List, width: number, context: RenderContext, depth: number): MarkdownLine[] => {
 	if (depth >= MAX_NEST_DEPTH) return renderFlatList(token, width, context, depth)
@@ -293,7 +463,7 @@ const renderDetails = (chunk: Extract<BodyChunk, { kind: "details" }>, width: nu
 	const body = renderChunks(chunk.body, Math.max(1, width - 2), context, depth)
 	const open = context.detailsOpen ?? (chunk.open || body.length <= DETAILS_AUTO_OPEN_MAX_LINES)
 	const summary = inlineSpans(
-		lex(chunk.summary, context.deadline).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
+		lex(chunk.summary, context).flatMap((token) => ("tokens" in token && token.tokens ? token.tokens : [token])),
 		{ role: "summary", bold: true },
 		context,
 	)
@@ -313,6 +483,8 @@ const renderBlock = (token: Token, width: number, context: RenderContext, depth:
 			return []
 		case "paragraph":
 		case "text": {
+			const heading = depth === 0 && context.quoteDepth === 0 ? boldHeading(token, context) : null
+			if (heading) return wrapSpans(inlineSpans(heading, { role: "heading", bold: true }, context), width)
 			const text = token as Tokens.Paragraph | Tokens.Text
 			return wrapSpans(text.tokens && text.tokens.length > 0 ? inlineSpans(text.tokens, { role: "text" }, context) : [span(textContent(text.text), { role: "text" })], width)
 		}
@@ -324,6 +496,17 @@ const renderBlock = (token: Token, width: number, context: RenderContext, depth:
 			return renderCode(token as Tokens.Code, width)
 		case "blockquote": {
 			const flat = context.quoteDepth >= MAX_NEST_DEPTH
+			const alertMatch = ALERT_MARKER.exec((token as Tokens.Blockquote).text)
+			if (alertMatch && !flat) {
+				const alert = ALERTS[alertMatch[1]!.toLowerCase() as keyof typeof ALERTS]
+				context.quoteDepth++
+				const rest = (token as Tokens.Blockquote).text.slice(alertMatch[0].length)
+				const inner = rest.trim().length > 0 ? renderBlocks(lex(rest, context), Math.max(1, width - 2), context, depth, true) : []
+				context.quoteDepth--
+				const bar: MarkdownSpan = { text: "│ ", role: "frame" }
+				const label: MarkdownLine = { spans: [{ text: `${alert.icon} ${alert.label}`, role: alert.role, bold: true }] }
+				return prefixLines([label, ...inner], [bar], [bar])
+			}
 			context.quoteDepth++
 			const inner = renderBlocks((token as Tokens.Blockquote).tokens, flat ? width : Math.max(1, width - 2), context, depth, true)
 			context.quoteDepth--
@@ -351,10 +534,15 @@ const renderBlock = (token: Token, width: number, context: RenderContext, depth:
 // Join blocks with one blank line (none for tight list items).
 const renderBlocks = (tokens: readonly Token[], width: number, context: RenderContext, depth: number, spaced: boolean): MarkdownLine[] => {
 	const out: MarkdownLine[] = []
+	const topLevel = depth === 0 && context.quoteDepth === 0
+	let afterTrailer = false
 	for (const token of tokens) {
-		const lines = renderBlock(token, width, context, depth)
-		if (lines.length === 0) continue
-		if (out.length > 0 && spaced) out.push(blank)
+		const trailer: TrailerKind = topLevel ? trailerKind(token, afterTrailer) : null
+		const rendered = renderBlock(token, width, context, depth)
+		if (rendered.length === 0) continue
+		afterTrailer = trailer !== null
+		const lines = trailer !== null ? dimLines(rendered) : rendered
+		if (out.length > 0 && spaced) out.push(SECTION_TOKENS.has(token.type) || rendered[0]!.spans[0]?.role === "heading" ? sectionBlank : blank)
 		out.push(...lines)
 	}
 	return out
@@ -363,9 +551,9 @@ const renderBlocks = (tokens: readonly Token[], width: number, context: RenderCo
 const renderChunks = (chunks: readonly BodyChunk[], width: number, context: RenderContext, depth: number): MarkdownLine[] => {
 	const out: MarkdownLine[] = []
 	for (const chunk of chunks) {
-		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text, context.deadline), width, context, depth, true)
+		const lines = chunk.kind === "details" ? renderDetails(chunk, width, context, depth) : renderBlocks(lex(chunk.text, context), width, context, depth, true)
 		if (lines.length === 0) continue
-		if (out.length > 0) out.push(blank)
+		if (out.length > 0) out.push(lines[0]!.spans[0]?.role === "heading" || (lines[0]!.spans[0]?.role === "frame" && lines[0]!.spans.length === 1) ? sectionBlank : blank)
 		out.push(...lines)
 	}
 	return out
@@ -386,8 +574,10 @@ const INLINE_MARKERS = /[*_<[`~(]/g
 // quadratic-prone inline pass. Measuring marked's own inline runs avoids
 // re-implementing CommonMark's paragraph rules, and fences or HTML blocks
 // (never inline-lexed) do not count.
-const lex = (source: string, deadline: number): Token[] => {
+const lex = (source: string, context: Pick<RenderContext, "deadline" | "refLinks">): Token[] => {
+	const { deadline } = context
 	const lexer = new Lexer({ gfm: true })
+	lexer.tokens.links = context.refLinks
 	lexer.blockTokens(source.replace(/\r\n?/g, "\n"), lexer.tokens)
 	for (const entry of lexer.inlineQueue) {
 		if ((entry.src.match(INLINE_MARKERS)?.length ?? 0) > MAX_MARKERS_PER_PARAGRAPH) throw new MarkdownBudgetError()
@@ -411,14 +601,14 @@ const renderPlain = (body: string, width: number): MarkdownLine[] => [
 
 // Last line of defence: a body that still trips the parser renders as text
 // rather than taking the UI down with it.
-const renderChunksOrPlain = (body: string, width: number, context: RenderContext): MarkdownLine[] => {
+const renderChunksOrPlain = (body: string, width: number, context: RenderContext): { readonly lines: MarkdownLine[]; readonly plain: boolean } => {
 	try {
-		return renderChunks(splitBody(body), width, context, 0)
+		return { lines: renderChunks(splitBody(body), width, context, 0), plain: false }
 	} catch {
 		context.links.length = 0
 		context.detailsCount = 0
 		context.collapsedDetails = 0
-		return renderPlain(body.trim(), width)
+		return { lines: renderPlain(body.trim(), width), plain: true }
 	}
 }
 
@@ -433,28 +623,43 @@ export const renderMarkdownUncached = (rawBody: string, options: MarkdownOptions
 		htmlDepth: 0,
 		quoteDepth: 0,
 		deadline: performance.now() + INLINE_TIME_BUDGET_MS,
+		tableMode: options.tableMode ?? "auto",
+		issueReferenceRepository: options.issueReferenceRepository ?? null,
+		linkIndexes: options.linkIndexes ?? true,
+		boldHeadings: options.boldHeadings ?? false,
+		refLinks: Object.create(null) as Links,
 	}
-	const lines =
+	const result =
 		body.trim().length === 0
-			? [{ spans: [{ text: "(empty comment)", role: "muted" as const }] }]
+			? { lines: [], plain: false }
 			: exceedsMarkdownBudget(body)
-				? renderPlain(body.trim(), width)
+				? { lines: renderPlain(body.trim(), width), plain: true }
 				: renderChunksOrPlain(body, width, context)
+	const empty = result.lines.length === 0
 	return {
-		lines: lines.length > 0 ? lines : [{ spans: [{ text: "(empty comment)", role: "muted" }] }],
+		lines: empty ? [{ spans: [{ text: EMPTY_COMMENT_NOTE, role: "muted" }] }] : result.lines,
 		links: context.links,
 		detailsCount: context.detailsCount,
 		collapsedDetails: context.collapsedDetails,
+		...(empty ? { fallback: "empty" as const } : result.plain ? { fallback: "plain" as const } : {}),
 	}
 }
 
 const CACHE_LIMIT = 400
 const cache = new Map<string, MarkdownRender>()
 
-// Rendering is pure in (body, width, detailsOpen); memoize so scrolling and
+// Rendering is pure in (body, options); memoize so scrolling and
 // re-renders never re-lex a comment.
 export const renderMarkdown = (body: string, options: MarkdownOptions): MarkdownRender => {
-	const key = `${Math.floor(options.width)}\u0001${options.detailsOpen ?? "auto"}\u0001${body}`
+	const key = [
+		Math.floor(options.width),
+		options.detailsOpen ?? "auto",
+		options.tableMode ?? "auto",
+		options.issueReferenceRepository ?? "",
+		options.linkIndexes ?? true,
+		options.boldHeadings ?? false,
+		body,
+	].join("\u0001")
 	const hit = cache.get(key)
 	if (hit) {
 		cache.delete(key)
