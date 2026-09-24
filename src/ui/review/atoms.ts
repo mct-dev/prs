@@ -2,9 +2,10 @@ import { Effect, Stream } from "effect"
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"
 import * as Atom from "effect/unstable/reactivity/Atom"
 import type { PullRequestItem } from "../../domain.js"
-import { type BriefStatus, briefStatusFor as briefStatusFromIndex, type ReviewIndex } from "../../review/briefStatus.js"
+import { type BriefStatus, briefStatusFor as briefStatusFromIndex, idleBriefStatus, type ReviewIndex } from "../../review/briefStatus.js"
 import { AgentRunner } from "../../services/AgentRunner.js"
 import { githubRuntime } from "../../services/runtime.js"
+import { selectedPullRequestAtom } from "../pullRequests/atoms.js"
 
 export type { BriefStatus } from "../../review/briefStatus.js"
 
@@ -33,6 +34,12 @@ export const briefStatusFamily = Atom.family((key: string) => {
 })
 
 export const briefStatusFor = (pullRequest: BriefTarget) => briefStatusFamily(briefKey(pullRequest))
+
+/** Brief state for the selected PR; read by both the header layout math and the renderer. */
+export const selectedBriefStatusAtom = Atom.make((get): BriefStatus => {
+	const pullRequest = get(selectedPullRequestAtom)
+	return pullRequest ? get(briefStatusFor(pullRequest)) : idleBriefStatus
+})
 
 /** Starts a read-only agent review for a PR with the given (or default) preset; resolves to the run id. */
 export const runAgentReviewAtom = githubRuntime.fn<{ readonly pullRequest: PullRequestItem; readonly presetId?: string | null }>()(({ pullRequest, presetId }) =>

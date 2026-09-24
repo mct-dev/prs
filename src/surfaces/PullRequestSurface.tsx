@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react"
 import type { DiffRenderable, ScrollBoxRenderable } from "@opentui/core"
 import type { ComponentProps, MutableRefObject } from "react"
 import type { DiffCommentSide, IssueItem, PullRequestComment, PullRequestItem, PullRequestReviewComment } from "../domain.js"
@@ -21,6 +22,7 @@ import { SplitPane } from "../ui/paneLayout.js"
 import { Divider, Filler, PlainLine, SeparatorColumn } from "../ui/primitives.js"
 import { PullRequestDiffPane } from "../ui/PullRequestDiffPane.js"
 import { PullRequestList } from "../ui/PullRequestList.js"
+import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { PullRequestRunsPane } from "../ui/runs/RunsPane.js"
 import type { RunsViewModel } from "../hooks/useRunsView.js"
 import type { DiffFilePanelBundle } from "./WorkspaceContent.js"
@@ -154,6 +156,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 		diffScrollRef,
 		onLinkOpen,
 	} = props
+	const selectedBrief = useAtomValue(selectedBriefStatusAtom)
 
 	if (commentsViewActive && commentSubject) {
 		return (
@@ -297,6 +300,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 					showChecks={false}
 					comments={selectedComments}
 					commentsStatus={selectedCommentsStatus}
+					brief={selectedBrief}
 				/>
 				<PlainLine text="- Could not load pull request details." fg={colors.error} />
 				<PlainLine text={`- ${selectedPullRequestDetailError ?? ""}`} fg={colors.muted} />
@@ -316,6 +320,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 					showChecks={isWideLayout}
 					comments={selectedComments}
 					commentsStatus={selectedCommentsStatus}
+					brief={selectedBrief}
 				/>
 				<DetailBody
 					pullRequest={selectedPullRequest}
@@ -342,6 +347,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 							showChecks
 							comments={selectedComments}
 							commentsStatus={selectedCommentsStatus}
+							brief={selectedBrief}
 						/>
 						<scrollbox ref={detailScrollRef} focusable={false} flexGrow={1} verticalScrollbarOptions={{ visible: showScrollbars && fullscreenDetailBodyScrollable }}>
 							<DetailBody
@@ -431,6 +437,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 								showChecks={false}
 								comments={selectedComments}
 								commentsStatus={selectedCommentsStatus}
+								brief={selectedBrief}
 							/>
 							<PlainLine text="- Could not load pull request details." fg={colors.error} />
 							<PlainLine text={`- ${selectedPullRequestDetailError ?? ""}`} fg={colors.muted} />
@@ -446,6 +453,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 								showChecks
 								comments={selectedComments}
 								commentsStatus={selectedCommentsStatus}
+								brief={selectedBrief}
 							/>
 							<DetailBody
 								pullRequest={selectedPullRequest}
@@ -466,6 +474,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 								showChecks
 								comments={selectedComments}
 								commentsStatus={selectedCommentsStatus}
+								brief={selectedBrief}
 							/>
 							<scrollbox ref={detailPreviewScrollRef} flexGrow={1} verticalScrollbarOptions={{ visible: showScrollbars && wideDetailBodyScrollable }}>
 								<DetailBody
@@ -501,6 +510,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 							showChecks={false}
 							comments={selectedComments}
 							commentsStatus={selectedCommentsStatus}
+							brief={selectedBrief}
 						/>
 						<PlainLine text="- Could not load pull request details." fg={colors.error} />
 						<PlainLine text={`- ${selectedPullRequestDetailError ?? ""}`} fg={colors.muted} />
@@ -515,6 +525,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 							loadingIndicator={loadingIndicator}
 							comments={selectedComments}
 							commentsStatus={selectedCommentsStatus}
+							brief={selectedBrief}
 						/>
 						<scrollbox ref={detailScrollRef} focusable={false} flexGrow={1} verticalScrollbarOptions={{ visible: showScrollbars && fullscreenDetailBodyScrollable }}>
 							<DetailBody
@@ -571,6 +582,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 							showChecks={false}
 							comments={selectedComments}
 							commentsStatus={selectedCommentsStatus}
+							brief={selectedBrief}
 						/>
 						<PlainLine text="- Could not load pull request details." fg={colors.error} />
 						<PlainLine text={`- ${selectedPullRequestDetailError ?? ""}`} fg={colors.muted} />
@@ -584,6 +596,7 @@ export const PullRequestSurface = (props: PullRequestSurfaceProps) => {
 							loadingIndicator={loadingIndicator}
 							comments={selectedComments}
 							commentsStatus={selectedCommentsStatus}
+							brief={selectedBrief}
 						/>
 						<scrollbox
 							ref={detailPreviewScrollRef}

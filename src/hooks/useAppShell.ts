@@ -49,6 +49,7 @@ import { useDiffViewState } from "./useDiffViewState.js"
 import { useViewModeState } from "./useViewModeState.js"
 import { useFilterModal } from "../ui/filter/useFilterModal.js"
 import { DIFF_FILE_PANEL_AUTO_THRESHOLD, diffFilePanelOverrideAtom, selectedDiffKeyAtom, selectedDiffStateAtom } from "../ui/diff/atoms.js"
+import { selectedBriefStatusAtom } from "../ui/review/atoms.js"
 import { runsFullViewAtom } from "../ui/runs/atoms.js"
 import { diffCommentThreadMapKey } from "../ui/diff/comments.js"
 import { useDiffLineColors } from "../ui/diff/useDiffLineColors.js"
@@ -191,6 +192,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 	const terminalHeight = height ?? 24
 	const terminalTooSmall = isTerminalTooSmall(terminalWidth, terminalHeight)
 	const runsFullView = useAtomValue(runsFullViewAtom)
+	const selectedBrief = useAtomValue(selectedBriefStatusAtom)
 	const showWorkspaceTabs = !detailFullView && !diffFullView && !runsFullView && !commentsViewActive
 	const diffFilePanelOverride = useAtomValue(diffFilePanelOverrideAtom)
 	const setDiffFilePanelOverride = useAtomSet(diffFilePanelOverrideAtom)
@@ -1096,6 +1098,7 @@ export const useAppShell = ({ systemThemeGeneration }: UseAppShellInput) => {
 		selectedRepository,
 		selectedComments,
 		selectedCommentsStatus,
+		selectedBrief,
 		isSelectedPullRequestDetailLoading,
 		pullRequestStatus,
 		pullRequestError,

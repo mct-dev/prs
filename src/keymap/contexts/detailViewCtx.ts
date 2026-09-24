@@ -27,4 +27,5 @@ export const buildDetailViewCtx = ({ halfPage, activeSurface, scrollDetailFullVi
 	openInBrowser: () => runCommandById(activeSurface === "issues" ? "issue.open-browser" : "pull.open-browser"),
 	openInEditor: () => runCommandById("pull.open-editor"),
 	copyMetadata: () => runCommandById(activeSurface === "issues" ? "issue.copy-metadata" : "pull.copy-metadata"),
+	runAgentReview: () => runCommandById("pull.agent-review"),
 })
