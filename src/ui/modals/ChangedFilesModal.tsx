@@ -78,7 +78,7 @@ export const ChangedFilesModal = ({
 							fg={isSelected ? colors.selectedText : colors.text}
 						>
 							<MatchedCell text={entry.file.name} width={nameWidth} query={state.query} matchIndexes={entry.matchIndexes} />
-							{badge ? <span fg={isSelected ? colors.selectedText : colors.accent}>{fitCell(badge, badgeWidth, "right")}</span> : null}
+							{badge ? <span fg={isSelected ? colors.selectedText : colors.accent}>{fitCell(badge, badgeWidth, "left")}</span> : null}
 							<span fg={colors.muted}>{fitCell(stats, statsWidth, "right")}</span>
 						</TextLine>
 					)
