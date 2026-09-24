@@ -175,7 +175,7 @@ or pushes:
 
 ## Sections & filters
 
-When you launch prs outside a git repository, it opens the **sections** view. This view groups every open PR that needs you into sections. The queue modes are still one `tab` away. Inside a repo, the palette command `Show sections view` switches to sections.
+prs always opens on the **sections** view, including inside a git repository. This view groups every open PR that needs you into sections. The queue modes are still one `tab` away, and the repository view is still available from the repository picker (or the palette). The palette command `Show sections view` returns to sections from anywhere.
 
 Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SECTIONS_PATH`). If the file is missing, the built-in defaults below apply. If it fails to parse or validate, prs shows the defaults with the error above them. Set `PRS_DEFAULT_VIEW=queue` to start on the authored queue instead.
 
@@ -212,7 +212,7 @@ sections:
 - A PR appears only in the first section it matches, unless that section sets `exclusive: false`.
 - Optional keys per section: `where`, `sort` (`updated`, `size`, `age`, `risk`; a leading `-` means descending; default `-updated`), `limit` (default 50), `collapsed`, `exclusive`.
 - Sections load four at a time and render from cache first. A section that fails shows its error and keeps the PRs it had last.
-- `[` / `]` jump between sections, `z` collapses or expands the current section, and `Z` toggles all of them. You can also click a header.
+- `[` / `]` move between sections, including collapsed and empty ones (the header is highlighted when the cursor rests on it). `z` collapses or expands the section under the cursor, and `Z` toggles all of them. You can also click a header.
 
 The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `field>N` / `<` / `>=` / `<=`. Anything else is free text, which is still ranked by match score. Tokens AND together. `where:` also accepts `and`, `or`, `not` and parentheses.
 
@@ -232,7 +232,7 @@ A predicate on data that hasn't loaded yet counts as unknown, and unknown never 
 - `k` / `j`: move selection
 - `gg` / `G`: jump to first or last pull request
 - `ctrl-u` / `ctrl-d`: page up or down
-- `tab` / `shift-tab`: switch PR queue (outside a repo the cycle starts at sections; in a repo, at the repository view)
+- `tab` / `shift-tab`: switch PR queue (the cycle starts at sections; once you pick a repository, at the repository view)
 - `[` / `]`: jump between sections (or repository groups)
 - `z` / `Z`: collapse or expand the current section / all sections
 - `ctrl-p` / `cmd-k`: open the command palette

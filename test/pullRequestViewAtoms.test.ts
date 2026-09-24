@@ -294,6 +294,16 @@ describe("item view atoms", () => {
 		})
 	})
 
+	test("sections is the home view, even inside a repository; PRS_DEFAULT_VIEW=queue opts out", async () => {
+		const probe = `
+			import { homePullRequestView } from "./src/services/runtime.ts"
+			console.log(homePullRequestView._tag)
+		`
+		const env = { GHUI_MOCK_PR_COUNT: "4", GHUI_MOCK_REPOSITORY: "owner/repo", GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off" }
+		expect(await runIsolatedProbe(probe, { ...env, PRS_DEFAULT_VIEW: undefined })).toBe("Sections")
+		expect(await runIsolatedProbe(probe, { ...env, PRS_DEFAULT_VIEW: "queue" })).toBe("Queue")
+	})
+
 	test("sections rank PRs by free-text score inside each section", async () => {
 		const probe = `
 			import * as AsyncResult from "effect/unstable/reactivity/AsyncResult"

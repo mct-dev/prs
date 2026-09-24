@@ -21,15 +21,10 @@ const parseOptionalPositiveInt = (value: string | undefined, fallback: number | 
 export const mockPrCount = parseOptionalPositiveInt(process.env.GHUI_MOCK_PR_COUNT, null)
 export const mockRepository = process.env.GHUI_MOCK_REPOSITORY?.trim() || null
 export const detectedRepository = mockPrCount === null ? detectCurrentGitHubRepository() : mockRepository
-// Home view: sections outside a git repo, the authored queue inside one.
-// Mock mode keeps the queue so fixtures stay stable. `PRS_DEFAULT_VIEW`
-// (`sections` or `queue`) overrides either way.
-export const homePullRequestView: PullRequestView = (() => {
-	const override = process.env.PRS_DEFAULT_VIEW?.trim().toLowerCase()
-	if (override === "sections") return sectionsView
-	if (override === "queue") return initialPullRequestView(null)
-	return mockPrCount === null && detectedRepository === null ? sectionsView : initialPullRequestView(null)
-})()
+// Home view: sections, everywhere (in a repo and in mock mode too). The
+// repository and queue views stay reachable from the tab cycle, repository
+// picker and palette. `PRS_DEFAULT_VIEW=queue` starts in the authored queue.
+export const homePullRequestView: PullRequestView = process.env.PRS_DEFAULT_VIEW?.trim().toLowerCase() === "queue" ? initialPullRequestView(null) : sectionsView
 export const mockUsername = process.env.GHUI_MOCK_USERNAME?.trim() || (mockPrCount !== null ? "kitlangton" : undefined)
 
 export const mockWorkspacePreferencesPath = (() => {

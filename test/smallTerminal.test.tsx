@@ -9,6 +9,9 @@ process.env.GHUI_MOCK_REPO_COUNT = "4"
 process.env.GHUI_MOCK_FIXTURE_PATH = "/var/folders/dd/5fz89drs5p9_r0fk7rwqqnbr0000gn/T/opencode/ghui-test-no-fixture.json"
 process.env.GHUI_MOCK_WORKSPACE_PREFERENCES_PATH = "off"
 process.env.GHUI_PR_PAGE_SIZE = "100"
+// These suites exercise the repository-grouped queue list; sections is the
+// default home view, so pin the queue.
+process.env.PRS_DEFAULT_VIEW = "queue"
 
 const loadApp = async () => {
 	const { createTestRenderer } = await import("@opentui/core/testing")

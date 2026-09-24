@@ -56,7 +56,8 @@ describe("sections keyboard", () => {
 			GHUI_MOCK_FIXTURE_PATH: "/nonexistent/prs-test/fixture.json",
 			GHUI_MOCK_WORKSPACE_PREFERENCES_PATH: "off",
 			GHUI_CONFIG_DIR: "/nonexistent/prs-test/config",
-			PRS_DEFAULT_VIEW: "sections",
+			// No PRS_DEFAULT_VIEW: sections is the home view in mock mode too.
+			PRS_DEFAULT_VIEW: undefined,
 			PRS_SECTIONS_PATH: "/nonexistent/prs-test/sections.yaml",
 		})
 		const frames = JSON.parse(stdout.split("\n").at(-1)!)
