@@ -1,11 +1,18 @@
-import { mkdir } from "node:fs/promises"
-import { dirname } from "node:path"
 import { Effect } from "effect"
 import * as Atom from "effect/unstable/reactivity/Atom"
 import { errorMessage } from "../errors.js"
 import { loadSectionsConfig, sectionsConfigPath } from "../sections/config.js"
 import { defaultMyTeams } from "../sections/teams.js"
-import { configuredMyTeams, ensureSectionsConfigFile, myTeamsUnchanged, SECTIONS_TEMPLATE, setMyTeamsInYaml } from "../sections/template.js"
+import {
+	configuredMyTeams,
+	HAND_EDIT_MY_TEAMS,
+	ensureSectionsConfigFile,
+	myTeamsUnchanged,
+	readTextIfExists,
+	SECTIONS_TEMPLATE,
+	setMyTeamsInYaml,
+	writeFileAtomic,
+} from "../sections/template.js"
 import { EditorOpener } from "../services/EditorOpener.js"
 import { GitHubService } from "../services/GitHubService.js"
 import { activeModalAtom } from "../ui/modals/atoms.js"
@@ -25,15 +32,7 @@ import { defineCommand, type CommandDefinition } from "./registry.js"
  */
 const sectionsConfigWritable = () => !process.env.GHUI_MOCK_PR_COUNT || Boolean(process.env.PRS_SECTIONS_PATH)
 
-const readConfigText = (path: string) =>
-	Effect.promise(async () => {
-		try {
-			const file = Bun.file(path)
-			return (await file.exists()) ? await file.text() : null
-		} catch {
-			return null
-		}
-	})
+const readConfigText = (path: string) => Effect.tryPromise({ try: () => readTextIfExists(path), catch: (error) => new Error(`Can't read ${path}: ${errorMessage(error)}`) })
 
 /** Re-read sections.yaml, show any error, and refetch. */
 const reloadSections = (path: string, okMessage: string) =>
@@ -86,7 +85,10 @@ export const sectionsConfigCommands: readonly CommandDefinition[] = [
 				Effect.catch((error) => updateTeamsModal((state) => ({ ...state, loading: false, error: `Couldn't load teams: ${errorMessage(error)}` })).pipe(Effect.as(null))),
 			)
 			if (teams === null) return
-			const text = yield* readConfigText(sectionsConfigPath())
+			const text = yield* readConfigText(sectionsConfigPath()).pipe(
+				Effect.catch((error) => updateTeamsModal((state) => ({ ...state, loading: false, error: error.message })).pipe(Effect.as(undefined))),
+			)
+			if (text === undefined) return
 			const inEffect = configuredMyTeams(text ?? SECTIONS_TEMPLATE) ?? defaultMyTeams(teams)
 			yield* updateTeamsModal(() => ({
 				teams: teamsModalRows(teams, inEffect),
@@ -123,18 +125,16 @@ export const sectionsConfigCommands: readonly CommandDefinition[] = [
 				yield* Atom.set(noticeAtom, `Mock mode: my_teams not saved (${modal.chosen.join(", ")})`)
 				return
 			}
-			const text = yield* readConfigText(path)
+			const text = yield* readConfigText(path).pipe(Effect.catch((error) => updateTeamsModal((state) => ({ ...state, error: error.message })).pipe(Effect.as(undefined))))
+			if (text === undefined) return
 			// Start from the template when the file is missing: a vars-only file has no sections and would be rejected.
 			const next = setMyTeamsInYaml(text ?? SECTIONS_TEMPLATE, modal.chosen)
 			if ("error" in next) {
-				yield* updateTeamsModal((state) => ({ ...state, error: `Fix sections.yaml first: ${next.error}` }))
+				yield* updateTeamsModal((state) => ({ ...state, error: next.error === HAND_EDIT_MY_TEAMS ? next.error : `Fix sections.yaml first: ${next.error}` }))
 				return
 			}
 			const written = yield* Effect.tryPromise({
-				try: async () => {
-					await mkdir(dirname(path), { recursive: true })
-					await Bun.write(path, next.text)
-				},
+				try: () => writeFileAtomic(path, next.text),
 				catch: (error) => error,
 			}).pipe(
 				Effect.as(true),

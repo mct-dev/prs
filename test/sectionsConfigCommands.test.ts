@@ -125,7 +125,7 @@ describe("sections config commands", () => {
 		const path = join(dir, "blocker", "prs", "sections.yaml")
 		const frames = framesOf(await runIsolatedProbe(probe, env(path)))
 		expect(frames.afterEdit).toContain("Can't create")
-		expect(frames.saved).toContain("Can't write")
+		expect(frames.teams).toContain("Can't read")
 		expect(frames.saved).toContain("My Teams")
 		expect(await Bun.file(join(dir, "blocker")).text()).toBe("")
 	})

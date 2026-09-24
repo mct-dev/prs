@@ -22,7 +22,8 @@ export interface PullRequestSectionHeader {
 	readonly collapsed: boolean
 	readonly count: number
 	/** Keyboard cursor rests on this header (collapsed or empty section). */
-	readonly focused?: boolean /** Why PRs are in this section, shown dimmed after the count (active section only). */
+	readonly focused?: boolean
+	/** Why PRs are in this section, shown dimmed after the count (active section only). */
 	readonly reason?: string | null
 }
 

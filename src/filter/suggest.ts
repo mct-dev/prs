@@ -200,6 +200,8 @@ export const suggestFilter = (input: FilterSuggestInput): FilterSuggestions => {
 		return { token, items: [...recent, ...fieldSuggestions("", "", "")].slice(0, limit) }
 	}
 	if (token.length === 0) return { token, items: [] }
+	// Inside an open quote (`title:"fix the`) the last word isn't a token yet.
+	if ((draft.match(/"/g)?.length ?? 0) % 2 === 1) return { token, items: [] }
 
 	const valueMatch = valueTokenPattern.exec(token)
 	if (valueMatch) {

@@ -11,6 +11,8 @@ describe("recent filters", () => {
 	test("newest first, deduped, blanks ignored, capped", () => {
 		expect(pushRecentFilter(["ci:fail", "author:@me"], "author:@me")).toEqual(["author:@me", "ci:fail"])
 		expect(pushRecentFilter(["ci:fail"], "   ")).toEqual(["ci:fail"])
+		const same = ["ci:fail", "author:@me"]
+		expect(pushRecentFilter(same, " ci:fail ")).toBe(same)
 		const many = Array.from({ length: 12 }, (_, index) => `q${index}`).reduce<readonly string[]>((list, query) => pushRecentFilter(list, query), [])
 		expect(many.length).toBe(maxRecentFilters)
 		expect(many[0]).toBe("q11")

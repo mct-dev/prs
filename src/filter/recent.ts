@@ -13,6 +13,7 @@ export const recentFiltersPath = () => join(dirname(configPath()), "recent-filte
 export const pushRecentFilter = (recent: readonly string[], query: string, max = maxRecentFilters): readonly string[] => {
 	const trimmed = query.trim()
 	if (trimmed.length === 0) return recent
+	if (recent[0] === trimmed && recent.length <= max) return recent
 	return [trimmed, ...recent.filter((entry) => entry !== trimmed)].slice(0, max)
 }
 

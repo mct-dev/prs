@@ -120,3 +120,10 @@ describe("filterDiagnostics", () => {
 		expect(filterDiagnostics("ci:pa ", { skipCurrent: true }).length).toBe(1)
 	})
 })
+
+describe("suggestFilter inside quotes", () => {
+	test("offers nothing while a quote is open", () => {
+		expect(suggest('title:"fix au').items).toEqual([])
+		expect(suggest('title:"fix" au').items.length).toBeGreaterThan(0)
+	})
+})

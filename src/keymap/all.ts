@@ -107,7 +107,7 @@ const inListMode = (a: AppCtx): boolean => !modalActive(a) && !a.filterMode && !
 export const appKeymap = App(
 	// Always-on: command palette opener
 	{ id: "command.open", title: "Open command palette", keys: ["ctrl+p", "meta+k"], run: (s) => s.openCommandPalette() },
-	{ id: "legend.open", title: "Show icon legend", keys: ["?"], when: (s) => !s.textInputActive && !s.legendModalActive, run: (s) => s.openLegend() },
+	{ id: "legend.open", title: "Show icon legend", keys: ["?"], when: (s) => !s.textInputActive && !modalActive(s), run: (s) => s.openLegend() },
 	{ id: "legend.close", title: "Close legend", keys: ["escape", "?", "return"], when: (s) => s.legendModalActive, run: (s) => s.closeLegend() },
 
 	// Quit / close-active-modal — gated to "not editing text"

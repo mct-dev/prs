@@ -67,6 +67,9 @@ const sectionOf = (groups: readonly SectionNavGroup[], selected: SectionSelectio
 	return byRow ?? groups.find((group) => isVisible(group) && group.urls.includes(selected.url))
 }
 
+/** The section the selected row itself sits in (by row index, so a PR listed in two sections resolves to the right one). */
+export const selectedRowSectionId = (groups: readonly SectionNavGroup[], selected: SectionSelection | null): string | null => sectionOf(groups, selected)?.id ?? null
+
 const cursorMatches = (cursor: SectionCursor, selected: SectionSelection | null) =>
 	cursor.url === (selected?.url ?? null) && (cursor.index === null || selected === null || cursor.index === selected.index)
 

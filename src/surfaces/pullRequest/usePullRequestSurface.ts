@@ -43,6 +43,7 @@ import {
 import { describeFilterQuery } from "../../filter/parse.js"
 import {
 	activeSectionId,
+	selectedRowSectionId,
 	focusedSectionHeaderId,
 	type SectionNavGroup,
 	type SectionNavResult,
@@ -239,9 +240,11 @@ export const usePullRequestSurface = (input: UsePullRequestSurfaceInput): PullRe
 	const currentSectionId = activeSectionId(sectionNavGroups, sectionCursor, sectionSelection)
 	const sectionReasonFor = useAtomValue(sectionReasonForAtom)
 	const currentSectionSummary = sectionGroups.find((group) => group.id === currentSectionId)?.reason?.summary ?? null
-	const selectedReasonText = selectedPullRequest && currentSectionId ? sectionReasonFor(selectedPullRequest, currentSectionId) : null
-	// The row only repeats what the header says when it adds something (e.g. which team).
-	const selectedSectionReason = selectedReasonText === currentSectionSummary ? null : selectedReasonText
+	// The row's own section, not the one the header cursor is in.
+	const rowSectionId = selectedRowSectionId(sectionNavGroups, sectionSelection)
+	const selectedReasonText = selectedPullRequest && rowSectionId ? sectionReasonFor(selectedPullRequest, rowSectionId) : null
+	// The row only repeats what its (visible) header says when it adds something (e.g. which team).
+	const selectedSectionReason = rowSectionId === currentSectionId && selectedReasonText === currentSectionSummary ? null : selectedReasonText
 	const pullRequestSections = useMemo<PullRequestSections | null>(
 		() =>
 			activeView._tag === "Sections"
