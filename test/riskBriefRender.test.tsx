@@ -101,6 +101,6 @@ describe("risk brief rendering", () => {
 
 	test("idle state shows the run hint", async () => {
 		const { lines } = await renderHeader({ _tag: "idle" })
-		expect(lines.join("\n")).toContain("b: run agent review")
+		expect(lines.join("\n")).toContain("b run agent review · B pick preset · v brief view")
 	})
 })
