@@ -10,8 +10,9 @@ import { briefFullViewAtom } from "./review/briefViewAtoms.js"
  */
 export type ReturnView = "brief" | "detail"
 
-export const diffReturnViewAtom = Atom.make<ReturnView | null>(null)
-export const runsReturnViewAtom = Atom.make<ReturnView | null>(null)
+// keepAlive: only commands read these, and an unsubscribed atom resets to null before esc.
+export const diffReturnViewAtom = Atom.make<ReturnView | null>(null).pipe(Atom.keepAlive)
+export const runsReturnViewAtom = Atom.make<ReturnView | null>(null).pipe(Atom.keepAlive)
 
 /** The view the user sees right now, read before an open clears the flags. */
 export const currentReturnView = Effect.gen(function* () {

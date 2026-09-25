@@ -115,6 +115,28 @@ describe("brief view commands", () => {
 		expect(JSON.parse(stdout)).toEqual({ back: { brief: true, diff: false, focus: 1, scroll: 5 }, detail: true, origin: null })
 	})
 
+	test("the return path survives the diff view being open for a while", async () => {
+		// The return-path atoms are read only by commands; unsubscribed, the registry
+		// resets them to their defaults. The views React keeps mounted stay subscribed.
+		const stdout = await runIsolatedProbe(`${prelude}
+			registerHandoff("openDiffView", () => {})
+			const registry = registryWith([[selectedPullRequestAtom, pr], [agentReviewIndexAtom, index(null)], [detailFullViewAtom, true]])
+			for (const atom of [selectedPullRequestAtom, agentReviewIndexAtom, detailFullViewAtom, diffFullViewAtom]) registry.subscribe(atom, () => {})
+			await run(registry, "brief.open")
+			registry.set(briefFocusIndexAtom, 1)
+			registry.set(briefScrollTopAtom, 5)
+			await run(registry, "brief.open-focus")
+			registry.set(diffFullViewAtom, true)
+			await new Promise((resolve) => setTimeout(resolve, 50))
+			await run(registry, "diff.close")
+			const back = { brief: registry.get(briefFullViewAtom), focus: registry.get(briefFocusIndexAtom), scroll: registry.get(briefScrollTopAtom) }
+			await new Promise((resolve) => setTimeout(resolve, 50))
+			await run(registry, "brief.close")
+			console.log(JSON.stringify({ back, detail: registry.get(detailFullViewAtom) }))
+		`)
+		expect(JSON.parse(stdout)).toEqual({ back: { brief: true, focus: 1, scroll: 5 }, detail: true })
+	})
+
 	test("a plain diff or runs open returns to where it came from", async () => {
 		const stdout = await runIsolatedProbe(`${prelude}
 			registerHandoff("openDiffView", () => {})
