@@ -1,0 +1,288 @@
+# prs reference
+
+Everything the [README](../README.md) skips.
+
+## Environment
+
+- `PRS_PR_FETCH_LIMIT`: max PRs fetched, defaults to `500`
+- `PRS_RUN_FETCH_LIMIT`: max workflow runs fetched per PR, defaults to `20`
+- `PRS_NO_ANIMATION=1`: show a still loading picture instead of the animated one
+- `PRS_LOADING_ART=contours|plasma|torus`: pick the loading art (default `contours`)
+
+Example:
+
+```bash
+PRS_PR_FETCH_LIMIT=100 prs
+```
+
+## config.json
+
+Lives at `~/.config/prs/config.json` (or `$XDG_CONFIG_HOME/prs`, or `$PRS_CONFIG_DIR`). Cache: `~/.cache/prs/`. `GHUI_` env names still work as a fallback.
+
+Example:
+
+```json
+{
+	"theme": "system",
+	"systemThemeAutoReload": true,
+	"showScrollbars": false
+}
+```
+
+`systemThemeAutoReload` defaults to `false`. Set it to `true` to let external
+theme reload signals update the active system theme palette while prs is
+running.
+
+Scrollable panes hide their scrollbar rails by default. Set `showScrollbars`
+to `true` to display them while retaining the same keyboard and mouse scrolling
+behavior.
+
+## Open in editor
+
+Press `e` on a pull request (in the list, detail, or diff view) to hand it off
+to your editor. prs suspends the TUI, runs your command attached to the
+terminal, and resumes when it exits.
+
+Configure this in `config.json`:
+
+```json
+{
+	"editorCommand": "tmux new-window -c {{repoPath}} 'gh pr checkout {{number}} && nvim -c \":DiffviewOpen {{baseRef}}...{{headRef}}\"'",
+	"repoPaths": {
+		"mct-dev/prs": "~/code/prs",
+		"my-org/*": "~/code/repos/my-org/*",
+		":owner/:repo": "~/src/github.com/:owner/:repo"
+	}
+}
+```
+
+`repoPaths` maps a repository to a local clone, matched in order: an exact
+`owner/repo` key, then an owner wildcard (`owner/*`, where `*` becomes the repo
+name), then the generic `:owner/:repo` template. `~` expands to your home
+directory.
+
+`editorCommand` is a shell command template with these substitutions:
+
+- `{{repo}}` — full `owner/repo`
+- `{{owner}}`, `{{name}}`
+- `{{number}}` — PR number
+- `{{headRef}}` — PR head branch
+- `{{baseRef}}` — base branch
+- `{{author}}`
+- `{{url}}`
+- `{{repoPath}}` — resolved local path (requires a matching `repoPaths` entry)
+
+If `editorCommand` is omitted, prs falls back to `$VISUAL`/`$EDITOR` opening
+the resolved `repoPath`. Some common recipes:
+
+```jsonc
+// diffview.nvim: checkout the branch and diff against base
+"editorCommand": "tmux new-window -c {{repoPath}} 'gh pr checkout {{number}} && nvim -c \":DiffviewOpen {{baseRef}}...{{headRef}}\"'"
+
+// octo.nvim: review via the GitHub API (no checkout)
+"editorCommand": "tmux new-window -c {{repoPath}} 'nvim -c \":silent Octo pr edit {{number}}\"'"
+
+// VS Code
+"editorCommand": "code {{repoPath}}"
+```
+
+## Workflow runs
+
+Press `a` on a pull request to open its **GitHub Actions runs** full-screen,
+scoped to the PR's head commit:
+
+- The runs list shows each workflow run with status, conclusion, duration, and age.
+- `enter` drills into a run to see its jobs and steps; failing steps are easy to spot.
+- `n` / `p` jump between failures, `enter` expands a step, `o` opens the run in your browser, `r` refreshes, and `esc` walks back out.
+
+Requires the GitHub CLI (`gh`) the same as the rest of prs; nothing extra to configure.
+
+## Agent review
+
+prs can run a local coding agent (Claude Code or Codex) against a pull request
+and show a short **risk brief** at the top of the details pane: a risk level, a
+summary, and the files most worth your attention.
+
+Select a PR (in the list or its details) and press `b` to run a review with
+the default preset, or `B` to pick a preset. Only one review runs per PR at a
+time; pressing `b` again while one is running just says so. **Cancel agent
+review** in the command palette stops a running review. Briefs are cached per
+head commit and marked `stale` after a force-push.
+
+The PR list shows each review's state in a column at the end of the row: a spinner while it
+runs, a dot colored by risk (low, medium, high) when it is done, a dim ring when
+the brief is for an older head, and an error mark when the run failed.
+
+Press `v` to open the full **brief view**. It shows the risk, confidence,
+summary, before/after, every focus area (file, lines, severity, why), what is
+safe to skip, open questions, test notes, and the run details (preset, cost,
+duration, reviewed head, stale state, log path). In the brief view:
+
+- `up` / `down` (`k` / `j`): select a focus area; the view scrolls past the ends
+- `enter`: open the diff at the focused file, on the nearest changed line
+- `L`: open the run log in `$PAGER` (or `less`), or show its path if that fails
+- `o`: open the pull request in the browser
+- `x`: cancel a running review; `b` / `B`: run again
+- `ctrl-u` / `ctrl-d`, `gg` / `G`: page, or jump to the top or bottom
+- `esc`: go back to where you opened it from
+
+The `B` picker also manages presets and saves changes to `config.json`:
+
+- `enter`: run the selected preset
+- `e`: edit its skill, model, budget, and extra prompt. `tab` completes skills
+  found in `~/.claude/skills`, installed plugins (`plugin:skill`), the
+  project's `.claude/skills`, and `~/.codex/skills`.
+- `n`: new preset (pick claude or codex, then name it)
+- `d`: make it the default
+- `x` / `D`: delete it, after asking (the last preset stays). A deleted
+  built-in is saved as `null`.
+
+Configure it in `config.json` (all keys optional):
+
+```json
+{
+	"review": {
+		"default": "claude",
+		"concurrency": 2,
+		"timeoutMinutes": 20,
+		"presets": {
+			"claude": { "skill": "review", "model": null, "maxBudgetUsd": 3, "extraPrompt": "" },
+			"codex": { "agent": "codex", "model": null, "extraPrompt": "" }
+		}
+	},
+	"repoPaths": { ":owner/:repo": "~/src/github.com/:owner/:repo" }
+}
+```
+
+When a `repoPaths` entry points at a local clone, the agent reviews a detached
+git worktree at the PR head. prs removes that worktree when the run ends.
+Without a clone it gets only the diff. `PRS_REVIEW_AGENT_BIN` overrides the
+agent binary for every preset. Run logs are kept under the cache
+directory in `runs/`.
+
+Agent reviews are **read-only**. The agent never posts comments, approves
+or pushes:
+
+- Claude runs non-interactively with only Read, Grep and Glob. Bash, edit and
+  write tools, web tools and subagents are denied outright. Deny rules win
+  over any allow rules in your user settings. It loads your user skills but
+  no project settings or MCP servers.
+- The agent has no shell. prs pre-generates the diff, the commit log and
+  the file list into `.prs-context/` inside the worktree.
+- Codex runs in its `read-only` sandbox.
+- Worktrees are created with git hooks disabled. PR refs are fetched into
+  private `refs/prs/...` refs, which are deleted afterwards.
+- prs only reads the agent's JSON output. Nothing is sent to GitHub.
+
+## Sections & filters
+
+prs always opens on the **sections** view, including inside a git repository. This view groups every open PR that needs you into sections. The queue modes are still one `tab` away, and the repository view is still available from the repository picker (or the palette). The palette command `Show sections view` returns to sections from anywhere.
+
+Sections come from `~/.config/prs/sections.yaml` (override the path with `PRS_SECTIONS_PATH`). If the file is missing, the built-in defaults below apply. If it fails to parse or validate, prs shows the defaults with the error above them. Set `PRS_DEFAULT_VIEW=queue` to start on the authored queue instead.
+
+From the command palette (`ctrl-p`), **Edit sections config** creates the file from a commented template if needed, opens it in `$VISUAL`/`$EDITOR`, and reloads sections when the editor exits. **Choose my teams** lists your teams by size; `space` toggles, `enter` writes `vars.my_teams` and leaves the rest of the file as it was.
+
+```yaml
+vars:
+  # Optional. If unset, my_teams = your smallest team from `gh api user/teams`
+  # (ties included; every team if you have one, or GitHub hides counts).
+  my_teams: [my-org/backend]
+  bots: ["app/dependabot", "app/renovate", "app/github-actions"]
+
+sections:
+  - id: needs-me
+    title: Needs my review
+    query: "review-requested:{me} -author:{me} draft:false"
+    exclude: "author:{bots}"          # negated onto every branch
+  - id: rereview
+    title: New commits since my review
+    query: "reviewed-by:{me} -author:{me}"
+    where: "me.reviewed and not me.reviewed_since_push"
+  - id: team
+    title: My team's work
+    query: "team-authors:{my_teams} -author:{me}"
+  - id: mine
+    title: My PRs
+    query: "author:{me}"
+  - id: bots
+    title: Bots
+    any: ["review-requested:{me} author:{bots}"]
+    collapsed: true
+```
+
+- Every query gets `is:pr is:open archived:false`, plus `sort:updated-desc` unless it has its own `sort:`. `{me}` is your login. A list var expands to repeated qualifiers, and `-author:{bots}` expands to repeated negated ones.
+- `any:` runs one search per branch and merges the results. `exclude:` is negated onto every branch.
+- `team-authors:org/team` expands to the team's members, which are cached for a day. Long author lists are split across several searches.
+- A PR appears only in the first section it matches, unless that section sets `exclusive: false`.
+- Optional keys per section: `where`, `sort` (`updated`, `size`, `age`, `risk`; a leading `-` means descending; default `-updated`), `limit` (default 50), `collapsed`, `exclusive`.
+- Sections load four at a time and render from cache first. A section that fails shows its error and keeps the PRs it had last.
+- `[` / `]` move between sections, including collapsed and empty ones (the header is highlighted when the cursor rests on it). `z` collapses or expands the section under the cursor, and `Z` toggles all of them. You can also click a header.
+
+The `/` filter (and `where:`) understands `field:value`, `-field:value`, and `field>N` / `<` / `>=` / `<=`. Anything else is free text, which is still ranked by match score. Tokens AND together. `where:` also accepts `and`, `or`, `not` and parentheses.
+
+| Field | Meaning |
+|---|---|
+| `author`, `repo`, `org`, `draft`, `review:approved\|changes\|none` | PR metadata (`author:@me` works) |
+| `label`, `size`, `files`, `file:glob`, `ci:pass\|fail\|pending\|none` | Need PR details; unknown until loaded |
+| `age`, `idle` | Since created / updated, e.g. `idle>3d`, `age<2h`, `1w` |
+| `risk:low\|medium\|high` (also `risk>=medium`), `brief:none\|running\|done\|stale` | From the latest agent review; `risk` is unknown until a brief is done, and `stale` means the brief is for an older head |
+| `me.reviewed`, `me.reviewed_since_push` | Whether you reviewed, and whether that review is on the current head |
+| `section:<id>` | In that section (e.g. `section:needs-me`). Works from any view once sections have loaded |
+
+A predicate on data that hasn't loaded yet counts as unknown, and unknown never hides a PR. For example, `author:alice size>400 fix` keeps alice's PRs that match "fix", including ones whose size isn't known yet.
+
+Risk works the same way: `risk:high` keeps PRs that have no brief yet (the filter bar says how many, e.g. "12 PRs have no brief (shown as unknown)"). To see only reviewed PRs, add `brief:done`: `risk:high brief:done`.
+
+While typing after `/`, a popover suggests field names, then values (authors, repos and labels from the loaded PRs by frequency; the fixed values for `ci`, `review`, `risk`, `brief`, `draft`; examples like `>3d` for numbers). `tab` completes the first (or highlighted) suggestion, `up` / `down` highlight one and `enter` accepts it, and `esc` closes the popover before it cancels the filter. It also shows how many PRs match and warns about typos like `ci:passs`. With an empty prompt it lists your last 10 filters (kept in `recent-filters.json` next to `config.json`).
+
+- `section:needs-me ci:pass -review:approved`: PRs waiting on you with green CI that nobody has approved yet. In the sections view, `ci:pass -review:approved` alone does the same inside each section.
+
+## Keybindings
+
+- `up` / `down`: move selection
+- `k` / `j`: move selection
+- `gg` / `G`: jump to first or last pull request
+- `ctrl-u` / `ctrl-d`: page up or down
+- `tab` / `shift-tab`: switch PR queue (the cycle starts at sections; once you pick a repository, at the repository view)
+- `[` / `]`: jump between sections (or repository groups)
+- `z` / `Z`: collapse or expand the current section / all sections
+- `ctrl-p` / `cmd-k`: open the command palette
+- `?`: icon legend (what the review, check and brief glyphs mean)
+- `/`: filter
+- `enter`: expand details; normal PR actions still work while details are expanded
+- `esc`: return from expanded details, leave diff/comment mode, or close modal
+- `r`: refresh
+- `d`: view stacked diff for all changed files
+- `a`: view this PR's GitHub Actions runs (jobs, steps, and failing logs)
+- `b`: run an agent review with the default preset
+- `B`: pick an agent review preset, then run it
+- `v`: open the agent review brief view (in a diff, `v` starts a comment range instead)
+- `shift-r`: review or approve the selected pull request
+- `up` / `down` / `pageup` / `pagedown`: move comment target while viewing a diff
+- `enter`: open a commented diff line, or start a comment on an uncommented line
+- `v`: start or clear a multi-line diff comment range
+- `n` / `p`: jump between diff comment threads
+- `f`: open the changed-files navigator while viewing a diff
+- `left` / `right`: choose the deleted or added side while in split diff comment mode
+- `[` / `]`: switch files while viewing or commenting on a diff
+- `s`: toggle draft or ready-for-review state
+- `m`: merge (merge now, enable or disable auto-merge, pick squash/merge/rebase)
+- `x`: close with confirmation
+- `t`: choose a fixed theme, including `System` to match your terminal colors; press `m` in the theme picker to follow the OS light/dark appearance with separate theme choices
+- `l`: manage labels
+- `o`: open PR in browser
+- `e`: open PR in your editor (configurable; see `editorCommand` / `repoPaths`)
+- `y`: copy PR metadata
+- `q`: quit
+
+Authored-only pull request views render compact one-line rows because the
+author identity is implied by the active view. Mixed-author views continue to
+show the author and branch metadata row.
+
+Review submission:
+
+- Press `shift-r` to open the review modal.
+- Use `j` / `k` or `up` / `down` to choose Comment, Approve, or Request changes.
+- Press `enter` to move to the optional summary area.
+- Press `enter` again to submit, or `shift-enter` to insert a newline.
+- Press `esc` from the summary to return to action selection; press `esc` from action selection to cancel.
