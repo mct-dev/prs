@@ -2,6 +2,8 @@
 
 PR review in your terminal. Your agent reads the PR first and tells you where to look.
 
+![prs sections list](docs/screenshots/sections.svg)
+
 ## Install
 
 Needs [Bun](https://bun.sh), Node, and the [GitHub CLI](https://cli.github.com).
@@ -60,6 +62,34 @@ Edit with `ctrl-p` → **Edit sections config** (`~/.config/prs/sections.yaml`).
 `b` runs your agent on the PR and writes a risk brief: what changed, where to look, what's safe to skip. `B` picks or edits presets.
 
 It's read-only. It can't comment, approve, or push.
+
+## Views
+
+Details (`enter`)
+![details](docs/screenshots/details.svg)
+
+Diff (`d`)
+![diff](docs/screenshots/diff.svg)
+
+Comments (`c`)
+![comments](docs/screenshots/comments.svg)
+
+Agent brief (`v`)
+![agent brief](docs/screenshots/brief.svg)
+
+Filter (`/`)
+![filter](docs/screenshots/filter.svg)
+
+Merge (`m`)
+![merge](docs/screenshots/merge.svg)
+
+Workflow runs (`a`)
+![workflow runs](docs/screenshots/runs.svg)
+
+Commands (`ctrl-p`)
+![command palette](docs/screenshots/palette.svg)
+
+Mock data. Regenerate with `bun run screenshots`.
 
 ## More
 
