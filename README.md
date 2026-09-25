@@ -6,15 +6,21 @@ PR review in your terminal. Your agent reads the PR first and tells you where to
 
 ## Install
 
-Needs [Bun](https://bun.sh), Node, and the [GitHub CLI](https://cli.github.com).
+Needs [Bun](https://bun.sh), Node, git, and the [GitHub CLI](https://cli.github.com) (`gh auth login` if you haven't).
 
 ```bash
-gh auth login   # if you haven't
+curl -fsSL https://raw.githubusercontent.com/mct-dev/prs/main/install.sh | bash
+```
+
+Clones to `~/.local/share/prs` and puts `prs` in `~/.bun/bin`. Run it again to update, or `prs upgrade`.
+
+By hand:
+
+```bash
 git clone https://github.com/mct-dev/prs.git
 cd prs
 bun install
 bun link        # puts `prs` on your PATH (~/.bun/bin)
-prs
 ```
 
 Update: `git pull && bun install` in the checkout.
