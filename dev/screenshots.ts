@@ -18,7 +18,7 @@ import type { MockFixtureSnapshot } from "../src/services/mockFixtures.ts"
 
 const COLS = 140
 const ROWS = 36
-const THEME = "tokyo-night"
+export const THEME = "tokyo-night"
 const VIEWER = "alice"
 const repoRoot = new URL("..", import.meta.url).pathname
 const outDir = join(repoRoot, "docs", "screenshots")
@@ -26,7 +26,7 @@ const outDir = join(repoRoot, "docs", "screenshots")
 // ---------------------------------------------------------------------------
 // Views
 
-type Step = { readonly key: string; readonly ctrl?: boolean } | { readonly type: string }
+export type Step = { readonly key: string; readonly ctrl?: boolean } | { readonly type: string }
 
 interface View {
 	readonly name: string
@@ -38,7 +38,7 @@ interface View {
 // Braille spinner frames: something is still loading.
 const spinner = /[\u2800-\u28FF]/
 
-const hasFooter = (frame: string) => /ctrl-p|esc /.test(frame.split("\n").slice(-3).join("\n"))
+export const hasFooter = (frame: string) => /ctrl-p|esc /.test(frame.split("\n").slice(-3).join("\n"))
 
 const views: readonly View[] = [
 	{ name: "sections", steps: [], ready: (f) => f.includes("Needs my review") && f.includes("ctrl-p") },
@@ -409,7 +409,7 @@ const prSpecs: readonly PrSpec[] = [
 	},
 ]
 
-const buildFixture = (): MockFixtureSnapshot => ({
+export const buildFixture = (): MockFixtureSnapshot => ({
 	repository: "my-org/api",
 	generatedAt: new Date().toISOString(),
 	issues: [],
@@ -529,7 +529,7 @@ interface Cell {
 	readonly attributes: number
 	readonly width: number
 }
-interface Frame {
+export interface Frame {
 	readonly chars: string
 	readonly background: string
 	readonly lines: readonly (readonly Cell[])[]
@@ -580,7 +580,8 @@ const toHex = (color: { toInts(): [number, number, number, number] } | null | un
 	return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`
 }
 
-const runChild = async (view: View) => {
+/** Boots the app in mock mode inside a test renderer. Call only in a child process. */
+export const startApp = async () => {
 	installMockPatches()
 	const reviews = buildReviews()
 	Object.assign(globalThis, { __prsScreenshotReviews: reviews, IS_REACT_ACT_ENVIRONMENT: true })
@@ -609,30 +610,41 @@ const runChild = async (view: View) => {
 		}
 		throw new Error(`screenshots: "${label}" never settled. Last frame:\n${last}`)
 	}
-	act(() => root.render(createElement(RegistryProvider, null, createElement(App))))
-	await settle(views[0]!.ready, "startup")
-	for (const step of view.steps) {
+	const press = async (step: Step) => {
 		if ("type" in step) for (const char of step.type) act(() => setup.mockInput.pressKey(char))
 		else if (step.key === "return") act(() => setup.mockInput.pressEnter())
+		else if (step.key === "escape") act(() => setup.mockInput.pressEscape())
 		else act(() => setup.mockInput.pressKey(step.key, step.ctrl ? { ctrl: true } : undefined))
 		for (let index = 0; index < 6; index++) await tick()
 	}
-	await settle(view.ready, view.name)
+	const capture = (): Frame => {
+		const captured = setup.captureSpans()
+		const counts = new Map<string, number>()
+		const lines = captured.lines.map((line) =>
+			line.spans.map((span): Cell => {
+				const cell = { text: span.text, fg: toHex(span.fg), bg: toHex(span.bg), attributes: span.attributes & 255, width: span.width }
+				if (cell.bg) counts.set(cell.bg, (counts.get(cell.bg) ?? 0) + cell.width)
+				return cell
+			}),
+		)
+		const background = [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "#1a1b26"
+		return { chars: setup.captureCharFrame(), background, lines }
+	}
+	const stop = () => {
+		act(() => root.unmount())
+		setup.renderer.destroy()
+	}
+	act(() => root.render(createElement(RegistryProvider, null, createElement(App))))
+	await settle(views[0]!.ready, "startup")
+	return { press, settle, capture, stop }
+}
 
-	const captured = setup.captureSpans()
-	const counts = new Map<string, number>()
-	const lines = captured.lines.map((line) =>
-		line.spans.map((span): Cell => {
-			const cell = { text: span.text, fg: toHex(span.fg), bg: toHex(span.bg), attributes: span.attributes & 255, width: span.width }
-			if (cell.bg) counts.set(cell.bg, (counts.get(cell.bg) ?? 0) + cell.width)
-			return cell
-		}),
-	)
-	const background = [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "#1a1b26"
-	const frame: Frame = { chars: setup.captureCharFrame(), background, lines }
-	console.log(JSON.stringify(frame))
-	act(() => root.unmount())
-	setup.renderer.destroy()
+const runChild = async (view: View) => {
+	const app = await startApp()
+	for (const step of view.steps) await app.press(step)
+	await app.settle(view.ready, view.name)
+	console.log(JSON.stringify(app.capture()))
+	app.stop()
 	process.exit(0)
 }
 
@@ -732,7 +744,7 @@ const titles: Record<string, string> = {
 	palette: "prs: command palette",
 }
 
-const childEnv = (temp: string) => {
+export const childEnv = (temp: string) => {
 	const env: Record<string, string> = {}
 	for (const [key, value] of Object.entries(process.env)) {
 		if (value === undefined || /^(PRS_|GHUI_|XDG_)/.test(key) || key === "FORCE_COLOR") continue

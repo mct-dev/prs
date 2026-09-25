@@ -2,7 +2,7 @@
 
 PR review in your terminal. Your agent reads the PR first and tells you where to look.
 
-![prs sections list](docs/screenshots/sections.svg)
+![prs demo](docs/demo.gif)
 
 ## Install
 
@@ -65,6 +65,9 @@ It's read-only. It can't comment, approve, or push.
 
 ## Views
 
+Sections (home)
+![sections](docs/screenshots/sections.svg)
+
 Details (`enter`)
 ![details](docs/screenshots/details.svg)
 
@@ -89,7 +92,7 @@ Workflow runs (`a`)
 Commands (`ctrl-p`)
 ![command palette](docs/screenshots/palette.svg)
 
-Mock data. Regenerate with `bun run screenshots`.
+Mock data. Regenerate with `bun run screenshots` and `bun run demo`.
 
 ## More
 

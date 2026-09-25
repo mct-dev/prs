@@ -49,6 +49,7 @@
 		"format:check": "oxfmt --check src/ test/ dev/",
 		"package:smoke": "bun run dev/package-smoke.ts",
 		"screenshots": "bun run dev/screenshots.ts",
+		"demo": "bun run dev/demo.ts",
 		"prepublishOnly": "printf '%s\n' 'Publish dist/npm/main, not the source checkout.' && exit 1",
 		"prepack": "bun run build:cli"
 	},
